@@ -13,7 +13,7 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone http://localhost:3000/osef/Rhythm-Open-Exchange.git .
+      - git clone http://gitea:3000/osef/Rhythm-Open-Exchange.git .
       - git checkout $DRONE_COMMIT
 
   - name: test
