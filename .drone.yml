@@ -5,7 +5,17 @@ name: default
 platform:
   os: linux
   arch: arm64
+
+clone:
+  disable: true
+
 steps:
+  - name: clone
+    image: alpine/git
+    commands:
+      - git clone http://localhost:3000/osef/Rhythm-Open-Exchange.git .
+      - git checkout $DRONE_COMMIT
+
   - name: test
     image: rust:1.83
     commands:
