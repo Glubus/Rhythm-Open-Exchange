@@ -3,11 +3,6 @@ type: docker
 name: default
 
 steps:
-  - name: build
-    image: rust:1.83
-    commands:
-      - cargo build --release
-
   - name: test
     image: rust:1.83
     commands:
