@@ -17,18 +17,18 @@ steps:
       - git checkout $DRONE_COMMIT
 
   - name: test
-    image: rust:alpine
+    image: rust:slim
     commands:
       - cargo test
 
   - name: clippy
-    image: rust:alpine
+    image: rust:slim
     commands:
       - rustup component add clippy
       - cargo clippy -- -D warnings
 
   - name: fmt
-    image: rust:alpine
+    image: rust:slim
     commands:
       - rustup component add rustfmt
       - cargo fmt -- --check
