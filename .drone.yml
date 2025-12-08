@@ -11,7 +11,7 @@ clone:
 
 steps:
   - name: clone
-    image: alpine/git
+    image: drone/git
     commands:
       - git clone http://gitea:3000/osef/Rhythm-Open-Exchange.git .
       - git checkout $DRONE_COMMIT
