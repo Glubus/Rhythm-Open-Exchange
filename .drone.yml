@@ -13,7 +13,7 @@ steps:
   - name: clone
     image: drone/git
     commands:
-      - git clone http://gitea:3000/osef/Rhythm-Open-Exchange.git .
+      - git clone http://localhost:3000/osef/Rhythm-Open-Exchange.git .
       - git checkout $DRONE_COMMIT
 
   - name: test
