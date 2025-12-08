@@ -1,0 +1,26 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: build
+    image: rust:1.83
+    commands:
+      - cargo build --release
+
+  - name: test
+    image: rust:1.83
+    commands:
+      - cargo test
+
+  - name: clippy
+    image: rust:1.83
+    commands:
+      - rustup component add clippy
+      - cargo clippy -- -D warnings
+
+  - name: fmt
+    image: rust:1.83
+    commands:
+      - rustup component add rustfmt
+      - cargo fmt -- --check
