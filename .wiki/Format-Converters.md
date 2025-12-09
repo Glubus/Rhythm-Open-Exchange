@@ -225,7 +225,6 @@ mod tests {
 | Quaver | `.qua` | ✓ | ✓ | Planned |
 | FNF | `.json` | ✓ | ✓ | Planned |
 | Malody | `.mc` | ✓ | ✓ | Planned |
-| RoBeats | - | ✓ | ✓ | Planned |
 | BMS | `.bms/.bme` | ✓ | ✗ | Planned |
 | O2Jam | `.ojn` | ✓ | ✗ | Planned |
 
