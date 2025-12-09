@@ -1,5 +1,6 @@
 //! Codec module for encoding/decoding ROX format.
 
+pub mod formats;
 mod rox;
 mod traits;
 
