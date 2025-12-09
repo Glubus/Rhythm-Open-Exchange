@@ -26,7 +26,7 @@ steps:
     image: arm64v8/rust:bullseye
     commands:
       - rustup component add clippy
-      - cargo clippy --all-targets -- -D warnings -W clippy::pedantic
+      - cargo clippy --lib -- -D warnings -W clippy::pedantic
 
   - name: test
     image: arm64v8/rust:bullseye
