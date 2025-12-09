@@ -189,6 +189,8 @@ ROX is built for extreme efficiency. Benchmarks on a massive 50,000 note chart (
 | Quaver (.qua) | Planned | Yes | Yes |
 | Friday Night Funkin' (.json) | Planned | Yes | Yes |
 | Malody (.mc) | Planned | Yes | Yes |
+| RoBeats | Planned | Yes | Yes |
+| Clone Hero (.chart/.mid) | Planned (Experimental) | Yes | Yes |
 | BMS (.bms/.bme/.bml) | Planned | Yes | No |
 | O2Jam (.ojn/.ojm) | Planned | Yes | No |
 
