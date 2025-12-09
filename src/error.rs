@@ -25,4 +25,22 @@ pub enum RoxError {
 
     #[error("Invalid column index {column} for {key_count}K chart")]
     InvalidColumn { column: u8, key_count: u8 },
+
+    #[error("Invalid hold duration {duration_us}µs at time {time_us}µs (must be > 0)")]
+    InvalidHoldDuration { time_us: i64, duration_us: i64 },
+
+    #[error("Timing points not sorted by time (found {time_us}µs after {prev_time_us}µs)")]
+    TimingPointsNotSorted { prev_time_us: i64, time_us: i64 },
+
+    #[error("Overlapping notes on column {column} at time {time_us}µs")]
+    OverlappingNotes { column: u8, time_us: i64 },
+
+    #[error("No BPM timing point found (at least one is required)")]
+    NoBpmTimingPoint,
+
+    #[error("First BPM timing point at {bpm_time_us}µs is after first note at {note_time_us}µs")]
+    BpmAfterFirstNote { bpm_time_us: i64, note_time_us: i64 },
+
+    #[error("Parse error at line {line}: {message}")]
+    ParseError { line: usize, message: String },
 }

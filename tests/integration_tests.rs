@@ -181,6 +181,8 @@ fn test_various_key_counts() {
             chart.notes.push(Note::tap(col as i64 * 100_000, col));
         }
 
+        chart.timing_points.push(TimingPoint::bpm(0, 120.0));
+
         assert!(chart.validate().is_ok());
 
         let encoded = RoxCodec::encode(&chart).expect("Encoding failed");

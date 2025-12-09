@@ -181,6 +181,7 @@ mod tests {
     #[test]
     fn test_delta_encoding() {
         let mut chart = RoxChart::new(4);
+        chart.timing_points.push(TimingPoint::bpm(0, 120.0));
         chart.notes.push(Note::tap(1_000_000, 0));
         chart.notes.push(Note::tap(1_100_000, 1));
         chart.notes.push(Note::tap(1_200_000, 2));

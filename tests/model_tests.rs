@@ -227,6 +227,8 @@ fn test_rox_chart_validate_valid() {
     chart.notes.push(Note::tap(0, 2));
     chart.notes.push(Note::tap(0, 3));
 
+    chart.timing_points.push(TimingPoint::bpm(0, 120.0));
+
     assert!(chart.validate().is_ok());
 }
 
