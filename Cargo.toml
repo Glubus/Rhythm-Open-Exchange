@@ -17,3 +17,7 @@ criterion = "0.8.1"
 [[bench]]
 name = "codec_bench"
 harness = false
+
+[[bench]]
+name = "format_bench"
+harness = false

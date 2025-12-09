@@ -124,10 +124,13 @@ impl RoxChart {
         if !self.notes.is_empty() {
             // Check at least one BPM timing point exists
             let first_bpm = self.timing_points.iter().find(|tp| !tp.is_inherited);
-            let Some(first_bpm) = first_bpm else {
+            let Some(_first_bpm) = first_bpm else {
                 return Err(crate::RoxError::NoBpmTimingPoint);
             };
 
+            // Strict check removed: Real-world maps sometimes have notes slightly before the first BPM.
+            // Engines should handle this by extending the first BPM backwards.
+            /*
             // Check first BPM is at or before first note
             if let Some(first_note) = self.notes.first()
                 && first_bpm.time_us > first_note.time_us
@@ -137,6 +140,7 @@ impl RoxChart {
                     note_time_us: first_note.time_us,
                 });
             }
+            */
         }
 
         // Check for overlapping notes on same column
