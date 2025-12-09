@@ -213,11 +213,11 @@ mod tests {
 }
 ```
 
-## Supported Formats (Planned)
+## Supported Formats
 
 | Format | Extension | Decode | Encode | Status |
 |--------|-----------|--------|--------|--------|
-| osu!mania | `.osu` | ✓ | ✓ | Planned |
+| osu!mania | `.osu` | ✓ | ✓ | **Implemented** |
 | Quaver | `.qua` | ✓ | ✓ | Planned |
 | StepMania | `.sm/.ssc` | ✓ | ✓ | Planned |
 | Etterna | `.sm` | ✓ | ✓ | Planned |
