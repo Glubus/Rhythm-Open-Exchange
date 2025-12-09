@@ -1,5 +1,7 @@
 //! Type definitions for osu!taiko format conversion.
 
+use crate::codec::formats::osu::types::{OsuDifficulty, OsuGeneral, OsuMetadata, OsuTimingPoint};
+
 use bitflags::bitflags;
 
 bitflags! {
@@ -60,6 +62,25 @@ impl TaikoHitObject {
     pub fn is_slider(&self) -> bool {
         (self.object_type & 2) != 0
     }
+}
+
+/// Parsed Taiko beatmap data.
+#[derive(Debug, Default)]
+pub struct TaikoBeatmap {
+    /// Format version.
+    pub format_version: u8,
+    /// General section.
+    pub general: OsuGeneral,
+    /// Metadata section.
+    pub metadata: OsuMetadata,
+    /// Difficulty section.
+    pub difficulty: OsuDifficulty,
+    /// Background file.
+    pub background: Option<String>,
+    /// Timing points.
+    pub timing_points: Vec<OsuTimingPoint>,
+    /// Taiko hit objects.
+    pub hit_objects: Vec<TaikoHitObject>,
 }
 
 /// Column layout options for Taiko->`4K` conversion.

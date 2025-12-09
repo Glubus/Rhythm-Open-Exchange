@@ -84,18 +84,10 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
         }
     }
 
-    // Validate it's mania mode
-    if beatmap.general.mode != 3 {
-        return Err(RoxError::InvalidFormat(format!(
-            "Not a mania beatmap (mode={}, expected 3)",
-            beatmap.general.mode
-        )));
-    }
-
     Ok(beatmap)
 }
 
-fn parse_general(line: &str, general: &mut OsuGeneral) {
+pub fn parse_general(line: &str, general: &mut OsuGeneral) {
     if let Some((key, value)) = line.split_once(':') {
         let value = value.trim();
         match key.trim() {
@@ -108,7 +100,7 @@ fn parse_general(line: &str, general: &mut OsuGeneral) {
     }
 }
 
-fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
+pub fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
     if let Some((key, value)) = line.split_once(':') {
         let value = value.trim();
         match key.trim() {
@@ -136,7 +128,7 @@ fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
     }
 }
 
-fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
+pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
     if let Some((key, value)) = line.split_once(':') {
         let value = value.trim();
         match key.trim() {
@@ -148,7 +140,7 @@ fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
     }
 }
 
-fn parse_event(line: &str, background: &mut Option<String>) {
+pub fn parse_event(line: &str, background: &mut Option<String>) {
     // Format: 0,0,"filename.jpg",0,0
     let parts: Vec<&str> = line.split(',').collect();
     if parts.len() >= 3 && parts[0] == "0" && parts[1] == "0" {
@@ -159,7 +151,8 @@ fn parse_event(line: &str, background: &mut Option<String>) {
     }
 }
 
-fn parse_timing_point(line: &str) -> Option<OsuTimingPoint> {
+#[must_use]
+pub fn parse_timing_point(line: &str) -> Option<OsuTimingPoint> {
     let parts: Vec<&str> = line.split(',').collect();
     if parts.len() < 8 {
         return None;

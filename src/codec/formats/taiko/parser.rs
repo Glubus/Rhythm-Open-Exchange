@@ -1,35 +1,13 @@
 //! Parser for osu!taiko format.
 //!
-//! Reuses the osu parser but extracts Taiko-specific information.
+//! Reuses the osu parser struct parsing logic but extracts Taiko-specific hit objects.
 
+use crate::codec::formats::osu::parser::{
+    parse_difficulty, parse_event, parse_general, parse_metadata, parse_timing_point,
+};
 use crate::error::{RoxError, RoxResult};
 
-use super::types::{TaikoHitObject, TaikoHitsound};
-
-/// Parsed Taiko beatmap data.
-#[derive(Debug, Default)]
-pub struct TaikoBeatmap {
-    /// Song title.
-    pub title: String,
-    /// Artist name.
-    pub artist: String,
-    /// Mapper name.
-    pub creator: String,
-    /// Difficulty name.
-    pub version: String,
-    /// Audio filename.
-    pub audio_file: String,
-    /// Background filename.
-    pub background: Option<String>,
-    /// Audio offset in ms.
-    pub offset_ms: i32,
-    /// Preview time in ms.
-    pub preview_time_ms: i32,
-    /// BPM timing points: `(time_ms, bpm)`.
-    pub bpm_changes: Vec<(f64, f32)>,
-    /// Hit objects.
-    pub hit_objects: Vec<TaikoHitObject>,
-}
+use super::types::{TaikoBeatmap, TaikoHitObject, TaikoHitsound};
 
 /// Parse a Taiko beatmap from raw bytes.
 ///
@@ -41,7 +19,7 @@ pub fn parse(data: &[u8]) -> RoxResult<TaikoBeatmap> {
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
 
     let mut beatmap = TaikoBeatmap::default();
-    let mut current_section = "";
+    let mut section = "";
 
     for line in content.lines() {
         let line = line.trim();
@@ -51,93 +29,37 @@ pub fn parse(data: &[u8]) -> RoxResult<TaikoBeatmap> {
             continue;
         }
 
-        // Section headers
-        if line.starts_with('[') && line.ends_with(']') {
-            current_section = line;
+        // Check for format version
+        if line.starts_with("osu file format v") {
+            beatmap.format_version = line
+                .strip_prefix("osu file format v")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(14);
             continue;
         }
 
-        match current_section {
-            "[General]" => parse_general_line(line, &mut beatmap),
-            "[Metadata]" => parse_metadata_line(line, &mut beatmap),
-            "[Events]" => parse_events_line(line, &mut beatmap),
-            "[TimingPoints]" => parse_timing_line(line, &mut beatmap),
+        // Section headers
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line;
+            continue;
+        }
+
+        match section {
+            "[General]" => parse_general(line, &mut beatmap.general),
+            "[Metadata]" => parse_metadata(line, &mut beatmap.metadata),
+            "[Difficulty]" => parse_difficulty(line, &mut beatmap.difficulty),
+            "[Events]" => parse_event(line, &mut beatmap.background),
+            "[TimingPoints]" => {
+                if let Some(tp) = parse_timing_point(line) {
+                    beatmap.timing_points.push(tp);
+                }
+            }
             "[HitObjects]" => parse_hit_object_line(line, &mut beatmap),
             _ => {}
         }
     }
 
     Ok(beatmap)
-}
-
-fn parse_general_line(line: &str, beatmap: &mut TaikoBeatmap) {
-    if let Some((key, value)) = line.split_once(':') {
-        let value = value.trim();
-        match key.trim() {
-            "AudioFilename" => beatmap.audio_file = value.to_string(),
-            "PreviewTime" => beatmap.preview_time_ms = value.parse().unwrap_or(0),
-            "Mode" => {
-                // Verify it's Taiko mode (1)
-                if value != "1" {
-                    // We'll still try to parse, might work
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn parse_metadata_line(line: &str, beatmap: &mut TaikoBeatmap) {
-    if let Some((key, value)) = line.split_once(':') {
-        let value = value.trim();
-        match key.trim() {
-            "Title" => {
-                if beatmap.title.is_empty() {
-                    beatmap.title = value.to_string();
-                }
-            }
-            "TitleUnicode" => beatmap.title = value.to_string(),
-            "Artist" => {
-                if beatmap.artist.is_empty() {
-                    beatmap.artist = value.to_string();
-                }
-            }
-            "ArtistUnicode" => beatmap.artist = value.to_string(),
-            "Creator" => beatmap.creator = value.to_string(),
-            "Version" => beatmap.version = value.to_string(),
-            _ => {}
-        }
-    }
-}
-
-fn parse_events_line(line: &str, beatmap: &mut TaikoBeatmap) {
-    // Parse background: 0,0,"filename.jpg",0,0
-    if let Some(rest) = line.strip_prefix("0,0,\"")
-        && let Some(end) = rest.find('"')
-    {
-        beatmap.background = Some(rest[..end].to_string());
-    }
-}
-
-fn parse_timing_line(line: &str, beatmap: &mut TaikoBeatmap) {
-    let parts: Vec<&str> = line.split(',').collect();
-    if parts.len() >= 2 {
-        let time_ms: f64 = parts[0].parse().unwrap_or(0.0);
-        let beat_length: f64 = parts[1].parse().unwrap_or(0.0);
-
-        // Check if uninherited (BPM point)
-        let uninherited = if parts.len() >= 7 {
-            parts[6].parse::<i32>().unwrap_or(1) == 1
-        } else {
-            beat_length > 0.0
-        };
-
-        if uninherited && beat_length > 0.0 {
-            #[allow(clippy::cast_possible_truncation)]
-            let bpm = (60000.0 / beat_length) as f32;
-            beatmap.bpm_changes.push((time_ms, bpm));
-        }
-    }
 }
 
 fn parse_hit_object_line(line: &str, beatmap: &mut TaikoBeatmap) {

@@ -4,6 +4,7 @@
 
 pub mod decoder;
 pub mod parser;
+
 pub mod types;
 
 pub use decoder::TaikoDecoder;

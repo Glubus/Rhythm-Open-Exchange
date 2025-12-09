@@ -9,8 +9,8 @@ use crate::codec::Decoder;
 use crate::error::RoxResult;
 use crate::model::{Metadata, Note, RoxChart, TimingPoint};
 
-use super::parser;
 use super::types::{AlternationState, ColumnLayout};
+use crate::codec::formats::taiko::parser;
 
 /// Decoder for osu!taiko beatmaps.
 pub struct TaikoDecoder;
@@ -37,23 +37,49 @@ impl TaikoDecoder {
         // Taiko converts to 4K
         let mut chart = RoxChart::new(4);
 
-        // Map metadata
+        // Map metadata (reusing OsuBeatmap fields)
         chart.metadata = Metadata {
-            title: beatmap.title,
-            artist: beatmap.artist,
-            creator: beatmap.creator,
-            difficulty_name: beatmap.version,
-            audio_file: beatmap.audio_file,
-            background_file: beatmap.background,
-            preview_time_us: i64::from(beatmap.preview_time_ms) * 1000,
+            title: beatmap
+                .metadata
+                .title_unicode
+                .clone()
+                .unwrap_or_else(|| beatmap.metadata.title.clone()),
+            artist: beatmap
+                .metadata
+                .artist_unicode
+                .clone()
+                .unwrap_or_else(|| beatmap.metadata.artist.clone()),
+            creator: beatmap.metadata.creator.clone(),
+            difficulty_name: beatmap.metadata.version.clone(),
+            difficulty_value: Some(beatmap.difficulty.overall_difficulty),
+            audio_file: beatmap.general.audio_filename.clone(),
+            background_file: beatmap.background.clone(),
+            audio_offset_us: i64::from(beatmap.general.audio_lead_in) * 1000,
+            preview_time_us: if beatmap.general.preview_time > 0 {
+                i64::from(beatmap.general.preview_time) * 1000
+            } else {
+                0
+            },
+            source: beatmap.metadata.source.clone(),
+            tags: beatmap.metadata.tags.clone(),
             ..Default::default()
         };
 
         // Convert BPM timing points
-        for (time_ms, bpm) in &beatmap.bpm_changes {
+        for tp in &beatmap.timing_points {
             #[allow(clippy::cast_possible_truncation)]
-            let time_us = (*time_ms * 1000.0) as i64;
-            chart.timing_points.push(TimingPoint::bpm(time_us, *bpm));
+            let time_us = (tp.time * 1000.0) as i64;
+
+            if tp.uninherited {
+                if let Some(bpm) = tp.bpm() {
+                    let mut timing = TimingPoint::bpm(time_us, bpm);
+                    timing.signature = tp.meter;
+                    chart.timing_points.push(timing);
+                }
+            } else {
+                // SV logic if needed, but Taiko SV is complex.
+                // For now, let's stick to BPM.
+            }
         }
 
         // Ensure at least one BPM point

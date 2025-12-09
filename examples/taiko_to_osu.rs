@@ -10,42 +10,13 @@ use rhythm_open_exchange::codec::formats::osu::OsuEncoder;
 use rhythm_open_exchange::codec::formats::taiko::{TaikoDecoder, types::ColumnLayout};
 
 fn main() {
-    // Note: Since we don't have a real .osu taiko file in assets yet,
-    // we'll use a hardcoded string for demonstration or a user provided file if available.
-    // Ideally this would read from assets/taiko/test.osu
+    // Use the real Taiko file from assets
+    let input_path = Path::new("assets/osu/taiko.osu");
+    if !input_path.exists() {
+        panic!("Please ensure assets/osu/taiko.osu exists before running this example.");
+    }
 
-    // Simulating input data for now, or reading if it exists.
-    let input_path = Path::new("assets/taiko/test.osu");
-    let taiko_data = if input_path.exists() {
-        fs::read(input_path).expect("Failed to read test.osu")
-    } else {
-        println!(
-            "No test file found at {}, using synthetic data.",
-            input_path.display()
-        );
-        // Simple synthetic Taiko map
-        b"osu file format v14
-[General]
-Mode: 1
-AudioFilename: audio.mp3
-
-[Metadata]
-Title:Synthetic Taiko
-Artist:Rust
-Creator:Rox
-Version:Oni
-
-[TimingPoints]
-0,500,4,1,0,100,1,0
-
-[HitObjects]
-256,192,1000,1,0,0:0:0:0:
-256,192,1250,1,2,0:0:0:0:
-256,192,1500,1,4,0:0:0:0:
-256,192,1750,1,8,0:0:0:0:
-"
-        .to_vec()
-    };
+    let taiko_data = fs::read(input_path).expect("Failed to read taiko.osu");
 
     println!("=== Taiko to ROX to Osu!mania Conversion ===\n");
 

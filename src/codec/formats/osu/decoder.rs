@@ -92,6 +92,15 @@ impl OsuDecoder {
 impl Decoder for OsuDecoder {
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
         let beatmap = parser::parse(data)?;
+
+        // Validate it's mania mode (3)
+        if beatmap.general.mode != 3 {
+            return Err(crate::error::RoxError::InvalidFormat(format!(
+                "Not a mania beatmap (mode={}, expected 3)",
+                beatmap.general.mode
+            )));
+        }
+
         Ok(Self::from_beatmap(&beatmap))
     }
 }
