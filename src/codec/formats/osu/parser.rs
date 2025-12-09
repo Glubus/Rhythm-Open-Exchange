@@ -1,10 +1,12 @@
 //! Parser for .osu file format.
 
-use super::types::*;
+use super::types::{
+    OsuBeatmap, OsuDifficulty, OsuGeneral, OsuHitObject, OsuMetadata, OsuTimingPoint,
+};
 use crate::error::{RoxError, RoxResult};
 
 /// Current section being parsed.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Section {
     None,
     General,
@@ -16,10 +18,16 @@ enum Section {
     HitObjects,
 }
 
-/// Parse a .osu file into an OsuBeatmap.
+/// Parse a .osu file into an `OsuBeatmap`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The data is not valid UTF-8
+/// - The beatmap is not in mania mode (mode != 3)
 pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
     let content = std::str::from_utf8(data)
-        .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {}", e)))?;
+        .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
 
     let mut beatmap = OsuBeatmap::default();
     let mut section = Section::None;
@@ -72,7 +80,7 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
                     beatmap.hit_objects.push(ho);
                 }
             }
-            _ => {}
+            Section::None | Section::Editor => {}
         }
     }
 
@@ -116,7 +124,10 @@ fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
                 }
             }
             "Tags" => {
-                metadata.tags = value.split_whitespace().map(|s| s.to_string()).collect();
+                metadata.tags = value
+                    .split_whitespace()
+                    .map(std::string::ToString::to_string)
+                    .collect();
             }
             "BeatmapID" => metadata.beatmap_id = value.parse().ok(),
             "BeatmapSetID" => metadata.beatmap_set_id = value.parse().ok(),
@@ -211,7 +222,7 @@ mod tests {
     #[test]
     fn test_parse_timing_point_bpm() {
         let tp = parse_timing_point("404,322.58064516129,4,1,1,50,1,0").unwrap();
-        assert_eq!(tp.time, 404.0);
+        assert!((tp.time - 404.0).abs() < f64::EPSILON);
         assert!(tp.uninherited);
         assert!((tp.bpm().unwrap() - 186.0).abs() < 1.0); // ~186 BPM
     }

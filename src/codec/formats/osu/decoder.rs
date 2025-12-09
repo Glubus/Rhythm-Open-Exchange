@@ -1,4 +1,4 @@
-//! Decoder for converting .osu to RoxChart.
+//! Decoder for converting .osu to `RoxChart`.
 
 use crate::codec::Decoder;
 use crate::error::RoxResult;
@@ -11,8 +11,11 @@ use super::types::OsuBeatmap;
 pub struct OsuDecoder;
 
 impl OsuDecoder {
-    /// Convert an OsuBeatmap to RoxChart.
+    /// Convert an `OsuBeatmap` to `RoxChart`.
+    #[must_use]
     pub fn from_beatmap(beatmap: &OsuBeatmap) -> RoxChart {
+        // Safe: circle_size is always 4-18 for mania which fits in u8
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let key_count = beatmap.difficulty.circle_size as u8;
         let mut chart = RoxChart::new(key_count);
 
@@ -33,9 +36,9 @@ impl OsuDecoder {
             difficulty_value: Some(beatmap.difficulty.overall_difficulty),
             audio_file: beatmap.general.audio_filename.clone(),
             background_file: beatmap.background.clone(),
-            audio_offset_us: beatmap.general.audio_lead_in as i64 * 1000,
+            audio_offset_us: i64::from(beatmap.general.audio_lead_in) * 1000,
             preview_time_us: if beatmap.general.preview_time > 0 {
-                beatmap.general.preview_time as i64 * 1000
+                i64::from(beatmap.general.preview_time) * 1000
             } else {
                 0
             },
@@ -46,6 +49,8 @@ impl OsuDecoder {
 
         // Convert timing points
         for tp in &beatmap.timing_points {
+            // Safe: time in ms fits in i64 after multiplying by 1000
+            #[allow(clippy::cast_possible_truncation)]
             let time_us = (tp.time * 1000.0) as i64;
 
             if tp.uninherited {
@@ -65,10 +70,10 @@ impl OsuDecoder {
         // Convert hit objects to notes
         for ho in &beatmap.hit_objects {
             let column = ho.column(key_count);
-            let time_us = ho.time as i64 * 1000;
+            let time_us = i64::from(ho.time) * 1000;
 
             let note = if ho.is_hold() {
-                let duration_us = ho.duration_ms() as i64 * 1000;
+                let duration_us = i64::from(ho.duration_ms()) * 1000;
                 Note::hold(time_us, duration_us, column)
             } else {
                 Note::tap(time_us, column)

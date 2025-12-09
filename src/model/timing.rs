@@ -19,6 +19,7 @@ pub struct TimingPoint {
 
 impl TimingPoint {
     /// Create a new BPM timing point.
+    #[must_use]
     pub fn bpm(time_us: i64, bpm: f32) -> Self {
         Self {
             time_us,
@@ -30,6 +31,7 @@ impl TimingPoint {
     }
 
     /// Create a scroll velocity change point.
+    #[must_use]
     pub fn sv(time_us: i64, scroll_speed: f32) -> Self {
         Self {
             time_us,

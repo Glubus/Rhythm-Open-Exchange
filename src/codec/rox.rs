@@ -162,8 +162,10 @@ mod tests {
         chart.timing_points.push(TimingPoint::bpm(0, 120.0));
 
         // Add many similar notes (compresses well)
-        for i in 0..1000 {
-            chart.notes.push(Note::tap(i * 100_000, (i % 4) as u8));
+        for i in 0i64..1000 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let column = (i % 4) as u8;
+            chart.notes.push(Note::tap(i * 100_000, column));
         }
 
         let encoded = RoxCodec::encode(&chart).expect("Failed to encode");

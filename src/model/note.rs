@@ -24,12 +24,13 @@ pub struct Note {
     pub column: u8,
     /// Type of note (tap, hold, burst, mine).
     pub note_type: NoteType,
-    /// Optional index into RoxChart.hitsounds for keysounded notes.
+    /// Optional index into `RoxChart.hitsounds` for keysounded notes.
     pub hitsound_index: Option<u16>,
 }
 
 impl Note {
     /// Create a tap note.
+    #[must_use]
     pub fn tap(time_us: i64, column: u8) -> Self {
         Self {
             time_us,
@@ -40,6 +41,7 @@ impl Note {
     }
 
     /// Create a hold note.
+    #[must_use]
     pub fn hold(time_us: i64, duration_us: i64, column: u8) -> Self {
         Self {
             time_us,
@@ -50,6 +52,7 @@ impl Note {
     }
 
     /// Create a burst/roll note.
+    #[must_use]
     pub fn burst(time_us: i64, duration_us: i64, column: u8) -> Self {
         Self {
             time_us,
@@ -60,6 +63,7 @@ impl Note {
     }
 
     /// Create a mine note.
+    #[must_use]
     pub fn mine(time_us: i64, column: u8) -> Self {
         Self {
             time_us,
@@ -70,21 +74,25 @@ impl Note {
     }
 
     /// Check if this is a hold note.
+    #[must_use]
     pub fn is_hold(&self) -> bool {
         matches!(self.note_type, NoteType::Hold { .. })
     }
 
     /// Check if this is a burst note.
+    #[must_use]
     pub fn is_burst(&self) -> bool {
         matches!(self.note_type, NoteType::Burst { .. })
     }
 
     /// Check if this is a mine.
+    #[must_use]
     pub fn is_mine(&self) -> bool {
         matches!(self.note_type, NoteType::Mine)
     }
 
     /// Get the duration for holds/bursts, or 0 for taps/mines.
+    #[must_use]
     pub fn duration_us(&self) -> i64 {
         match self.note_type {
             NoteType::Tap | NoteType::Mine => 0,
@@ -93,6 +101,7 @@ impl Note {
     }
 
     /// Get end time (start time + duration).
+    #[must_use]
     pub fn end_time_us(&self) -> i64 {
         self.time_us + self.duration_us()
     }

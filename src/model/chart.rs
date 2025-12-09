@@ -29,6 +29,7 @@ pub struct RoxChart {
 
 impl RoxChart {
     /// Create a new empty chart with the given key count.
+    #[must_use]
     pub fn new(key_count: u8) -> Self {
         Self {
             version: ROX_VERSION,
@@ -41,21 +42,24 @@ impl RoxChart {
     }
 
     /// Get the total duration of the chart in microseconds.
+    #[must_use]
     pub fn duration_us(&self) -> i64 {
         self.notes
             .iter()
-            .map(|n| n.end_time_us())
+            .map(super::note::Note::end_time_us)
             .max()
             .unwrap_or(0)
     }
 
     /// Get the number of notes (taps + holds).
+    #[must_use]
     pub fn note_count(&self) -> usize {
         self.notes.len()
     }
 
     /// Compute the BLAKE3 hash of the chart.
     /// Returns a 32-byte hash as a hex string.
+    #[must_use]
     pub fn hash(&self) -> String {
         let config = config::standard()
             .with_little_endian()
@@ -65,11 +69,16 @@ impl RoxChart {
     }
 
     /// Compute a short hash (first 16 hex chars).
+    #[must_use]
     pub fn short_hash(&self) -> String {
         self.hash()[..16].to_string()
     }
 
     /// Validate the chart (check column bounds, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any note has a column index >= `key_count`.
     pub fn validate(&self) -> Result<(), crate::RoxError> {
         for note in &self.notes {
             if note.column >= self.key_count {

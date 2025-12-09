@@ -3,6 +3,8 @@
 //! A universal, compact binary format for VSRG (Vertical Scrolling Rhythm Games).
 //! Serves as a pivot format for converting between different rhythm game formats.
 
+#![warn(clippy::pedantic)]
+
 pub mod codec;
 pub mod error;
 pub mod model;

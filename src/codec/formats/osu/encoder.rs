@@ -1,4 +1,6 @@
-//! Encoder for converting RoxChart to .osu format.
+//! Encoder for converting `RoxChart` to .osu format.
+
+use std::fmt::Write;
 
 use crate::codec::Encoder;
 use crate::error::RoxResult;
@@ -16,15 +18,17 @@ impl Encoder for OsuEncoder {
 
         // [General]
         output.push_str("[General]\n");
-        output.push_str(&format!("AudioFilename: {}\n", chart.metadata.audio_file));
-        output.push_str(&format!(
-            "AudioLeadIn: {}\n",
+        let _ = writeln!(output, "AudioFilename: {}", chart.metadata.audio_file);
+        let _ = writeln!(
+            output,
+            "AudioLeadIn: {}",
             chart.metadata.audio_offset_us / 1000
-        ));
-        output.push_str(&format!(
-            "PreviewTime: {}\n",
+        );
+        let _ = writeln!(
+            output,
+            "PreviewTime: {}",
             chart.metadata.preview_time_us / 1000
-        ));
+        );
         output.push_str("Countdown: 0\n");
         output.push_str("SampleSet: Normal\n");
         output.push_str("StackLeniency: 0.7\n");
@@ -42,17 +46,17 @@ impl Encoder for OsuEncoder {
 
         // [Metadata]
         output.push_str("[Metadata]\n");
-        output.push_str(&format!("Title:{}\n", chart.metadata.title));
-        output.push_str(&format!("TitleUnicode:{}\n", chart.metadata.title));
-        output.push_str(&format!("Artist:{}\n", chart.metadata.artist));
-        output.push_str(&format!("ArtistUnicode:{}\n", chart.metadata.artist));
-        output.push_str(&format!("Creator:{}\n", chart.metadata.creator));
-        output.push_str(&format!("Version:{}\n", chart.metadata.difficulty_name));
+        let _ = writeln!(output, "Title:{}", chart.metadata.title);
+        let _ = writeln!(output, "TitleUnicode:{}", chart.metadata.title);
+        let _ = writeln!(output, "Artist:{}", chart.metadata.artist);
+        let _ = writeln!(output, "ArtistUnicode:{}", chart.metadata.artist);
+        let _ = writeln!(output, "Creator:{}", chart.metadata.creator);
+        let _ = writeln!(output, "Version:{}", chart.metadata.difficulty_name);
         if let Some(source) = &chart.metadata.source {
-            output.push_str(&format!("Source:{}\n", source));
+            let _ = writeln!(output, "Source:{source}");
         }
         if !chart.metadata.tags.is_empty() {
-            output.push_str(&format!("Tags:{}\n", chart.metadata.tags.join(" ")));
+            let _ = writeln!(output, "Tags:{}", chart.metadata.tags.join(" "));
         }
         output.push_str("BeatmapID:0\n");
         output.push_str("BeatmapSetID:-1\n\n");
@@ -60,11 +64,12 @@ impl Encoder for OsuEncoder {
         // [Difficulty]
         output.push_str("[Difficulty]\n");
         output.push_str("HPDrainRate:8\n");
-        output.push_str(&format!("CircleSize:{}\n", chart.key_count));
-        output.push_str(&format!(
-            "OverallDifficulty:{}\n",
+        let _ = writeln!(output, "CircleSize:{}", chart.key_count);
+        let _ = writeln!(
+            output,
+            "OverallDifficulty:{}",
             chart.metadata.difficulty_value.unwrap_or(8.0)
-        ));
+        );
         output.push_str("ApproachRate:5\n");
         output.push_str("SliderMultiplier:1.4\n");
         output.push_str("SliderTickRate:1\n\n");
@@ -73,7 +78,7 @@ impl Encoder for OsuEncoder {
         output.push_str("[Events]\n");
         output.push_str("//Background and Video events\n");
         if let Some(bg) = &chart.metadata.background_file {
-            output.push_str(&format!("0,0,\"{}\",0,0\n", bg));
+            let _ = writeln!(output, "0,0,\"{bg}\",0,0");
         }
         output.push_str("//Break Periods\n");
         output.push_str("//Storyboard Layer 0 (Background)\n");
@@ -85,19 +90,21 @@ impl Encoder for OsuEncoder {
         // [TimingPoints]
         output.push_str("[TimingPoints]\n");
         for tp in &chart.timing_points {
+            #[allow(clippy::cast_precision_loss)]
             let time_ms = tp.time_us as f64 / 1000.0;
 
-            if !tp.is_inherited {
-                // BPM point: beatLength = 60000 / bpm
-                let beat_length = 60000.0 / tp.bpm as f64;
-                output.push_str(&format!(
-                    "{},{},{},1,0,100,1,0\n",
-                    time_ms, beat_length, tp.signature
-                ));
-            } else {
+            if tp.is_inherited {
                 // SV point: beatLength = -100 / sv
-                let beat_length = -100.0 / tp.scroll_speed as f64;
-                output.push_str(&format!("{},{},4,1,0,100,0,0\n", time_ms, beat_length));
+                let beat_length = -100.0 / f64::from(tp.scroll_speed);
+                let _ = writeln!(output, "{time_ms},{beat_length},4,1,0,100,0,0");
+            } else {
+                // BPM point: beatLength = 60000 / bpm
+                let beat_length = 60000.0 / f64::from(tp.bpm);
+                let _ = writeln!(
+                    output,
+                    "{},{},{},1,0,100,1,0",
+                    time_ms, beat_length, tp.signature
+                );
             }
         }
         output.push_str("\n\n");
@@ -105,25 +112,25 @@ impl Encoder for OsuEncoder {
         // [HitObjects]
         output.push_str("[HitObjects]\n");
         for note in &chart.notes {
+            // Safe: time_us / 1000 fits in i32 for typical beatmaps
+            #[allow(clippy::cast_possible_truncation)]
             let time_ms = (note.time_us / 1000) as i32;
             let x = column_to_x(note.column, chart.key_count);
 
             match &note.note_type {
                 crate::model::NoteType::Tap => {
                     // x,y,time,type,hitSound,extras
-                    output.push_str(&format!("{},192,{},1,0,0:0:0:0:\n", x, time_ms));
+                    let _ = writeln!(output, "{x},192,{time_ms},1,0,0:0:0:0:");
                 }
                 crate::model::NoteType::Hold { duration_us } => {
+                    #[allow(clippy::cast_possible_truncation)]
                     let end_time = time_ms + (*duration_us / 1000) as i32;
                     // x,y,time,type,hitSound,endTime:extras
-                    output.push_str(&format!(
-                        "{},192,{},128,0,{}:0:0:0:0:\n",
-                        x, time_ms, end_time
-                    ));
+                    let _ = writeln!(output, "{x},192,{time_ms},128,0,{end_time}:0:0:0:0:");
                 }
-                _ => {
+                crate::model::NoteType::Burst { .. } | crate::model::NoteType::Mine => {
                     // Burst and Mine - convert to tap for osu
-                    output.push_str(&format!("{},192,{},1,0,0:0:0:0:\n", x, time_ms));
+                    let _ = writeln!(output, "{x},192,{time_ms},1,0,0:0:0:0:");
                 }
             }
         }
@@ -134,11 +141,14 @@ impl Encoder for OsuEncoder {
 
 /// Convert column index to X position for osu.
 /// For 7K: 36, 109, 182, 256, 329, 402, 475
+#[must_use]
 pub fn column_to_x(column: u8, key_count: u8) -> i32 {
     // Use the same formula osu uses: x = floor(column * 512 / key_count) + floor(512 / key_count / 2)
     // For perfect centering, we calculate the column center position
-    let column_width = 512.0 / key_count as f64;
-    (column as f64 * column_width + column_width / 2.0).floor() as i32
+    let column_width = 512.0 / f64::from(key_count);
+    #[allow(clippy::cast_possible_truncation)]
+    let result = (f64::from(column) * column_width + column_width / 2.0).floor() as i32;
+    result
 }
 
 #[cfg(test)]

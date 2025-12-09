@@ -154,7 +154,8 @@ assert!(result.is_err()); // InvalidColumn error
 | N/A | Mine |
 
 osu! column calculation:
-```
+
+```bash
 column = floor(x * key_count / 512)
 ```
 
