@@ -5,13 +5,13 @@ use std::io::{Read, Write};
 use bincode::config;
 
 use crate::error::{RoxError, RoxResult};
-use crate::model::{Note, NoteType, ROX_MAGIC, RoxChart};
+use crate::model::{ROX_MAGIC, RoxChart};
 
 use super::{Decoder, Encoder};
 
 /// Compression level for zstd (1-22, higher = better compression but slower).
-/// Level 22 provides maximum compression.
-const COMPRESSION_LEVEL: i32 = 19;
+/// Level 3 provides fast compression with good ratio.
+const COMPRESSION_LEVEL: i32 = 3;
 
 /// Native ROX format codec using bincode for compact binary serialization
 /// and zstd for compression. Uses delta encoding for note timestamps.
