@@ -2,3 +2,4 @@
 
 mod osu;
 mod sm;
+mod taiko;

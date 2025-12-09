@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bincode = "2.0.1"
+bitflags = "2.9"
 blake3 = "1.8.2"
 rand = "0.9"
 thiserror = "2.0.17"

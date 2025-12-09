@@ -9,6 +9,8 @@
 
 pub mod osu;
 pub mod sm;
+pub mod taiko;
 
 pub use osu::{OsuDecoder, OsuEncoder};
 pub use sm::{SmDecoder, SmEncoder};
+pub use taiko::TaikoDecoder;

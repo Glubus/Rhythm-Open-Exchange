@@ -221,5 +221,6 @@ mod tests {
 | Quaver | `.qua` | ✓ | ✓ | Planned |
 | StepMania | `.sm` | ✓ | ✓ | **Implemented** |
 | Etterna | `.sm` | ✓ | ✓ | Planned |
+| Taiko | `.osu` | ✓ | ✓ | **Implemented** |
 | BMS | `.bms/.bme` | ✓ | ✗ | Planned |
 | O2Jam | `.ojn` | ✓ | ✗ | Planned |
