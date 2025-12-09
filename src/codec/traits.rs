@@ -28,4 +28,11 @@ pub trait Encoder {
         std::fs::write(path, data)?;
         Ok(())
     }
+
+    /// Encode a chart to a String (for text-based formats like .osu).
+    fn encode_to_string(chart: &RoxChart) -> RoxResult<String> {
+        let data = Self::encode(chart)?;
+        String::from_utf8(data)
+            .map_err(|e| crate::error::RoxError::InvalidFormat(format!("Invalid UTF-8: {}", e)))
+    }
 }
