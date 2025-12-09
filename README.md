@@ -2,6 +2,8 @@
 
 A universal, compact binary format for Vertical Scrolling Rhythm Games (VSRG). ROX serves as a pivot format for converting between different rhythm game formats like osu!mania, Quaver, StepMania, Etterna, and BMS.
 
+> "so i'm just trying to make a ffmpeg of rythm game idk where i'm going"
+
 ## Overview
 
 ROX is designed to be:
