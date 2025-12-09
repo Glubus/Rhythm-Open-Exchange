@@ -219,7 +219,7 @@ mod tests {
 |--------|-----------|--------|--------|--------|
 | osu!mania | `.osu` | ✓ | ✓ | **Implemented** |
 | Quaver | `.qua` | ✓ | ✓ | Planned |
-| StepMania | `.sm/.ssc` | ✓ | ✓ | Planned |
+| StepMania | `.sm` | ✓ | ✓ | **Implemented** |
 | Etterna | `.sm` | ✓ | ✓ | Planned |
 | BMS | `.bms/.bme` | ✓ | ✗ | Planned |
 | O2Jam | `.ojn` | ✓ | ✗ | Planned |

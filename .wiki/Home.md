@@ -66,7 +66,7 @@ println!("{}", chart.short_hash());
 |--------|--------|--------|--------|
 | osu!mania (.osu) | ✓ | ✓ | **Implemented** |
 | Quaver (.qua) | Planned | Planned | Not started |
-| StepMania (.sm/.ssc) | Planned | Planned | Not started |
+| StepMania (.sm) | ✓ | ✓ | **Implemented** |
 | Etterna | Planned | Planned | Not started |
 | BMS (.bms/.bme/.bml) | Planned | No | Not started |
 | O2Jam (.ojn/.ojm) | Planned | No | Not started |
