@@ -6,4 +6,13 @@ edition = "2024"
 [dependencies]
 bincode = "2.0.1"
 blake3 = "1.8.2"
+rand = "0.9"
 thiserror = "2.0.17"
+zstd = "0.13"
+
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "codec_bench"
+harness = false
