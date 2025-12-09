@@ -217,11 +217,15 @@ mod tests {
 
 | Format | Extension | Decode | Encode | Status |
 |--------|-----------|--------|--------|--------|
+| Format | Extension | Decode | Encode | Status |
+|--------|-----------|--------|--------|--------|
 | osu!mania | `.osu` | ✓ | ✓ | **Implemented** |
+| osu!taiko | `.osu` | ✓ | ✓ | **Implemented** |
+| StepMania / Etterna | `.sm/.ssc` | ✓ | ✓ | **Implemented** |
 | Quaver | `.qua` | ✓ | ✓ | Planned |
-| StepMania | `.sm` | ✓ | ✓ | **Implemented** |
-| Etterna | `.sm` | ✓ | ✓ | Planned |
-| Taiko | `.osu` | ✓ | ✓ | **Implemented** |
+| FNF | `.json` | ✓ | ✓ | Planned |
+| Malody | `.mc` | ✓ | ✓ | Planned |
+| RoBeats | - | ✓ | ✓ | Planned |
 | BMS | `.bms/.bme` | ✓ | ✗ | Planned |
 | O2Jam | `.ojn` | ✓ | ✗ | Planned |
 

@@ -2,7 +2,7 @@
 
 A universal, compact binary format for Vertical Scrolling Rhythm Games (VSRG). ROX serves as a pivot format for converting between different rhythm game formats like osu!mania, Quaver, StepMania, Etterna, and BMS.
 
-> "so i'm just trying to make a ffmpeg of rythm game idk where i'm going"
+> "so i'm just trying to make a ffmpeg of vsrg game idk where i'm going"
 
 ## Overview
 
@@ -11,7 +11,7 @@ ROX is designed to be:
 - **Compact** — Uses bincode for minimal file size with variable-length integer encoding
 - **Precise** — Microsecond timestamp precision (i64) for accurate timing
 - **Universal** — Supports all common VSRG features across different games
-- **Verifiable** — BLAKE3 content hashing for integrity verification
+- **Verifiable** — BLAKE3 content hashing for integrity verification 
 
 ## Features
 
@@ -34,7 +34,7 @@ rhythm-open-exchange = "0.1"
 Or clone and build locally:
 
 ```bash
-git clone https://github.com/your-username/Rhythm-Open-Exchange.git
+git clone https://github.com/Glubus/Rhythm-Open-Exchange.git
 cd Rhythm-Open-Exchange
 cargo build --release
 ```
@@ -185,9 +185,11 @@ ROX is built for extreme efficiency. Benchmarks on a massive 50,000 note chart (
 |--------|--------|--------|--------|
 | osu!mania (.osu) | **Implemented** | Yes | Yes |
 | osu!taiko (.osu) | **Implemented** | Yes | No |
-| StepMania (.sm) | **Implemented** | Yes | Yes |
+| StepMania / Etterna (.sm/.ssc) | **Implemented** | Yes | Yes |
 | Quaver (.qua) | Planned | Yes | Yes |
-| Etterna | Planned | Yes | Yes |
+| Friday Night Funkin' (.json) | Planned | Yes | Yes |
+| Malody (.mc) | Planned | Yes | Yes |
+| RoBeats | Planned | Yes | Yes |
 | BMS (.bms/.bme/.bml) | Planned | Yes | No |
 | O2Jam (.ojn/.ojm) | Planned | Yes | No |
 
