@@ -5,7 +5,7 @@ use rhythm_open_exchange::codec::formats::osu::OsuDecoder;
 
 #[test]
 fn test_decode_sample_7k() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart = OsuDecoder::decode(data).expect("Failed to decode");
 
     assert_eq!(chart.key_count, 7);
@@ -17,7 +17,7 @@ fn test_decode_sample_7k() {
 
 #[test]
 fn test_decode_metadata() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart = OsuDecoder::decode(data).unwrap();
 
     // Check unicode title is used
@@ -28,7 +28,7 @@ fn test_decode_metadata() {
 
 #[test]
 fn test_decode_timing_points() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart = OsuDecoder::decode(data).unwrap();
 
     // Should have at least one BPM point
@@ -46,7 +46,7 @@ fn test_decode_timing_points() {
 
 #[test]
 fn test_decode_notes_sorted() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart = OsuDecoder::decode(data).unwrap();
 
     // Notes should be sorted by time

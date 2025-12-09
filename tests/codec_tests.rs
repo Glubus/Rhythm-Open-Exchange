@@ -4,8 +4,8 @@ use rhythm_open_exchange::{
     Decoder, Encoder, Hitsound, Metadata, Note, RoxChart, RoxCodec, TimingPoint,
 };
 
+mod codec;
 mod common;
-
 /// Test basic roundtrip: encode then decode should produce identical chart.
 #[test]
 fn test_roundtrip_basic() {

@@ -133,7 +133,7 @@ fn test_encode_basic() {
 
 #[test]
 fn test_roundtrip() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart1 = OsuDecoder::decode(data).unwrap();
     let encoded = OsuEncoder::encode(&chart1).unwrap();
     let chart2 = OsuDecoder::decode(&encoded).unwrap();

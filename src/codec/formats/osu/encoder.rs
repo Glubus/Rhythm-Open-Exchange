@@ -143,27 +143,9 @@ impl Encoder for OsuEncoder {
 /// For 7K: 36, 109, 182, 256, 329, 402, 475
 #[must_use]
 pub fn column_to_x(column: u8, key_count: u8) -> i32 {
-    // Use the same formula osu uses: x = floor(column * 512 / key_count) + floor(512 / key_count / 2)
-    // For perfect centering, we calculate the column center position
-    let column_width = 512.0 / f64::from(key_count);
-    #[allow(clippy::cast_possible_truncation)]
-    let result = (f64::from(column) * column_width + column_width / 2.0).floor() as i32;
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_column_to_x() {
-        // 7K: 36, 109, 182, 256, 329, 402, 475
-        assert_eq!(column_to_x(0, 7), 36);
-        assert_eq!(column_to_x(1, 7), 109);
-        assert_eq!(column_to_x(2, 7), 182);
-        assert_eq!(column_to_x(3, 7), 256); // center
-        assert_eq!(column_to_x(4, 7), 329);
-        assert_eq!(column_to_x(5, 7), 402);
-        assert_eq!(column_to_x(6, 7), 475);
-    }
+    // Formula: center of column = (2*column + 1) * 256 / key_count
+    // Use integer arithmetic to avoid floating-point precision errors
+    let column = i32::from(column);
+    let key_count = i32::from(key_count);
+    (2 * column + 1) * 256 / key_count
 }

@@ -73,7 +73,7 @@ fn test_column_calculation() {
 
 #[test]
 fn test_parse_full_sample() {
-    let data = include_bytes!("../../../assets/osu/mania_7k.osu");
+    let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let beatmap = parse(data).unwrap();
 
     assert_eq!(beatmap.general.mode, 3); // mania

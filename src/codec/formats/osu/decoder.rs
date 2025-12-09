@@ -95,19 +95,3 @@ impl Decoder for OsuDecoder {
         Ok(Self::from_beatmap(&beatmap))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_decode_sample() {
-        let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
-        let chart = OsuDecoder::decode(data).expect("Failed to decode");
-
-        assert_eq!(chart.key_count, 7);
-        assert!(!chart.notes.is_empty());
-        assert!(!chart.timing_points.is_empty());
-        assert_eq!(chart.metadata.difficulty_name, "7K Awakened");
-    }
-}
