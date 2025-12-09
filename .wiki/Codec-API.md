@@ -6,7 +6,7 @@ The codec API provides traits and implementations for encoding/decoding ROX char
 
 ### Encoder
 
-Convert a `RoxChart` to bytes or file:
+Convert a `RoxChart` to bytes, file, or string:
 
 ```rust
 pub trait Encoder {
@@ -15,8 +15,12 @@ pub trait Encoder {
 
     /// Encode a chart to a file path.
     fn encode_to_path(chart: &RoxChart, path: impl AsRef<Path>) -> RoxResult<()>;
+
+    /// Encode a chart to a String (for text-based formats like .osu).
+    fn encode_to_string(chart: &RoxChart) -> RoxResult<String>;
 }
 ```
+
 
 ### Decoder
 

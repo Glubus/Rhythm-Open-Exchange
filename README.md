@@ -95,7 +95,25 @@ let short = chart.short_hash();
 println!("Chart ID: {}", short);
 ```
 
+### Converting osu!mania files
+
+```rust
+use rhythm_open_exchange::codec::formats::osu::{OsuDecoder, OsuEncoder};
+use rhythm_open_exchange::codec::{Decoder, Encoder};
+
+// Load .osu file
+let chart = OsuDecoder::decode_from_path("song.osu")?;
+println!("Loaded: {} [{}]", chart.metadata.title, chart.metadata.difficulty_name);
+
+// Convert to .rox (compact binary)
+RoxCodec::encode_to_path(&chart, "output/song.rox")?;
+
+// Or export back to .osu
+OsuEncoder::encode_to_path(&chart, "output/song_converted.osu")?;
+```
+
 ## API Reference
+
 
 ### Core Types
 
@@ -151,7 +169,7 @@ The chart data is serialized using bincode with:
 
 | Format | Status | Import | Export |
 |--------|--------|--------|--------|
-| osu!mania (.osu) | Planned | Yes | Yes |
+| osu!mania (.osu) | **Implemented** | Yes | Yes |
 | Quaver (.qua) | Planned | Yes | Yes |
 | StepMania (.sm/.ssc) | Planned | Yes | Yes |
 | Etterna | Planned | Yes | Yes |
@@ -203,31 +221,36 @@ cargo test integration  # Run integration tests
 
 ## Project Structure
 
-```
+```text
 rhythm-open-exchange/
 ├── src/
-│   ├── lib.rs          # Library entry point and re-exports
-│   ├── error.rs        # Error types (RoxError, RoxResult)
+│   ├── lib.rs              # Library entry point and re-exports
+│   ├── error.rs            # Error types (RoxError, RoxResult)
 │   ├── codec/
-│   │   ├── mod.rs      # Codec module
-│   │   ├── traits.rs   # Encoder/Decoder traits
-│   │   └── rox.rs      # RoxCodec implementation
+│   │   ├── mod.rs          # Codec module
+│   │   ├── traits.rs       # Encoder/Decoder traits
+│   │   ├── rox.rs          # RoxCodec (with zstd + delta encoding)
+│   │   └── formats/        # Format converters
+│   │       └── osu/        # osu!mania (.osu) converter
 │   └── model/
-│       ├── mod.rs      # Model module
-│       ├── chart.rs    # RoxChart struct
-│       ├── metadata.rs # Metadata struct
-│       ├── note.rs     # Note and NoteType
-│       ├── timing.rs   # TimingPoint
-│       └── hitsound.rs # Hitsound
+│       ├── chart.rs        # RoxChart struct
+│       ├── metadata.rs     # Metadata struct
+│       ├── note.rs         # Note and NoteType
+│       ├── timing.rs       # TimingPoint
+│       └── hitsound.rs     # Hitsound
 ├── tests/
-│   ├── common/         # Test utilities
-│   ├── codec_tests.rs  # Codec tests
-│   ├── model_tests.rs  # Model tests
+│   ├── common/             # Test utilities
+│   ├── codec/formats/osu/  # osu format tests
+│   ├── codec_tests.rs
+│   ├── model_tests.rs
 │   └── integration_tests.rs
-├── .wiki/              # Documentation wiki
-├── Cargo.toml
+├── examples/               # Usage examples
+├── assets/                 # Test assets (.osu files)
+├── output/                 # Generated files (gitignored)
+├── .wiki/                  # Documentation wiki
 └── README.md
 ```
+
 
 ## Contributing
 
