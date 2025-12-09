@@ -1,1 +1,6 @@
 /target
+/output/*.rox
+/output/*.osu
+*.rox
+*.osu
+!assets/**

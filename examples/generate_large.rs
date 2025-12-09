@@ -5,8 +5,12 @@
 
 use rand::Rng;
 use rhythm_open_exchange::{Decoder, Encoder, Metadata, Note, RoxChart, RoxCodec, TimingPoint};
+use std::fs;
 
 fn main() {
+    // Create output directory if it doesn't exist
+    fs::create_dir_all("output").expect("Failed to create output directory");
+
     println!("Generating large ROX chart with random timing...");
 
     let mut rng = rand::rng();
@@ -119,7 +123,7 @@ fn main() {
     );
 
     // Save to file
-    let output_path = "large_chart.rox";
+    let output_path = "output/large_chart.rox";
     RoxCodec::encode_to_path(&chart, output_path).expect("Failed to write file!");
     println!("  Saved to: {}", output_path);
 
