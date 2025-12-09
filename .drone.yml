@@ -16,19 +16,19 @@ steps:
       - git clone http://100.67.82.99:3000/osef/Rhythm-Open-Exchange.git .
       - git checkout $DRONE_COMMIT
 
-  - name: test
-    image: arm64v8/rust:bullseye
-    commands:
-      - cargo test
-
-  - name: clippy
-    image: arm64v8/rust:bullseye
-    commands:
-      - rustup component add clippy
-      - cargo clippy -- -D warnings -W clippy::pedantic -A clippy::unwrap_used -A clippy::expect_used
-
   - name: fmt
     image: arm64v8/rust:bullseye
     commands:
       - rustup component add rustfmt
       - cargo fmt -- --check
+
+  - name: clippy
+    image: arm64v8/rust:bullseye
+    commands:
+      - rustup component add clippy
+      - cargo clippy --all-targets -- -D warnings -W clippy::pedantic
+
+  - name: test
+    image: arm64v8/rust:bullseye
+    commands:
+      - cargo test --all
