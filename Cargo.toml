@@ -1,11 +1,16 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/Glubus/rhythm-open-exchange"
+keywords = ["resources", "build-time", "xml", "config"]
+categories = ["config", "development-tools::build-utils"]
+readme = "README.md"
+description = "A try to create the ffmpeg of vsrg"
 
 [features]
 default = []
-# Pure-Rust feature for WASM compilation (no C dependencies)
 wasm = []
 
 [dependencies]
@@ -17,14 +22,12 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 thiserror = "2.0.17"
 
-# Native-only dependencies (C backends)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 blake3 = "1.8.2"
 zstd = "0.13"
 
-# WASM-compatible alternatives
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-sha2 = "0.10" # Pure Rust hash (replacing blake3 for WASM)
+sha2 = "0.10"
 
 [dev-dependencies]
 criterion = "0.8.1"
