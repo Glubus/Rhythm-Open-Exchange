@@ -222,7 +222,7 @@ mod tests {
 | osu!mania | `.osu` | ✓ | ✓ | **Implemented** |
 | osu!taiko | `.osu` | ✓ | ✓ | **Implemented** |
 | StepMania / Etterna | `.sm/.ssc` | ✓ | ✓ | **Implemented** |
-| Quaver | `.qua` | ✓ | ✓ | Planned |
+| Quaver | `.qua` | ✓ | ✓ | **Implemented** |
 | FNF | `.json` | ✓ | ✓ | Planned |
 | Malody | `.mc` | ✓ | ✓ | Planned |
 | RoBeats | - | ✓ | ✓ | Planned |

@@ -186,7 +186,7 @@ ROX is built for extreme efficiency. Benchmarks on a massive 50,000 note chart (
 | osu!mania (.osu) | **Implemented** | Yes | Yes |
 | osu!taiko (.osu) | **Implemented** | Yes | No |
 | StepMania / Etterna (.sm/.ssc) | **Implemented** | Yes | Yes |
-| Quaver (.qua) | Planned | Yes | Yes |
+| Quaver (.qua) | **Implemented** | Yes | Yes |
 | Friday Night Funkin' (.json) | Planned | Yes | Yes |
 | Malody (.mc) | Planned | Yes | Yes |
 | RoBeats | Planned | Yes | Yes |

@@ -7,7 +7,9 @@ use std::path::Path;
 use crate::error::{RoxError, RoxResult};
 use crate::model::RoxChart;
 
-use super::formats::{OsuDecoder, OsuEncoder, SmDecoder, SmEncoder, TaikoDecoder};
+use super::formats::{
+    OsuDecoder, OsuEncoder, QuaDecoder, QuaEncoder, SmDecoder, SmEncoder, TaikoDecoder,
+};
 use super::rox::RoxCodec;
 use super::{Decoder, Encoder};
 
@@ -22,6 +24,8 @@ pub enum InputFormat {
     Taiko,
     /// `StepMania` format (`.sm`)
     Sm,
+    /// Quaver format (`.qua`)
+    Qua,
 }
 
 /// Supported output format extensions for encoding.
@@ -33,12 +37,18 @@ pub enum OutputFormat {
     Osu,
     /// `StepMania` format (`.sm`)
     Sm,
+    /// Quaver format (`.qua`)
+    Qua,
 }
 
 impl InputFormat {
     /// All supported input extensions.
-    pub const EXTENSIONS: &'static [(&'static str, Self)] =
-        &[("rox", Self::Rox), ("osu", Self::Osu), ("sm", Self::Sm)];
+    pub const EXTENSIONS: &'static [(&'static str, Self)] = &[
+        ("rox", Self::Rox),
+        ("osu", Self::Osu),
+        ("sm", Self::Sm),
+        ("qua", Self::Qua),
+    ];
 
     /// Detect format from file extension.
     ///
@@ -74,8 +84,12 @@ impl InputFormat {
 
 impl OutputFormat {
     /// All supported output extensions.
-    pub const EXTENSIONS: &'static [(&'static str, Self)] =
-        &[("rox", Self::Rox), ("osu", Self::Osu), ("sm", Self::Sm)];
+    pub const EXTENSIONS: &'static [(&'static str, Self)] = &[
+        ("rox", Self::Rox),
+        ("osu", Self::Osu),
+        ("sm", Self::Sm),
+        ("qua", Self::Qua),
+    ];
 
     /// Detect format from file extension.
     ///
@@ -133,6 +147,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         InputFormat::Osu => OsuDecoder::decode(&data),
         InputFormat::Taiko => TaikoDecoder::decode(&data),
         InputFormat::Sm => SmDecoder::decode(&data),
+        InputFormat::Qua => QuaDecoder::decode(&data),
     }
 }
 
@@ -147,6 +162,7 @@ pub fn decode_with_format(data: &[u8], format: InputFormat) -> RoxResult<RoxChar
         InputFormat::Osu => OsuDecoder::decode(data),
         InputFormat::Taiko => TaikoDecoder::decode(data),
         InputFormat::Sm => SmDecoder::decode(data),
+        InputFormat::Qua => QuaDecoder::decode(data),
     }
 }
 
@@ -172,6 +188,7 @@ pub fn auto_encode(chart: &RoxChart, path: impl AsRef<Path>) -> RoxResult<()> {
         OutputFormat::Rox => RoxCodec::encode(chart)?,
         OutputFormat::Osu => OsuEncoder::encode(chart)?,
         OutputFormat::Sm => SmEncoder::encode(chart)?,
+        OutputFormat::Qua => QuaEncoder::encode(chart)?,
     };
 
     std::fs::write(path, data)?;
@@ -188,6 +205,7 @@ pub fn encode_with_format(chart: &RoxChart, format: OutputFormat) -> RoxResult<V
         OutputFormat::Rox => RoxCodec::encode(chart),
         OutputFormat::Osu => OsuEncoder::encode(chart),
         OutputFormat::Sm => SmEncoder::encode(chart),
+        OutputFormat::Qua => QuaEncoder::encode(chart),
     }
 }
 
