@@ -2,7 +2,7 @@ name: Publish
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     # Only run when version changes in Cargo.toml
     paths:
       - "Cargo.toml"
