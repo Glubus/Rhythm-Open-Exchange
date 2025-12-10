@@ -56,3 +56,55 @@ pub trait Encoder {
             .map_err(|e| crate::error::RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))
     }
 }
+
+/// Trait for formats that support specific file extensions.
+/// Implement this trait to enable auto-detection based on file extension.
+pub trait Format {
+    /// List of supported file extensions (lowercase, without leading dot).
+    /// Example: `["osu"]` or `["sm", "ssc"]`
+    const EXTENSIONS: &'static [&'static str];
+
+    /// Check if this format supports the given extension.
+    fn supports_extension(ext: &str) -> bool {
+        let ext_lower = ext.to_lowercase();
+        Self::EXTENSIONS.iter().any(|&e| e == ext_lower)
+    }
+}
+
+/// Convert data from one format to another using ROX as the intermediate format.
+///
+/// # Example
+/// ```ignore
+/// use rox::codec::{convert, formats::{OsuDecoder, SmEncoder}};
+///
+/// let osu_bytes = std::fs::read("chart.osu")?;
+/// let sm_bytes = convert::<OsuDecoder, SmEncoder>(&osu_bytes)?;
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if decoding or encoding fails.
+pub fn convert<D: Decoder, E: Encoder>(data: &[u8]) -> RoxResult<Vec<u8>> {
+    let chart = D::decode(data)?;
+    E::encode(&chart)
+}
+
+/// Convert a file from one format to another using ROX as the intermediate format.
+///
+/// # Example
+/// ```ignore
+/// use rox::codec::{convert_file, formats::{OsuDecoder, SmEncoder}};
+///
+/// convert_file::<OsuDecoder, SmEncoder>("chart.osu", "chart.sm")?;
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if reading, decoding, encoding, or writing fails.
+pub fn convert_file<D: Decoder, E: Encoder>(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+) -> RoxResult<()> {
+    let chart = D::decode_from_path(input)?;
+    E::encode_to_path(&chart, output)
+}

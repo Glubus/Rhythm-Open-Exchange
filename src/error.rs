@@ -43,4 +43,7 @@ pub enum RoxError {
 
     #[error("Parse error at line {line}: {message}")]
     ParseError { line: usize, message: String },
+
+    #[error("Unsupported format: {0}")]
+    UnsupportedFormat(String),
 }
