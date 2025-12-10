@@ -1,5 +1,6 @@
 //! Native ROX binary codec with optional zstd compression.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Read, Write};
 
 use bincode::config;
