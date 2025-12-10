@@ -65,6 +65,7 @@ pub trait Format {
     const EXTENSIONS: &'static [&'static str];
 
     /// Check if this format supports the given extension.
+    #[must_use]
     fn supports_extension(ext: &str) -> bool {
         let ext_lower = ext.to_lowercase();
         Self::EXTENSIONS.iter().any(|&e| e == ext_lower)

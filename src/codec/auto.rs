@@ -20,7 +20,7 @@ pub enum InputFormat {
     Osu,
     /// osu!taiko format (`.osu` with mode detection)
     Taiko,
-    /// StepMania format (`.sm`)
+    /// `StepMania` format (`.sm`)
     Sm,
 }
 
@@ -31,7 +31,7 @@ pub enum OutputFormat {
     Rox,
     /// osu!mania format (`.osu`)
     Osu,
-    /// StepMania format (`.sm`)
+    /// `StepMania` format (`.sm`)
     Sm,
 }
 
