@@ -57,15 +57,27 @@ impl RoxChart {
         self.notes.len()
     }
 
-    /// Compute the BLAKE3 hash of the chart.
-    /// Returns a 32-byte hash as a hex string.
+    /// Compute a hash of the chart.
+    /// Returns a hash as a hex string.
+    /// Uses BLAKE3 on native, SHA256 on WASM.
     #[must_use]
     pub fn hash(&self) -> String {
         let config = config::standard()
             .with_little_endian()
             .with_variable_int_encoding();
         let encoded = bincode::encode_to_vec(self, config).unwrap_or_default();
-        blake3::hash(&encoded).to_hex().to_string()
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            blake3::hash(&encoded).to_hex().to_string()
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use sha2::{Digest, Sha256};
+            let result = Sha256::digest(&encoded);
+            format!("{:x}", result)
+        }
     }
 
     /// Compute a short hash (first 16 hex chars).

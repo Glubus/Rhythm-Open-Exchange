@@ -3,16 +3,28 @@ name = "rhythm-open-exchange"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+# Pure-Rust feature for WASM compilation (no C dependencies)
+wasm = []
+
 [dependencies]
 bincode = "2.0.1"
 bitflags = "2.9"
-blake3 = "1.8.2"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 thiserror = "2.0.17"
+
+# Native-only dependencies (C backends)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+blake3 = "1.8.2"
 zstd = "0.13"
+
+# WASM-compatible alternatives
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+sha2 = "0.10" # Pure Rust hash (replacing blake3 for WASM)
 
 [dev-dependencies]
 criterion = "0.8.1"

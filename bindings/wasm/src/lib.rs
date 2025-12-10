@@ -5,8 +5,7 @@
 use rhythm_open_exchange::codec::formats::{
     FnfDecoder, FnfEncoder, OsuDecoder, OsuEncoder, QuaDecoder, QuaEncoder, SmDecoder, SmEncoder,
 };
-use rhythm_open_exchange::codec::rox::RoxCodec;
-use rhythm_open_exchange::codec::{Decoder, Encoder};
+use rhythm_open_exchange::codec::{Decoder, Encoder, RoxCodec};
 use rhythm_open_exchange::model::RoxChart;
 use wasm_bindgen::prelude::*;
 

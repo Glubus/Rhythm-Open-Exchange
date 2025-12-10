@@ -1,4 +1,4 @@
-//! Native ROX binary codec with zstd compression.
+//! Native ROX binary codec with optional zstd compression.
 
 use std::io::{Read, Write};
 
@@ -11,10 +11,11 @@ use super::{Decoder, Encoder};
 
 /// Compression level for zstd (1-22, higher = better compression but slower).
 /// Level 3 provides fast compression with good ratio.
+#[cfg(not(target_arch = "wasm32"))]
 const COMPRESSION_LEVEL: i32 = 3;
 
 /// Native ROX format codec using bincode for compact binary serialization
-/// and zstd for compression. Uses delta encoding for note timestamps.
+/// and zstd for compression (native only). Uses delta encoding for note timestamps.
 pub struct RoxCodec;
 
 impl RoxCodec {
@@ -25,19 +26,33 @@ impl RoxCodec {
             .with_variable_int_encoding()
     }
 
-    /// Compress data using zstd.
+    /// Compress data (zstd on native, passthrough on WASM).
+    #[cfg(not(target_arch = "wasm32"))]
     fn compress(data: &[u8]) -> RoxResult<Vec<u8>> {
         let mut encoder = zstd::stream::Encoder::new(Vec::new(), COMPRESSION_LEVEL)?;
         encoder.write_all(data)?;
         Ok(encoder.finish()?)
     }
 
-    /// Decompress data using zstd.
+    #[cfg(target_arch = "wasm32")]
+    fn compress(data: &[u8]) -> RoxResult<Vec<u8>> {
+        // No compression on WASM - just return data as-is
+        Ok(data.to_vec())
+    }
+
+    /// Decompress data (zstd on native, passthrough on WASM).
+    #[cfg(not(target_arch = "wasm32"))]
     fn decompress(data: &[u8]) -> RoxResult<Vec<u8>> {
         let mut decoder = zstd::stream::Decoder::new(data)?;
         let mut decompressed = Vec::new();
         decoder.read_to_end(&mut decompressed)?;
         Ok(decompressed)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn decompress(data: &[u8]) -> RoxResult<Vec<u8>> {
+        // No compression on WASM - data is already uncompressed
+        Ok(data.to_vec())
     }
 
     /// Apply delta encoding to note timestamps for better compression.
