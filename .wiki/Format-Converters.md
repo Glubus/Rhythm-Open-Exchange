@@ -223,9 +223,8 @@ mod tests {
 | osu!taiko | `.osu` | ✓ | ✓ | **Implemented** |
 | StepMania / Etterna | `.sm/.ssc` | ✓ | ✓ | **Implemented** |
 | Quaver | `.qua` | ✓ | ✓ | **Implemented** |
-| FNF | `.json` | ✓ | ✓ | Planned |
+| FNF | `.json` | ✓ | ✓ | **Implemented** |
 | Malody | `.mc` | ✓ | ✓ | Planned |
-| RoBeats | - | ✓ | ✓ | Planned |
 | Clone Hero | `.chart` | ✓ | ✓ | Experimental |
 | BMS | `.bms/.bme` | ✓ | ✗ | Planned |
 | O2Jam | `.ojn` | ✓ | ✗ | Planned |

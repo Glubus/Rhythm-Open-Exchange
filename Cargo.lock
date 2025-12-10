@@ -533,6 +533,7 @@ dependencies = [
  "criterion",
  "rand",
  "serde",
+ "serde_json",
  "serde_yaml",
  "thiserror",
  "zstd",

@@ -7,11 +7,13 @@
 //!
 //! See `formats/README.md` for guidelines on implementing new formats.
 
+pub mod fnf;
 pub mod osu;
 pub mod qua;
 pub mod sm;
 pub mod taiko;
 
+pub use fnf::{FnfDecoder, FnfEncoder, FnfSide};
 pub use osu::{OsuDecoder, OsuEncoder};
 pub use qua::{QuaDecoder, QuaEncoder};
 pub use sm::{SmDecoder, SmEncoder};

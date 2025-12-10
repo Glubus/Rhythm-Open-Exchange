@@ -8,7 +8,8 @@ use crate::error::{RoxError, RoxResult};
 use crate::model::RoxChart;
 
 use super::formats::{
-    OsuDecoder, OsuEncoder, QuaDecoder, QuaEncoder, SmDecoder, SmEncoder, TaikoDecoder,
+    FnfDecoder, FnfEncoder, OsuDecoder, OsuEncoder, QuaDecoder, QuaEncoder, SmDecoder, SmEncoder,
+    TaikoDecoder,
 };
 use super::rox::RoxCodec;
 use super::{Decoder, Encoder};
@@ -26,6 +27,8 @@ pub enum InputFormat {
     Sm,
     /// Quaver format (`.qua`)
     Qua,
+    /// Friday Night Funkin' format (`.json`)
+    Fnf,
 }
 
 /// Supported output format extensions for encoding.
@@ -39,6 +42,8 @@ pub enum OutputFormat {
     Sm,
     /// Quaver format (`.qua`)
     Qua,
+    /// Friday Night Funkin' format (`.json`)
+    Fnf,
 }
 
 impl InputFormat {
@@ -48,6 +53,7 @@ impl InputFormat {
         ("osu", Self::Osu),
         ("sm", Self::Sm),
         ("qua", Self::Qua),
+        ("json", Self::Fnf),
     ];
 
     /// Detect format from file extension.
@@ -89,6 +95,7 @@ impl OutputFormat {
         ("osu", Self::Osu),
         ("sm", Self::Sm),
         ("qua", Self::Qua),
+        ("json", Self::Fnf),
     ];
 
     /// Detect format from file extension.
@@ -148,6 +155,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         InputFormat::Taiko => TaikoDecoder::decode(&data),
         InputFormat::Sm => SmDecoder::decode(&data),
         InputFormat::Qua => QuaDecoder::decode(&data),
+        InputFormat::Fnf => FnfDecoder::decode(&data),
     }
 }
 
@@ -163,6 +171,7 @@ pub fn decode_with_format(data: &[u8], format: InputFormat) -> RoxResult<RoxChar
         InputFormat::Taiko => TaikoDecoder::decode(data),
         InputFormat::Sm => SmDecoder::decode(data),
         InputFormat::Qua => QuaDecoder::decode(data),
+        InputFormat::Fnf => FnfDecoder::decode(data),
     }
 }
 
@@ -189,6 +198,7 @@ pub fn auto_encode(chart: &RoxChart, path: impl AsRef<Path>) -> RoxResult<()> {
         OutputFormat::Osu => OsuEncoder::encode(chart)?,
         OutputFormat::Sm => SmEncoder::encode(chart)?,
         OutputFormat::Qua => QuaEncoder::encode(chart)?,
+        OutputFormat::Fnf => FnfEncoder::encode(chart)?,
     };
 
     std::fs::write(path, data)?;
@@ -206,6 +216,7 @@ pub fn encode_with_format(chart: &RoxChart, format: OutputFormat) -> RoxResult<V
         OutputFormat::Osu => OsuEncoder::encode(chart),
         OutputFormat::Sm => SmEncoder::encode(chart),
         OutputFormat::Qua => QuaEncoder::encode(chart),
+        OutputFormat::Fnf => FnfEncoder::encode(chart),
     }
 }
 

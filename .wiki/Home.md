@@ -62,15 +62,7 @@ println!("{}", chart.short_hash());
 
 ## Supported Conversions
 
-| Format | Import | Export | Status |
-|--------|--------|--------|--------|
-| osu!mania (.osu) | ✓ | ✓ | **Implemented** |
-| StepMania (.sm) | ✓ | ✓ | **Implemented** |
-| osu!taiko (.osu) | ✓ | ✓ | **Implemented** |
-| Quaver (.qua) | Planned | Planned | Not started |
-| Etterna | Planned | Planned | Not started |
-| BMS (.bms/.bme/.bml) | Planned | No | Not started |
-| O2Jam (.ojn/.ojm) | Planned | No | Not started |
+See [Format Converters](Format-Converters) for the full list of supported formats and conversion status.
 
 ## Project Links
 

@@ -1,0 +1,67 @@
+{
+  "song": {
+    "song": "Test-Song",
+    "bpm": 150,
+    "speed": 1.5,
+    "player1": "bf",
+    "player2": "dad",
+    "needsVoices": true,
+    "validScore": true,
+    "notes": [
+      {
+        "sectionNotes": [
+          [0, 0, 0],
+          [400, 1, 0],
+          [800, 2, 0],
+          [1200, 3, 0]
+        ],
+        "lengthInSteps": 16,
+        "mustHitSection": false,
+        "changeBPM": false,
+        "bpm": 150
+      },
+      {
+        "sectionNotes": [
+          [1600, 0, 0],
+          [2000, 1, 0],
+          [2400, 2, 0],
+          [2800, 3, 0]
+        ],
+        "lengthInSteps": 16,
+        "mustHitSection": true,
+        "changeBPM": false,
+        "bpm": 150
+      },
+      {
+        "sectionNotes": [
+          [3200, 0, 400],
+          [3200, 4, 0],
+          [3600, 1, 0],
+          [3600, 5, 0],
+          [4000, 2, 0],
+          [4000, 6, 0],
+          [4400, 3, 0],
+          [4400, 7, 0]
+        ],
+        "lengthInSteps": 16,
+        "mustHitSection": true,
+        "changeBPM": false,
+        "bpm": 150
+      },
+      {
+        "sectionNotes": [
+          [4800, 0, 0],
+          [4800, 2, 0],
+          [5200, 1, 0],
+          [5200, 3, 0],
+          [5600, 0, 800],
+          [6400, 2, 400]
+        ],
+        "lengthInSteps": 16,
+        "mustHitSection": false,
+        "changeBPM": true,
+        "bpm": 180
+      }
+    ]
+  }
+}
