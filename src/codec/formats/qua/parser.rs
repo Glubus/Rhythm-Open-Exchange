@@ -1,4 +1,4 @@
-//! Parser for Quaver .qua files using serde_yaml.
+//! Parser for Quaver .qua files using `serde_yaml`.
 
 use super::types::QuaChart;
 use crate::error::{RoxError, RoxResult};

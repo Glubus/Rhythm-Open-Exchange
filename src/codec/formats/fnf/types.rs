@@ -71,7 +71,7 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FnfSection {
-    /// Notes in this section: [time_ms, lane, duration_ms].
+    /// Notes in this section: `[time_ms, lane, duration_ms]`.
     #[serde(default)]
     pub section_notes: Vec<FnfNote>,
     /// Length of section in steps (16th notes).
@@ -84,7 +84,7 @@ pub struct FnfSection {
     /// Whether BPM changes in this section.
     #[serde(default)]
     pub change_bpm: bool,
-    /// New BPM if change_bpm is true.
+    /// New BPM if `change_bpm` is true.
     #[serde(default)]
     pub bpm: f32,
     /// Section type (often 0).
@@ -96,7 +96,7 @@ fn default_length() -> i32 {
     16
 }
 
-/// A single note: [time_ms, lane, duration_ms].
+/// A single note: `[time_ms, lane, duration_ms]`.
 /// Using a tuple struct for the array format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]

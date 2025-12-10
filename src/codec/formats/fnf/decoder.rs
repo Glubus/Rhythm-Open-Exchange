@@ -87,10 +87,10 @@ impl FnfDecoder {
                         }
                     }
                     FnfSide::Opponent => {
-                        if !is_player_note {
-                            Some(base_lane)
-                        } else {
+                        if is_player_note {
                             None
+                        } else {
+                            Some(base_lane)
                         }
                     }
                     FnfSide::Both => {

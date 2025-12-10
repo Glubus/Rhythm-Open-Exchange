@@ -42,8 +42,8 @@ pub struct Metadata {
 
     // Coop/multiplayer info
     /// Whether this chart is designed for 2-player coop mode.
-    /// When true, columns are split evenly: P1 = 0..key_count/2, P2 = key_count/2..key_count.
-    /// Examples: 8K with is_coop=true → 4K+4K, 16K with is_coop=true → 8K+8K.
+    /// When true, columns are split evenly: P1 = `0..key_count/2`, P2 = `key_count/2..key_count`.
+    /// Examples: 8K with `is_coop=true` → 4K+4K, 16K with `is_coop=true` → 8K+8K.
     pub is_coop: bool,
 }
 

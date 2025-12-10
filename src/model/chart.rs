@@ -99,7 +99,7 @@ impl RoxChart {
         }
 
         // Check coop mode requires even key count
-        if self.metadata.is_coop && self.key_count % 2 != 0 {
+        if self.metadata.is_coop && !self.key_count.is_multiple_of(2) {
             return Err(crate::RoxError::InvalidFormat(format!(
                 "Coop mode requires even key count, got {}",
                 self.key_count

@@ -12,7 +12,6 @@ pub struct QuaEncoder;
 impl Encoder for QuaEncoder {
     fn encode(chart: &RoxChart) -> RoxResult<Vec<u8>> {
         let mode = match chart.key_count {
-            4 => QuaMode::Keys4,
             7 => QuaMode::Keys7,
             // Default to 4K for unsupported key counts
             _ => QuaMode::Keys4,
