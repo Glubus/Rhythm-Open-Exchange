@@ -12,8 +12,11 @@ clone:
 steps:
   - name: clone
     image: drone/git
+    environment:
+      GIT_URL:
+        from_secret: git_url
     commands:
-      - git clone http://100.67.82.99:3000/osef/Rhythm-Open-Exchange.git .
+      - git clone $GIT_URL .
       - git checkout $DRONE_COMMIT
 
   - name: fmt
