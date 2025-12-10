@@ -26,6 +26,7 @@ fn test_complex_chart_workflow() {
         genre: Some("Speedcore".into()),
         language: Some("JP".into()),
         tags: vec!["marathon".into(), "stream".into(), "dump".into()],
+        is_coop: false,
     };
 
     // Add timing points with BPM changes

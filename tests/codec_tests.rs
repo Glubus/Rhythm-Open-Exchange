@@ -145,6 +145,7 @@ fn test_roundtrip_full_metadata() {
         genre: Some("Electronic".into()),
         language: Some("JP".into()),
         tags: vec!["stream".into(), "technical".into(), "marathon".into()],
+        is_coop: false,
     };
 
     let encoded = RoxCodec::encode(&chart).expect("Failed to encode");

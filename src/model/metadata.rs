@@ -39,6 +39,12 @@ pub struct Metadata {
     pub language: Option<String>,
     /// Tags for search/categorization.
     pub tags: Vec<String>,
+
+    // Coop/multiplayer info
+    /// Whether this chart is designed for 2-player coop mode.
+    /// When true, columns are split evenly: P1 = 0..key_count/2, P2 = key_count/2..key_count.
+    /// Examples: 8K with is_coop=true → 4K+4K, 16K with is_coop=true → 8K+8K.
+    pub is_coop: bool,
 }
 
 impl Default for Metadata {
@@ -58,6 +64,7 @@ impl Default for Metadata {
             genre: None,
             language: None,
             tags: Vec::new(),
+            is_coop: false,
         }
     }
 }

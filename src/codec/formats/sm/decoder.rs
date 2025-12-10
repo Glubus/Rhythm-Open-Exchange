@@ -49,6 +49,7 @@ impl SmDecoder {
             genre: None,
             language: None,
             tags: Vec::new(),
+            is_coop: false,
         };
 
         // Convert BPM timing points

@@ -54,7 +54,9 @@ impl QuaDecoder {
             let time_us = (sv.start_time * 1000.0) as i64;
             #[allow(clippy::cast_possible_truncation)]
             let multiplier = sv.multiplier as f32;
-            chart.timing_points.push(TimingPoint::sv(time_us, multiplier));
+            chart
+                .timing_points
+                .push(TimingPoint::sv(time_us, multiplier));
         }
 
         // Sort timing points by time

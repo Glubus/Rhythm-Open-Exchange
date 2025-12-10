@@ -98,6 +98,14 @@ impl RoxChart {
             }
         }
 
+        // Check coop mode requires even key count
+        if self.metadata.is_coop && self.key_count % 2 != 0 {
+            return Err(crate::RoxError::InvalidFormat(format!(
+                "Coop mode requires even key count, got {}",
+                self.key_count
+            )));
+        }
+
         // Check hold/burst durations > 0
         for note in &self.notes {
             let duration = note.duration_us();

@@ -36,6 +36,7 @@ impl FnfDecoder {
             title: fnf.song.song.clone(),
             creator: fnf.song.player2.clone(),
             difficulty_name: "Normal".to_string(),
+            is_coop: side == FnfSide::Both, // true for 8K coop mode
             ..Default::default()
         };
 
