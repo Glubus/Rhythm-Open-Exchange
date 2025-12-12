@@ -132,11 +132,16 @@ impl OutputFormat {
 
 /// Decode a chart from a file, auto-detecting the format from the extension.
 ///
+/// For `.osu` files, the mode is detected from the `Mode:` field in `[General]`:
+/// - Mode 1 (Taiko) → Uses `TaikoDecoder`
+/// - Mode 3 (Mania) → Uses `OsuDecoder`
+/// - Other modes are not supported
+///
 /// # Example
 /// ```ignore
 /// use rox::codec::auto_decode;
 ///
-/// let chart = auto_decode("chart.osu")?;  // Detects .osu format
+/// let chart = auto_decode("chart.osu")?;  // Detects .osu format and mode
 /// let chart = auto_decode("chart.sm")?;   // Detects .sm format
 /// let chart = auto_decode("chart.rox")?;  // Detects .rox format
 /// ```
@@ -151,12 +156,49 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
 
     match format {
         InputFormat::Rox => RoxCodec::decode(&data),
-        InputFormat::Osu => OsuDecoder::decode(&data),
-        InputFormat::Taiko => TaikoDecoder::decode(&data),
+        InputFormat::Osu | InputFormat::Taiko => decode_osu_by_mode(&data),
         InputFormat::Sm => SmDecoder::decode(&data),
         InputFormat::Qua => QuaDecoder::decode(&data),
         InputFormat::Fnf => FnfDecoder::decode(&data),
     }
+}
+
+/// Decode an osu! file by detecting its mode and using the appropriate decoder.
+fn decode_osu_by_mode(data: &[u8]) -> RoxResult<RoxChart> {
+    match detect_osu_mode(data) {
+        1 => TaikoDecoder::decode(data),
+        3 => OsuDecoder::decode(data),
+        mode => Err(RoxError::UnsupportedFormat(format!(
+            "osu! mode {mode} is not supported (only taiko=1 and mania=3)"
+        ))),
+    }
+}
+
+/// Detect the osu! game mode from file content.
+/// Returns the mode number: 0=std, 1=taiko, 2=catch, 3=mania.
+/// Defaults to 3 (mania) if not found.
+fn detect_osu_mode(data: &[u8]) -> u8 {
+    let content = match std::str::from_utf8(data) {
+        Ok(s) => s,
+        Err(_) => return 3, // Default to mania on invalid UTF-8
+    };
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with("Mode:") {
+            if let Some(value) = line.strip_prefix("Mode:") {
+                if let Ok(mode) = value.trim().parse::<u8>() {
+                    return mode;
+                }
+            }
+        }
+        // Stop parsing after [Metadata] section to avoid scanning entire file
+        if line == "[Metadata]" {
+            break;
+        }
+    }
+
+    3 // Default to mania if Mode not found
 }
 
 /// Decode chart data with a specific format.
