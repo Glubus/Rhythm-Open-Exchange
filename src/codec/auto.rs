@@ -178,19 +178,16 @@ fn decode_osu_by_mode(data: &[u8]) -> RoxResult<RoxChart> {
 /// Returns the mode number: 0=std, 1=taiko, 2=catch, 3=mania.
 /// Defaults to 3 (mania) if not found.
 fn detect_osu_mode(data: &[u8]) -> u8 {
-    let content = match std::str::from_utf8(data) {
-        Ok(s) => s,
-        Err(_) => return 3, // Default to mania on invalid UTF-8
+    let Ok(content) = std::str::from_utf8(data) else {
+        return 3; // Default to mania on invalid UTF-8
     };
 
     for line in content.lines() {
         let line = line.trim();
-        if line.starts_with("Mode:") {
-            if let Some(value) = line.strip_prefix("Mode:") {
-                if let Ok(mode) = value.trim().parse::<u8>() {
-                    return mode;
-                }
-            }
+        if let Some(value) = line.strip_prefix("Mode:")
+            && let Ok(mode) = value.trim().parse::<u8>()
+        {
+            return mode;
         }
         // Stop parsing after [Metadata] section to avoid scanning entire file
         if line == "[Metadata]" {
