@@ -35,7 +35,7 @@ const BASIC_SM: &str = r#"
 fn test_decode_basic_sm() {
     let chart = SmDecoder::decode(BASIC_SM.as_bytes()).expect("Failed to decode");
 
-    assert_eq!(chart.key_count, 4);
+    assert_eq!(chart.key_count(), 4);
     assert_eq!(chart.metadata.title, "Test Song");
     assert_eq!(chart.metadata.artist, "Test Artist");
     assert_eq!(chart.metadata.creator, "Test Mapper");

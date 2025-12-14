@@ -19,7 +19,7 @@ fn convert(input_osu: &str, name: &str) {
         "Loaded: {} [{}]",
         chart.metadata.title, chart.metadata.difficulty_name
     );
-    println!("  {}K | {} notes", chart.key_count, chart.notes.len());
+    println!("  {}K | {} notes", chart.key_count(), chart.note_count());
 
     // Step 2: Save as .rox
     RoxCodec::encode_to_path(&chart, &output_rox).expect("Failed to write .rox");
@@ -40,7 +40,7 @@ fn convert(input_osu: &str, name: &str) {
     let chart3 =
         OsuDecoder::decode_from_path(&output_osu).expect("Failed to decode re-encoded .osu");
 
-    assert_eq!(chart.key_count, chart3.key_count, "Key count mismatch");
+    assert_eq!(chart.key_count(), chart3.key_count(), "Key count mismatch");
     assert_eq!(chart.notes.len(), chart3.notes.len(), "Note count mismatch");
     assert_eq!(
         chart.timing_points.len(),

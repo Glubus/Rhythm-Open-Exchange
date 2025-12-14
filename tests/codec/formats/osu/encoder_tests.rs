@@ -138,6 +138,6 @@ fn test_roundtrip() {
     let encoded = OsuEncoder::encode(&chart1).unwrap();
     let chart2 = OsuDecoder::decode(&encoded).unwrap();
 
-    assert_eq!(chart1.key_count, chart2.key_count);
+    assert_eq!(chart1.key_count(), chart2.key_count());
     assert_eq!(chart1.notes.len(), chart2.notes.len());
 }

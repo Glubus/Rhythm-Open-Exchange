@@ -12,6 +12,7 @@ fn test_complex_chart_workflow() {
 
     // Set up metadata
     chart.metadata = Metadata {
+        key_count: 7,
         title: "Galaxy Collapse".into(),
         artist: "Kurokotei".into(),
         creator: "Shoegazer".into(),
@@ -27,6 +28,7 @@ fn test_complex_chart_workflow() {
         language: Some("JP".into()),
         tags: vec!["marathon".into(), "stream".into(), "dump".into()],
         is_coop: false,
+        ..Default::default()
     };
 
     // Add timing points with BPM changes
@@ -75,7 +77,7 @@ fn test_complex_chart_workflow() {
     assert_eq!(chart, decoded);
 
     // Verify specific fields
-    assert_eq!(decoded.key_count, 7);
+    assert_eq!(decoded.key_count(), 7);
     assert_eq!(decoded.metadata.title, "Galaxy Collapse");
     assert_eq!(decoded.timing_points.len(), 4);
     assert_eq!(decoded.notes.len(), 12); // 7 taps + 2 holds + 1 burst + 2 mines
@@ -189,7 +191,7 @@ fn test_various_key_counts() {
         let encoded = RoxCodec::encode(&chart).expect("Encoding failed");
         let decoded = RoxCodec::decode(&encoded).expect("Decoding failed");
 
-        assert_eq!(decoded.key_count, key_count);
+        assert_eq!(decoded.key_count(), key_count);
         assert_eq!(decoded.notes.len(), key_count as usize);
     }
 }

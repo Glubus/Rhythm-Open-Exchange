@@ -5,7 +5,7 @@ use bincode::{Decode, Encode, config};
 use super::{Hitsound, Metadata, Note, TimingPoint};
 
 /// Current ROX format version.
-pub const ROX_VERSION: u8 = 1;
+pub const ROX_VERSION: u8 = 2;
 
 /// Magic bytes to identify ROX files: "ROX\0"
 pub const ROX_MAGIC: [u8; 4] = [0x52, 0x4F, 0x58, 0x00];
@@ -15,8 +15,6 @@ pub const ROX_MAGIC: [u8; 4] = [0x52, 0x4F, 0x58, 0x00];
 pub struct RoxChart {
     /// Format version for backwards compatibility.
     pub version: u8,
-    /// Number of columns/keys (e.g., 4 for 4K, 7 for 7K).
-    pub key_count: u8,
     /// Chart metadata.
     pub metadata: Metadata,
     /// Timing points (BPM and SV changes).
@@ -33,12 +31,20 @@ impl RoxChart {
     pub fn new(key_count: u8) -> Self {
         Self {
             version: ROX_VERSION,
-            key_count,
-            metadata: Metadata::default(),
+            metadata: Metadata {
+                key_count,
+                ..Metadata::default()
+            },
             timing_points: Vec::new(),
             notes: Vec::new(),
             hitsounds: Vec::new(),
         }
+    }
+
+    /// Get the key count (convenience accessor for `metadata.key_count`).
+    #[must_use]
+    pub fn key_count(&self) -> u8 {
+        self.metadata.key_count
     }
 
     /// Get the total duration of the chart in microseconds.
@@ -101,20 +107,21 @@ impl RoxChart {
     /// Returns an error if any validation check fails.
     pub fn validate(&self) -> Result<(), crate::RoxError> {
         // Check column bounds
+        let key_count = self.key_count();
         for note in &self.notes {
-            if note.column >= self.key_count {
+            if note.column >= key_count {
                 return Err(crate::RoxError::InvalidColumn {
                     column: note.column,
-                    key_count: self.key_count,
+                    key_count,
                 });
             }
         }
 
         // Check coop mode requires even key count
-        if self.metadata.is_coop && !self.key_count.is_multiple_of(2) {
+        if self.metadata.is_coop && !key_count.is_multiple_of(2) {
             return Err(crate::RoxError::InvalidFormat(format!(
                 "Coop mode requires even key count, got {}",
-                self.key_count
+                key_count
             )));
         }
 
@@ -165,7 +172,7 @@ impl RoxChart {
 
         // Check for overlapping notes on same column
         // Group notes by column, then check for overlaps
-        for col in 0..self.key_count {
+        for col in 0..key_count {
             let mut col_notes: Vec<_> = self.notes.iter().filter(|n| n.column == col).collect();
             col_notes.sort_by_key(|n| n.time_us);
 

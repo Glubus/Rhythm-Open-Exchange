@@ -19,7 +19,7 @@ impl Encoder for FnfEncoder {
             .map_or(120.0, |tp| tp.bpm);
 
         // Determine if this is 8K (both sides) or 4K (player only)
-        let is_8k = chart.key_count >= 8;
+        let is_8k = chart.key_count() >= 8;
 
         // Create a single large section with all notes
         // This matches the JS converter approach

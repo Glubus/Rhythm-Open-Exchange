@@ -58,13 +58,19 @@ impl Encoder for OsuEncoder {
         if !chart.metadata.tags.is_empty() {
             let _ = writeln!(output, "Tags:{}", chart.metadata.tags.join(" "));
         }
-        output.push_str("BeatmapID:0\n");
-        output.push_str("BeatmapSetID:-1\n\n");
+        // Export chart IDs (default to 0/-1 if not set)
+        let _ = writeln!(output, "BeatmapID:{}", chart.metadata.chart_id.unwrap_or(0));
+        let _ = writeln!(
+            output,
+            "BeatmapSetID:{}",
+            chart.metadata.chartset_id.map_or(-1, |id| id as i64)
+        );
+        output.push('\n');
 
         // [Difficulty]
         output.push_str("[Difficulty]\n");
         output.push_str("HPDrainRate:8\n");
-        let _ = writeln!(output, "CircleSize:{}", chart.key_count);
+        let _ = writeln!(output, "CircleSize:{}", chart.key_count());
         let _ = writeln!(
             output,
             "OverallDifficulty:{}",
@@ -115,7 +121,7 @@ impl Encoder for OsuEncoder {
             // Safe: time_us / 1000 fits in i32 for typical beatmaps
             #[allow(clippy::cast_possible_truncation)]
             let time_ms = (note.time_us / 1000) as i32;
-            let x = column_to_x(note.column, chart.key_count);
+            let x = column_to_x(note.column, chart.key_count());
 
             match &note.note_type {
                 crate::model::NoteType::Tap => {

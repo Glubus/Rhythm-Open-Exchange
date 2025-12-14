@@ -178,8 +178,8 @@ fn test_metadata_default() {
 fn test_rox_chart_new() {
     let chart = RoxChart::new(4);
 
-    assert_eq!(chart.version, 1);
-    assert_eq!(chart.key_count, 4);
+    assert_eq!(chart.version, 2);
+    assert_eq!(chart.key_count(), 4);
     assert!(chart.timing_points.is_empty());
     assert!(chart.notes.is_empty());
     assert!(chart.hitsounds.is_empty());
@@ -188,7 +188,7 @@ fn test_rox_chart_new() {
 #[test]
 fn test_rox_chart_new_7k() {
     let chart = RoxChart::new(7);
-    assert_eq!(chart.key_count, 7);
+    assert_eq!(chart.key_count(), 7);
 }
 
 #[test]

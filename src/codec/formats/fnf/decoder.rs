@@ -33,6 +33,7 @@ impl FnfDecoder {
 
         // Map metadata
         chart.metadata = Metadata {
+            key_count,
             title: fnf.song.song.clone(),
             creator: fnf.song.player2.clone(),
             difficulty_name: "Normal".to_string(),

@@ -79,7 +79,7 @@ impl Encoder for SmEncoder {
         let _ = writeln!(output);
 
         // Notes section
-        let stepstype = match chart.key_count {
+        let stepstype = match chart.key_count() {
             4 => "dance-single",
             6 => "dance-solo",
             8 => "dance-double",
@@ -154,7 +154,7 @@ fn encode_measures(output: &mut String, chart: &RoxChart, bpms: &[(i64, f32)]) {
     if chart.notes.is_empty() {
         // Empty chart - just one empty measure
         for _ in 0..4 {
-            let _ = writeln!(output, "{}", "0".repeat(chart.key_count as usize));
+            let _ = writeln!(output, "{}", "0".repeat(chart.key_count() as usize));
         }
         return;
     }
@@ -215,7 +215,7 @@ fn encode_measures(output: &mut String, chart: &RoxChart, bpms: &[(i64, f32)]) {
             );
 
             // Find events in this time window
-            let mut line_chars: Vec<char> = vec!['0'; chart.key_count as usize];
+            let mut line_chars: Vec<char> = vec!['0'; chart.key_count() as usize];
 
             for (event_time, col, ch) in &events {
                 if *event_time >= line_time_us && *event_time < next_line_time_us {

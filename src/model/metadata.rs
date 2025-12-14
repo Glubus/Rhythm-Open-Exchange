@@ -5,6 +5,16 @@ use bincode::{Decode, Encode};
 /// Metadata describing the chart and associated media.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct Metadata {
+    // Identifiers
+    /// Optional chart ID (for online databases).
+    pub chart_id: Option<u64>,
+    /// Optional chartset ID (for online databases).
+    pub chartset_id: Option<u64>,
+
+    // Key configuration
+    /// Number of columns/keys (e.g., 4 for 4K, 7 for 7K).
+    pub key_count: u8,
+
     /// Song title.
     pub title: String,
     /// Song artist.
@@ -50,6 +60,9 @@ pub struct Metadata {
 impl Default for Metadata {
     fn default() -> Self {
         Self {
+            chart_id: None,
+            chartset_id: None,
+            key_count: 4,
             title: String::new(),
             artist: String::new(),
             creator: String::new(),

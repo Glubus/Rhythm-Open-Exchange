@@ -104,7 +104,7 @@ fn main() {
 
     // Print stats
     println!("\nChart Statistics:");
-    println!("  Key count: {}K", chart.key_count);
+    println!("  Key count: {}K", chart.key_count());
     println!("  Notes: {}", chart.note_count());
     println!("  Timing points: {}", chart.timing_points.len());
     println!(

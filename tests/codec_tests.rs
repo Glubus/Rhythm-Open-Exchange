@@ -131,6 +131,7 @@ fn test_encode_invalid_column() {
 fn test_roundtrip_full_metadata() {
     let mut chart = RoxChart::new(7);
     chart.metadata = Metadata {
+        key_count: 7,
         title: "Complex Song Title (Extended Mix)".into(),
         artist: "Famous Artist feat. Another Artist".into(),
         creator: "Pro Mapper".into(),
@@ -146,6 +147,7 @@ fn test_roundtrip_full_metadata() {
         language: Some("JP".into()),
         tags: vec!["stream".into(), "technical".into(), "marathon".into()],
         is_coop: false,
+        ..Default::default()
     };
 
     let encoded = RoxCodec::encode(&chart).expect("Failed to encode");

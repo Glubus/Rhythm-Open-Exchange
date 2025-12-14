@@ -18,8 +18,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Decoded: {} - {} [{} notes, {}K]",
             chart.metadata.title,
             chart.metadata.difficulty_name,
-            chart.notes.len(),
-            chart.key_count
+            chart.note_count(),
+            chart.key_count()
         );
         println!(
             "  Timing points: {} BPM, {} SV",
@@ -36,15 +36,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         // Encode back to .qua
-        let output_path = format!("target/{}_roundtrip.qua", chart.key_count);
+        let output_path = format!("target/{}_roundtrip.qua", chart.key_count());
         auto_encode(&chart, &output_path)?;
         println!("Encoded to: {}", output_path);
 
         // Re-decode to verify
         let chart2 = auto_decode(&output_path)?;
-        assert_eq!(chart.notes.len(), chart2.notes.len(), "Note count mismatch");
-        assert_eq!(chart.key_count, chart2.key_count, "Key count mismatch");
-        println!("  ✓ Roundtrip verified ({} notes)", chart2.notes.len());
+        assert_eq!(
+            chart.note_count(),
+            chart2.note_count(),
+            "Note count mismatch"
+        );
+        assert_eq!(chart.key_count(), chart2.key_count(), "Key count mismatch");
+        println!("  ✓ Roundtrip verified ({} notes)", chart2.note_count());
     }
 
     println!("\n✓ All tests passed!");

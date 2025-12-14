@@ -39,6 +39,10 @@ impl TaikoDecoder {
 
         // Map metadata (reusing OsuBeatmap fields)
         chart.metadata = Metadata {
+            // Map osu! IDs
+            chart_id: beatmap.metadata.beatmap_id.map(|id| id as u64),
+            chartset_id: beatmap.metadata.beatmap_set_id.map(|id| id as u64),
+            key_count: 4,
             title: beatmap
                 .metadata
                 .title_unicode

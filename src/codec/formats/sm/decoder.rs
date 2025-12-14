@@ -28,6 +28,7 @@ impl SmDecoder {
 
         // Map metadata
         rox.metadata = Metadata {
+            key_count: chart.column_count,
             title: sm.metadata.title.clone(),
             artist: sm.metadata.artist.clone(),
             creator: sm.metadata.credit.clone(),
@@ -50,6 +51,7 @@ impl SmDecoder {
             language: None,
             tags: Vec::new(),
             is_coop: false,
+            ..Default::default()
         };
 
         // Convert BPM timing points

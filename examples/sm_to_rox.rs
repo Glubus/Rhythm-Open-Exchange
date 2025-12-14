@@ -18,7 +18,7 @@ fn main() {
     println!("Artist: {}", chart.metadata.artist);
     println!("Creator: {}", chart.metadata.creator);
     println!("Difficulty: {}", chart.metadata.difficulty_name);
-    println!("Key count: {}K", chart.key_count);
+    println!("Key count: {}K", chart.key_count());
     println!("Notes: {}", chart.notes.len());
     println!("Timing points: {}", chart.timing_points.len());
 

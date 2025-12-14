@@ -29,7 +29,7 @@ fn main() {
     println!("Artist: {}", chart.metadata.artist);
     println!(
         "Chart Key Count: {}K (Converted from Taiko)",
-        chart.key_count
+        chart.key_count()
     );
     println!("Notes: {}", chart.notes.len());
 

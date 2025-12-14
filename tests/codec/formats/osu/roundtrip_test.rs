@@ -20,7 +20,7 @@ fn roundtrip_test(path: &str) {
     let chart2 = RoxCodec::decode(&rox_data).expect("Failed to decode ROX");
 
     // Verify ROX roundtrip
-    assert_eq!(chart1.key_count, chart2.key_count);
+    assert_eq!(chart1.key_count(), chart2.key_count());
     assert_eq!(chart1.notes.len(), chart2.notes.len());
     assert_eq!(chart1.timing_points.len(), chart2.timing_points.len());
 
@@ -31,7 +31,7 @@ fn roundtrip_test(path: &str) {
     let chart3 = OsuDecoder::decode(&osu_data).expect("Failed to decode re-encoded .osu");
 
     // Verify full roundtrip
-    assert_eq!(chart1.key_count, chart3.key_count, "Key count mismatch");
+    assert_eq!(chart1.key_count(), chart3.key_count(), "Key count mismatch");
     assert_eq!(
         chart1.notes.len(),
         chart3.notes.len(),

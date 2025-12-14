@@ -98,7 +98,7 @@ fn cmd_convert(args: &[String]) -> ExitCode {
         chart.metadata.artist,
         chart.metadata.title,
         chart.notes.len(),
-        chart.key_count
+        chart.key_count()
     );
 
     // Encode output
@@ -141,18 +141,29 @@ fn cmd_info(args: &[String]) -> ExitCode {
     if chart.metadata.is_coop {
         println!(
             "  Mode:       {}K Coop ({}K + {}K)",
-            chart.key_count,
-            chart.key_count / 2,
-            chart.key_count / 2
+            chart.key_count(),
+            chart.key_count() / 2,
+            chart.key_count() / 2
         );
     } else {
-        println!("  Mode:       {}K", chart.key_count);
+        println!("  Mode:       {}K", chart.key_count());
     }
     println!();
     println!("=== Statistics ===");
     println!("  Notes:         {}", chart.notes.len());
     println!("  Timing Points: {}", chart.timing_points.len());
-    println!("  Hitsounds:     {}", chart.hitsounds.len());
+    let notes_with_hs = chart
+        .notes
+        .iter()
+        .filter(|n| n.hitsound_index.is_some())
+        .count();
+    if notes_with_hs > 0 {
+        println!(
+            "  Hitsounds:     {} notes ({} samples)",
+            notes_with_hs,
+            chart.hitsounds.len()
+        );
+    }
     #[allow(clippy::cast_precision_loss)]
     let duration_s = chart.duration_us() as f64 / 1_000_000.0;
     println!("  Duration:      {:.1}s", duration_s);

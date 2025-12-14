@@ -9,7 +9,7 @@ fn main() {
 
     println!("\nChart Contents:");
     println!("  Version: {}", chart.version);
-    println!("  Key count: {}K", chart.key_count);
+    println!("  Key count: {}K", chart.key_count());
     println!("  Notes: {}", chart.notes.len());
     println!("  Timing points: {}", chart.timing_points.len());
     println!("  Hitsounds: {}", chart.hitsounds.len());

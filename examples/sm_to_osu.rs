@@ -21,7 +21,7 @@ fn main() {
     println!("Source: StepMania (.sm)");
     println!("Title: {}", chart.metadata.title);
     println!("Artist: {}", chart.metadata.artist);
-    println!("Key count: {}K", chart.key_count);
+    println!("Key count: {}K", chart.key_count());
     println!("Notes: {}", chart.notes.len());
 
     // Encode to osu! format

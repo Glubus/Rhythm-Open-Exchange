@@ -19,6 +19,18 @@ impl QuaDecoder {
 
         // Map metadata
         chart.metadata = Metadata {
+            // Map Quaver IDs (i32 -> Option<u64>)
+            chart_id: if qua.map_id > 0 {
+                Some(qua.map_id as u64)
+            } else {
+                None
+            },
+            chartset_id: if qua.map_set_id > 0 {
+                Some(qua.map_set_id as u64)
+            } else {
+                None
+            },
+            key_count,
             title: qua.title.clone(),
             artist: qua.artist.clone(),
             creator: qua.creator.clone(),

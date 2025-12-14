@@ -8,7 +8,7 @@ fn test_decode_sample_7k() {
     let data = include_bytes!("../../../../assets/osu/mania_7k.osu");
     let chart = OsuDecoder::decode(data).expect("Failed to decode");
 
-    assert_eq!(chart.key_count, 7);
+    assert_eq!(chart.key_count(), 7);
     assert!(!chart.notes.is_empty());
     assert!(!chart.timing_points.is_empty());
     assert_eq!(chart.metadata.difficulty_name, "7K Awakened");
@@ -53,4 +53,29 @@ fn test_decode_notes_sorted() {
     for window in chart.notes.windows(2) {
         assert!(window[0].time_us <= window[1].time_us);
     }
+}
+
+#[test]
+fn test_decode_hitsounds() {
+    let data = include_bytes!("../../../../assets/osu/mania_hitsound.osu");
+    let chart = OsuDecoder::decode(data).expect("Failed to decode");
+
+    // Should have 4K
+    assert_eq!(chart.key_count(), 4);
+
+    // Should have 4 unique hitsound samples
+    assert_eq!(chart.hitsounds.len(), 4);
+
+    // Should have 276 notes with hitsounds
+    let notes_with_hs = chart
+        .notes
+        .iter()
+        .filter(|n| n.hitsound_index.is_some())
+        .count();
+    assert_eq!(notes_with_hs, 276);
+
+    // Verify hitsound files are parsed correctly
+    let hs_files: Vec<&str> = chart.hitsounds.iter().map(|h| h.file.as_str()).collect();
+    assert!(hs_files.contains(&"RimShot.wav"));
+    assert!(hs_files.contains(&"KICK 2.wav"));
 }

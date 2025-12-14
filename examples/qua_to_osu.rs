@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "  Diff: {} [{}K, {} notes]",
             chart.metadata.difficulty_name,
-            chart.key_count,
+            chart.key_count(),
             chart.notes.len()
         );
 
