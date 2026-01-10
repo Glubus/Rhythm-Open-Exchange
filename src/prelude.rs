@@ -2,7 +2,7 @@
 //!
 //! Import everything you need with a single use statement:
 //! ```
-//! use rox::prelude::*;
+//! use rhythm_open_exchange::prelude::*;
 //! ```
 
 pub use crate::codec::{
