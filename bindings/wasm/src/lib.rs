@@ -44,7 +44,7 @@ impl Chart {
     /// Number of keys/columns.
     #[wasm_bindgen(getter)]
     pub fn key_count(&self) -> u8 {
-        self.inner.key_count
+        self.inner.key_count()
     }
 
     /// Number of notes.
