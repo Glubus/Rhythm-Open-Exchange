@@ -21,11 +21,13 @@ impl QuaDecoder {
         chart.metadata = Metadata {
             // Map Quaver IDs (i32 -> Option<u64>)
             chart_id: if qua.map_id > 0 {
+                #[allow(clippy::cast_sign_loss)]
                 Some(qua.map_id as u64)
             } else {
                 None
             },
             chartset_id: if qua.map_set_id > 0 {
+                #[allow(clippy::cast_sign_loss)]
                 Some(qua.map_set_id as u64)
             } else {
                 None

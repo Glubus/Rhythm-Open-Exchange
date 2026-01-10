@@ -39,8 +39,10 @@ impl TaikoDecoder {
 
         // Map metadata (reusing OsuBeatmap fields)
         chart.metadata = Metadata {
-            // Map osu! IDs
+            // Map osu! IDs (osu IDs are always positive in practice)
+            #[allow(clippy::cast_sign_loss)]
             chart_id: beatmap.metadata.beatmap_id.map(|id| id as u64),
+            #[allow(clippy::cast_sign_loss)]
             chartset_id: beatmap.metadata.beatmap_set_id.map(|id| id as u64),
             key_count: 4,
             title: beatmap

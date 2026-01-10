@@ -23,8 +23,10 @@ impl OsuDecoder {
 
         // Map metadata
         chart.metadata = Metadata {
-            // Map osu! IDs
+            // Map osu! IDs (osu IDs are always positive in practice)
+            #[allow(clippy::cast_sign_loss)]
             chart_id: beatmap.metadata.beatmap_id.map(|id| id as u64),
+            #[allow(clippy::cast_sign_loss)]
             chartset_id: beatmap.metadata.beatmap_set_id.map(|id| id as u64),
             key_count,
             title: beatmap
@@ -118,6 +120,8 @@ impl OsuDecoder {
                                 Hitsound::new(filename)
                             };
 
+                            // Safe: Limited by u16 max in ROX format
+                            #[allow(clippy::cast_possible_truncation)]
                             let idx = chart.hitsounds.len() as u16;
                             chart.hitsounds.push(hitsound);
                             hitsound_map.insert(filename.to_string(), idx);

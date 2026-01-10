@@ -259,6 +259,106 @@ pub fn encode_with_format(chart: &RoxChart, format: OutputFormat) -> RoxResult<V
     }
 }
 
+/// Decode a chart from a string, auto-detecting the format.
+///
+/// Attempts to decode the chart data from the provided string using all available decoders
+/// until one succeeds. Tries formats in the following order:
+/// 1. Osu (with mode detection)
+/// 2. `StepMania`
+/// 3. Quaver (YAML)
+/// 4. Friday Night Funkin' (JSON)
+///
+/// # Example
+/// ```ignore
+/// use rox::codec::from_string;
+///
+/// let osu_content = std::fs::read_to_string("chart.osu")?;
+/// let chart = from_string(&osu_content)?;
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if all decoders fail to parse the input.
+pub fn from_string(data: &str) -> RoxResult<RoxChart> {
+    let bytes = data.as_bytes();
+
+    // Try osu format (with mode detection)
+    if let Ok(chart) = decode_osu_by_mode(bytes) {
+        return Ok(chart);
+    }
+
+    // Try StepMania
+    if let Ok(chart) = SmDecoder::decode(bytes) {
+        return Ok(chart);
+    }
+
+    // Try Quaver
+    if let Ok(chart) = QuaDecoder::decode(bytes) {
+        return Ok(chart);
+    }
+
+    // Try FNF
+    if let Ok(chart) = FnfDecoder::decode(bytes) {
+        return Ok(chart);
+    }
+
+    Err(RoxError::InvalidFormat(
+        "Failed to decode chart: no format decoder succeeded".into(),
+    ))
+}
+
+/// Decode a chart from bytes, auto-detecting the format.
+///
+/// Attempts to decode the chart data from the provided bytes using all available decoders
+/// until one succeeds. Tries formats in the following order:
+/// 1. ROX binary format
+/// 2. Osu (with mode detection)
+/// 3. `StepMania`
+/// 4. Quaver (YAML)
+/// 5. Friday Night Funkin' (JSON)
+///
+/// # Example
+/// ```ignore
+/// use rox::codec::from_bytes;
+///
+/// let data = std::fs::read("chart.osu")?;
+/// let chart = from_bytes(&data)?;
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if all decoders fail to parse the input.
+pub fn from_bytes(data: &[u8]) -> RoxResult<RoxChart> {
+    // Try ROX binary format first
+    if let Ok(chart) = RoxCodec::decode(data) {
+        return Ok(chart);
+    }
+
+    // Try osu format (with mode detection)
+    if let Ok(chart) = decode_osu_by_mode(data) {
+        return Ok(chart);
+    }
+
+    // Try StepMania
+    if let Ok(chart) = SmDecoder::decode(data) {
+        return Ok(chart);
+    }
+
+    // Try Quaver
+    if let Ok(chart) = QuaDecoder::decode(data) {
+        return Ok(chart);
+    }
+
+    // Try FNF
+    if let Ok(chart) = FnfDecoder::decode(data) {
+        return Ok(chart);
+    }
+
+    Err(RoxError::InvalidFormat(
+        "Failed to decode chart: no format decoder succeeded".into(),
+    ))
+}
+
 /// Convert a file from one format to another, auto-detecting both formats.
 ///
 /// # Example

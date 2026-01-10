@@ -1,6 +1,6 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.2.2"
+version = "0.3.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
