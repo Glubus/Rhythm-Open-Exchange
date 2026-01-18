@@ -8,10 +8,10 @@ A universal, compact binary format for Vertical Scrolling Rhythm Games (VSRG). R
 
 ROX is designed to be:
 
-- **Compact** — Uses bincode for minimal file size with variable-length integer encoding
+- **Compact** — Uses rkyv zero-copy serialization with zstd compression
 - **Precise** — Microsecond timestamp precision (i64) for accurate timing
 - **Universal** — Supports all common VSRG features across different games
-- **Verifiable** — BLAKE3 content hashing for integrity verification 
+- **Verifiable** — BLAKE3 content hashing for integrity verification
 
 ## Features
 
@@ -21,17 +21,26 @@ ROX is designed to be:
 - Keysound support for BMS/O2Jam style charts
 - Comprehensive metadata (title, artist, difficulty, tags, etc.)
 - Content-based hashing for chart identification
+- **C# bindings** for Unity/Godot/.NET integration
 
 ## Installation
+
+### Rust
 
 Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhythm-open-exchange = "0.1"
+rhythm-open-exchange = "0.4"
 ```
 
-Or clone and build locally:
+### C# / .NET
+
+```bash
+dotnet add package RhythmOpenExchange
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/Glubus/Rhythm-Open-Exchange.git
@@ -68,106 +77,69 @@ chart.notes.push(Note::tap(1_500_000, 1));      // Tap at 1.5s, column 1
 chart.notes.push(Note::hold(2_000_000, 500_000, 2)); // Hold at 2s, 0.5s duration
 ```
 
-### Encoding and Decoding
+### Auto-Converting Formats
 
 ```rust
-use rhythm_open_exchange::{RoxCodec, Encoder, Decoder};
+use rhythm_open_exchange::{auto_decode, auto_encode, auto_convert};
 
-// Encode to bytes
-let bytes = RoxCodec::encode(&chart)?;
+// Load any supported format (auto-detected from extension)
+let chart = auto_decode("chart.osu")?;
 
-// Save to file
-RoxCodec::encode_to_path(&chart, "chart.rox")?;
+// Export to any format
+auto_encode(&chart, "chart.sm")?;
 
-// Load from file
-let loaded = RoxCodec::decode_from_path("chart.rox")?;
-
-// Decode from bytes
-let decoded = RoxCodec::decode(&bytes)?;
+// Or convert directly
+auto_convert("input.osu", "output.qua")?;
 ```
 
-### Chart Hashing
+### C# Usage
 
-```rust
-// Get full BLAKE3 hash (64 hex characters)
-let hash = chart.hash();
+```csharp
+using RhythmOpenExchange;
 
-// Get short hash for display (16 hex characters)
-let short = chart.short_hash();
-println!("Chart ID: {}", short);
+// Load a chart
+byte[] data = File.ReadAllBytes("chart.osu");
+using var chart = RoxChart.FromBytes(data);
+
+Console.WriteLine($"{chart.Title} by {chart.Artist}");
+Console.WriteLine($"{chart.KeyCount}K - {chart.NoteCount} notes");
+
+// Convert to StepMania
+string? sm = chart.ToString(RoxFormat.Sm);
+File.WriteAllText("chart.sm", sm);
 ```
 
-### Converting osu!mania files
+## Supported Formats
 
-```rust
-use rhythm_open_exchange::codec::formats::osu::{OsuDecoder, OsuEncoder};
-use rhythm_open_exchange::codec::{Decoder, Encoder};
+| Format | Extension | Read | Write |
+|--------|-----------|------|-------|
+| ROX (native binary) | `.rox` | ✅ | ✅ |
+| osu!mania | `.osu` | ✅ | ✅ |
+| osu!taiko | `.osu` | ✅ | ❌ |
+| StepMania / Etterna | `.sm` | ✅ | ✅ |
+| Quaver | `.qua` | ✅ | ✅ |
+| Friday Night Funkin' | `.json` | ✅ | ✅ |
 
-// Load .osu file
-let chart = OsuDecoder::decode_from_path("song.osu")?;
-println!("Loaded: {} [{}]", chart.metadata.title, chart.metadata.difficulty_name);
+### Planned
 
-// Convert to .rox (compact binary)
-RoxCodec::encode_to_path(&chart, "output/song.rox")?;
+- Malody (`.mc`)
+- BMS (`.bms/.bme/.bml`)
+- O2Jam (`.ojn/.ojm`)
+- Clone Hero (`.chart/.mid`)
 
-// Or export back to .osu
-OsuEncoder::encode_to_path(&chart, "output/song_converted.osu")?;
+## CLI Tool
+
+```bash
+# Convert a file
+cargo run --bin rox -- convert input.osu output.sm
+
+# Validate a file
+cargo run --bin rox -- validate chart.sm
 ```
-
-## API Reference
-
-
-### Core Types
-
-| Type | Description |
-|------|-------------|
-| `RoxChart` | Main chart container with metadata, timing, notes, and hitsounds |
-| `Metadata` | Song and chart information (title, artist, difficulty, etc.) |
-| `Note` | A single note with type, timing, column, and optional keysound |
-| `NoteType` | Enum: `Tap`, `Hold`, `Burst`, `Mine` |
-| `TimingPoint` | BPM or scroll velocity change |
-| `Hitsound` | Keysound sample reference |
-
-### Traits
-
-| Trait | Description |
-|-------|-------------|
-| `Encoder` | Encode a chart to bytes or file |
-| `Decoder` | Decode a chart from bytes or file |
-
-### Note Constructors
-
-```rust
-Note::tap(time_us, column)           // Single tap
-Note::hold(time_us, duration_us, column)  // Long note
-Note::burst(time_us, duration_us, column) // Roll/burst
-Note::mine(time_us, column)          // Mine (avoid)
-```
-
-### TimingPoint Constructors
-
-```rust
-TimingPoint::bpm(time_us, bpm)       // BPM change
-TimingPoint::sv(time_us, multiplier) // Scroll velocity change
-```
-
-## File Format
-
-ROX files use the `.rox` extension and have the following structure:
-
-| Offset | Field | Type | Description |
-|--------|-------|------|-------------|
-| 0x00 | Magic | `[u8; 4]` | `ROX\0` (0x524F5800) |
-| 0x04 | Data | zstd + bincode | Compressed, serialized RoxChart |
-
-The chart data is serialized using bincode with:
-- Little-endian byte order
-- Variable-length integer encoding
-- Zstd compression (level 3)
 
 ## Performance
 
-ROX is built for extreme efficiency. Benchmarks on a massive 50,000 note chart (4K) show:
+ROX is built for extreme efficiency. Benchmarks on a 50,000 note chart (4K):
 
 | Metric | .osu Format | .rox Format | Improvement |
 |--------|-------------|-------------|-------------|
@@ -175,66 +147,31 @@ ROX is built for extreme efficiency. Benchmarks on a massive 50,000 note chart (
 | **Decode Speed** | ~26 ms | **~2.7 ms** | **10x Faster** |
 | **Encode Speed** | N/A | **~4.2 ms** | Lightning Fast |
 
-*Benchmarks run on release build with `cargo bench`.*
-
-## Roadmap
-
-### Format Converters
-
-| Format | Status | Import | Export |
-|--------|--------|--------|--------|
-| osu!mania (.osu) | **Implemented** | Yes | Yes |
-| osu!taiko (.osu) | **Implemented** | Yes | No |
-| StepMania / Etterna (.sm/.ssc) | **Implemented** | Yes | Yes |
-| Quaver (.qua) | **Implemented** | Yes | Yes |
-| Friday Night Funkin' (.json) | **Implemented** | Yes | Yes |
-| Malody (.mc) | Planned | Yes | Yes |
-| RoBeats | Planned | Yes | Yes |
-| Clone Hero (.chart/.mid) | Planned (Experimental) | Yes | Yes |
-| BMS (.bms/.bme/.bml) | Planned | Yes | No |
-| O2Jam (.ojn/.ojm) | Planned | Yes | No |
-
-### Alternative Formats
-
-| Extension | Format | Use Case |
-|-----------|--------|----------|
-| `.rox` | Binary (zstd compressed) | Production, distribution |
-| `.jrox` | JSON | Human-readable, debugging |
-| `.yrox` | YAML | Human-readable, editing |
-
-### Planned Features
-
-- Chart difficulty calculation
-- Pattern analysis utilities
-- Timing section helpers
-- Batch conversion CLI tool
-- WebAssembly support
-
 ## Development
 
 ### Prerequisites
 
 - Rust 1.85+ (2024 edition)
 - Cargo
+- (Optional) just - for running QA checks
 
 ### Building
 
 ```bash
-cargo build
+cargo build --release
 ```
 
-### Running Tests
+### Running QA Checks
 
 ```bash
+# If you have 'just' installed
+just qa
+
+# Or manually
+cargo check --all-targets
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 cargo test
-```
-
-### Running Specific Tests
-
-```bash
-cargo test codec    # Run codec tests
-cargo test model    # Run model tests
-cargo test integration  # Run integration tests
 ```
 
 ## Project Structure
@@ -242,33 +179,26 @@ cargo test integration  # Run integration tests
 ```text
 rhythm-open-exchange/
 ├── src/
-│   ├── lib.rs              # Library entry point and re-exports
-│   ├── error.rs            # Error types (RoxError, RoxResult)
+│   ├── lib.rs              # Library entry point
+│   ├── api.rs              # FFI API for C#/native bindings
+│   ├── error.rs            # Error types
 │   ├── codec/
 │   │   ├── mod.rs          # Codec module
-│   │   ├── traits.rs       # Encoder/Decoder traits
-│   │   ├── rox.rs          # RoxCodec (with zstd + delta encoding)
+│   │   ├── auto.rs         # Auto-detection & conversion
+│   │   ├── rox.rs          # Native codec (rkyv + zstd)
 │   │   └── formats/        # Format converters
-│   │       └── osu/        # osu!mania (.osu) converter
-│   └── model/
-│       ├── chart.rs        # RoxChart struct
-│       ├── metadata.rs     # Metadata struct
-│       ├── note.rs         # Note and NoteType
-│       ├── timing.rs       # TimingPoint
-│       └── hitsound.rs     # Hitsound
-├── tests/
-│   ├── common/             # Test utilities
-│   ├── codec/formats/osu/  # osu format tests
-│   ├── codec_tests.rs
-│   ├── model_tests.rs
-│   └── integration_tests.rs
+│   │       ├── osu/        # osu!mania & osu!taiko
+│   │       ├── sm/         # StepMania
+│   │       ├── qua/        # Quaver
+│   │       └── fnf/        # Friday Night Funkin'
+│   └── model/              # Data structures
+├── bindings/
+│   └── csharp/             # C# NuGet package
+├── tests/                  # Test suite
 ├── examples/               # Usage examples
-├── assets/                 # Test assets (.osu files)
-├── output/                 # Generated files (gitignored)
-├── .wiki/                  # Documentation wiki
-└── README.md
+├── assets/                 # Test assets
+└── justfile                # QA automation
 ```
-
 
 ## Contributing
 
@@ -276,24 +206,18 @@ Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Follow Rust standard formatting (`cargo fmt`)
-- Ensure tests pass (`cargo test`)
-- Add tests for new functionality
-- Update documentation as needed
+3. Run QA checks (`just qa` or manual commands above)
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push and open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## See Also
 
-- [Wiki Documentation](.wiki/) — Detailed format specification
-- [osu!mania](https://osu.ppy.sh/wiki/en/Game_mode/osu%21mania) — Popular VSRG
-- [Quaver](https://quavergame.com/) — Competitive VSRG
-- [Etterna](https://etternaonline.com/) — Advanced VSRG
+- [C# Bindings Documentation](bindings/csharp/README.md)
+- [Wiki Documentation](.wiki/)
+- [osu!mania](https://osu.ppy.sh/wiki/en/Game_mode/osu%21mania)
+- [Quaver](https://quavergame.com/)
+- [Etterna](https://etternaonline.com/)
