@@ -11,11 +11,11 @@ pub enum RoxError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Decode error: {0}")]
-    Decode(#[from] bincode::error::DecodeError),
+    #[error("Serialization error: {0}")]
+    Serialize(String),
 
-    #[error("Encode error: {0}")]
-    Encode(#[from] bincode::error::EncodeError),
+    #[error("Deserialization error: {0}")]
+    Deserialize(String),
 
     #[error("Invalid format: {0}")]
     InvalidFormat(String),

@@ -1,6 +1,6 @@
 //! Main chart container.
 
-use bincode::{Decode, Encode, config};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use super::{Hitsound, Metadata, Note, TimingPoint};
 
@@ -11,7 +11,7 @@ pub const ROX_VERSION: u8 = 2;
 pub const ROX_MAGIC: [u8; 4] = [0x52, 0x4F, 0x58, 0x00];
 
 /// A complete VSRG chart in ROX format.
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 pub struct RoxChart {
     /// Format version for backwards compatibility.
     pub version: u8,
@@ -68,10 +68,7 @@ impl RoxChart {
     /// Uses BLAKE3 on native, SHA256 on WASM.
     #[must_use]
     pub fn hash(&self) -> String {
-        let config = config::standard()
-            .with_little_endian()
-            .with_variable_int_encoding();
-        let encoded = bincode::encode_to_vec(self, config).unwrap_or_default();
+        let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap_or_default();
 
         #[cfg(not(target_arch = "wasm32"))]
         {

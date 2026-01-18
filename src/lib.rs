@@ -5,6 +5,7 @@
 
 #![warn(clippy::pedantic)]
 
+pub mod api;
 pub mod codec;
 pub mod error;
 pub mod model;

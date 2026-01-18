@@ -1,9 +1,9 @@
 //! Timing points for BPM and scroll velocity changes.
 
-use bincode::{Decode, Encode};
+use rkyv::{Archive, Deserialize, Serialize};
 
 /// A point that defines timing or scroll velocity changes.
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 pub struct TimingPoint {
     /// Position in microseconds.
     pub time_us: i64,

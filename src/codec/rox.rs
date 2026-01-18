@@ -3,7 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Read, Write};
 
-use bincode::config;
+use rkyv::rancor::Error as RkyvError;
 
 use crate::error::{RoxError, RoxResult};
 use crate::model::{ROX_MAGIC, RoxChart};
@@ -15,18 +15,11 @@ use super::{Decoder, Encoder};
 #[cfg(not(target_arch = "wasm32"))]
 const COMPRESSION_LEVEL: i32 = 3;
 
-/// Native ROX format codec using bincode for compact binary serialization
+/// Native ROX format codec using rkyv for zero-copy binary serialization
 /// and zstd for compression (native only). Uses delta encoding for note timestamps.
 pub struct RoxCodec;
 
 impl RoxCodec {
-    /// Get the bincode configuration for ROX format.
-    fn config() -> impl config::Config {
-        config::standard()
-            .with_little_endian()
-            .with_variable_int_encoding()
-    }
-
     /// Compress data (zstd on native, passthrough on WASM).
     #[cfg(not(target_arch = "wasm32"))]
     fn compress(data: &[u8]) -> RoxResult<Vec<u8>> {
@@ -94,9 +87,9 @@ impl Decoder for RoxCodec {
         // Decompress the data after magic bytes
         let decompressed = Self::decompress(&data[4..])?;
 
-        // Decode the chart
-        let (mut chart, _): (RoxChart, _) =
-            bincode::decode_from_slice(&decompressed, Self::config())?;
+        // Deserialize the chart with rkyv
+        let mut chart: RoxChart = rkyv::from_bytes::<RoxChart, RkyvError>(&decompressed)
+            .map_err(|e| RoxError::Deserialize(e.to_string()))?;
 
         // Restore absolute timestamps from deltas
         Self::delta_decode_notes(&mut chart);
@@ -113,8 +106,9 @@ impl Encoder for RoxCodec {
         // Apply delta encoding for better compression
         let delta_chart = Self::delta_encode_notes(chart);
 
-        // Encode the chart with bincode
-        let encoded = bincode::encode_to_vec(&delta_chart, Self::config())?;
+        // Serialize the chart with rkyv
+        let encoded = rkyv::to_bytes::<RkyvError>(&delta_chart)
+            .map_err(|e| RoxError::Serialize(e.to_string()))?;
 
         // Compress the encoded data
         let compressed = Self::compress(&encoded)?;

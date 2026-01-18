@@ -1,9 +1,9 @@
 //! Chart metadata (title, artist, etc.)
 
-use bincode::{Decode, Encode};
+use rkyv::{Archive, Deserialize, Serialize};
 
 /// Metadata describing the chart and associated media.
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 pub struct Metadata {
     // Identifiers
     /// Optional chart ID (for online databases).

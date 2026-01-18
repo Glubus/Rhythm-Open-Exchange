@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>RhythmOpenExchange</PackageId>
+    <Version>0.4.0</Version>
+    <Authors>Glubus</Authors>
+    <Company>Glubus</Company>
+    <Product>Rhythm Open Exchange</Product>
+    <Description>C# bindings for rhythm-open-exchange - A universal format converter for VSRG (Vertical Scrolling Rhythm Games). Supports osu!mania, StepMania, Quaver, Friday Night Funkin' and more.</Description>
+    <PackageTags>vsrg;rhythm;osu;stepmania;quaver;fnf;chart;converter</PackageTags>
+    <PackageProjectUrl>https://github.com/Glubus/rhythm-open-exchange</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Glubus/rhythm-open-exchange</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    
+    <!-- Generate XML documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\target\release\rhythm_open_exchange.dll" Pack="true" PackagePath="runtimes\win-x64\native\" Condition="Exists('..\..\target\release\rhythm_open_exchange.dll')" />
+    <None Include="..\..\target\release\librhythm_open_exchange.so" Pack="true" PackagePath="runtimes\linux-x64\native\" Condition="Exists('..\..\target\release\librhythm_open_exchange.so')" />
+    <None Include="..\..\target\release\librhythm_open_exchange.dylib" Pack="true" PackagePath="runtimes\osx-x64\native\" Condition="Exists('..\..\target\release\librhythm_open_exchange.dylib')" />
+  </ItemGroup>
+
+</Project>

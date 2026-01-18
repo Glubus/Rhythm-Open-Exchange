@@ -1,9 +1,9 @@
 //! Hitsound definitions for keysounded charts.
 
-use bincode::{Decode, Encode};
+use rkyv::{Archive, Deserialize, Serialize};
 
 /// A hitsound sample definition.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
 pub struct Hitsound {
     /// Relative path to the audio sample.
     pub file: String,

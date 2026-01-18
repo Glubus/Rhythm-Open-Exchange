@@ -1,9 +1,9 @@
 //! Note types for VSRG.
 
-use bincode::{Decode, Encode};
+use rkyv::{Archive, Deserialize, Serialize};
 
 /// Type of note.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize)]
 pub enum NoteType {
     /// Single tap note.
     Tap,
@@ -16,7 +16,7 @@ pub enum NoteType {
 }
 
 /// A single note in the chart.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
 pub struct Note {
     /// Position in microseconds.
     pub time_us: i64,

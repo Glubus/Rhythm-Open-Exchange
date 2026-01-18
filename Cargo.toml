@@ -1,6 +1,6 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.3.3"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
@@ -9,12 +9,15 @@ categories = ["config", "development-tools::build-utils"]
 readme = "README.md"
 description = "A try to create the ffmpeg of vsrg"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = []
 wasm = []
 
 [dependencies]
-bincode = "2.0.1"
+rkyv = { version = "0.8" }
 bitflags = "2.9"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }

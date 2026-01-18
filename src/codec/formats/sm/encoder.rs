@@ -49,8 +49,7 @@ impl Encoder for SmEncoder {
             .timing_points
             .iter()
             .find(|tp| !tp.is_inherited)
-            .map(|tp| tp.time_us)
-            .unwrap_or(0);
+            .map_or(0, |tp| tp.time_us);
 
         // Offset (SM uses "Time where Beat 0 begins" in seconds)
         // So if beat 0 is at -0.030s, Offset should be -0.030.
@@ -114,7 +113,7 @@ impl Encoder for SmEncoder {
             }
             _ => "Hard", // Fallback for numeric versions like "1.0x"
         };
-        let _ = writeln!(output, "     {}:", difficulty_name);
+        let _ = writeln!(output, "     {difficulty_name}:");
         let _ = writeln!(
             output,
             "     {}:",
@@ -174,8 +173,7 @@ fn us_to_beats_at_bpm(us: i64, bpm: f32) -> f64 {
 }
 
 /// Encode all notes into SM measure format.
-///
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
 fn encode_measures(output: &mut String, chart: &RoxChart, bpms: &[(i64, f32)], start_time_us: i64) {
     if chart.notes.is_empty() {
         // Empty chart - just one empty measure
@@ -299,6 +297,7 @@ fn encode_measures(output: &mut String, chart: &RoxChart, bpms: &[(i64, f32)], s
         }
 
         // Snap to grid (48th notes / 192 per measure) to handle floating point jitter
+        #[allow(clippy::items_after_statements)]
         const GRID_RESOLUTION: f64 = 48.0;
         let mut beat = (raw_beat * GRID_RESOLUTION).round() / GRID_RESOLUTION;
 
