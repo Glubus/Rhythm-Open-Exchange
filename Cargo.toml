@@ -1,6 +1,6 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
@@ -26,11 +26,10 @@ serde_yaml = "0.9"
 thiserror = "2.0.17"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-blake3 = "1.8.2"
 zstd = "0.13"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-sha2 = "0.10"
+[dependencies.blake3]
+version = "1.8.2"
 
 [dev-dependencies]
 criterion = "0.8.1"

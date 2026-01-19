@@ -64,23 +64,20 @@ impl RoxChart {
     }
 
     /// Compute a hash of the chart.
-    /// Returns a hash as a hex string.
-    /// Uses BLAKE3 on native, SHA256 on WASM.
+    /// Returns a BLAKE3 hash as a hex string.
     #[must_use]
     pub fn hash(&self) -> String {
         let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap_or_default();
+        blake3::hash(&encoded).to_hex().to_string()
+    }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            blake3::hash(&encoded).to_hex().to_string()
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            use sha2::{Digest, Sha256};
-            let result = Sha256::digest(&encoded);
-            format!("{:x}", result)
-        }
+    /// Compute a hash of just the notes (ignoring metadata, timing points, hitsounds).
+    /// Useful for comparing charts with different metadata but same gameplay.
+    /// Returns a BLAKE3 hash as a hex string.
+    #[must_use]
+    pub fn notes_hash(&self) -> String {
+        let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(&self.notes).unwrap_or_default();
+        blake3::hash(&encoded).to_hex().to_string()
     }
 
     /// Compute a short hash (first 16 hex chars).
