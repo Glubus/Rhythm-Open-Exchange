@@ -109,3 +109,54 @@ pub fn convert_file<D: Decoder, E: Encoder>(
     let chart = D::decode_from_path(input)?;
     E::encode_to_path(&chart, output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::formats::{OsuDecoder, OsuEncoder};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_convert() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let result = convert::<OsuDecoder, OsuEncoder>(&data).unwrap();
+        assert!(!result.is_empty());
+        assert!(String::from_utf8_lossy(&result).contains("osu file format v14"));
+    }
+
+    #[test]
+    fn test_convert_file() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("input.osu");
+        let output_path = dir.path().join("output.osu");
+
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        fs::write(&input_path, &data).unwrap();
+
+        convert_file::<OsuDecoder, OsuEncoder>(&input_path, &output_path).unwrap();
+
+        assert!(output_path.exists());
+        let result = fs::read(&output_path).unwrap();
+        assert!(String::from_utf8_lossy(&result).contains("osu file format v14"));
+    }
+
+    #[test]
+    fn test_decoder_from_path() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.osu");
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        fs::write(&path, &data).unwrap();
+
+        let chart = OsuDecoder::decode_from_path(&path).unwrap();
+        assert_eq!(chart.key_count(), 7);
+    }
+
+    #[test]
+    fn test_encoder_to_string() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let chart = OsuDecoder::decode(&data).unwrap();
+        let s = OsuEncoder::encode_to_string(&chart).unwrap();
+        assert!(s.contains("Artist:Iced Blade"));
+    }
+}

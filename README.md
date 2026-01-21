@@ -31,13 +31,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhythm-open-exchange = "0.4"
+rhythm-open-exchange = "0.5"
 ```
 
 ### C# / .NET
 
 ```bash
-dotnet add package RhythmOpenExchange
+dotnet add package RhythmOpenExchange --version 0.5.0
 ```
 
 ### From Source
@@ -49,7 +49,7 @@ cargo build --release
 ```
 
 ## Quick Start
-
+<!-- slide -->
 ### Creating a Chart
 
 ```rust
@@ -118,7 +118,7 @@ File.WriteAllText("chart.sm", sm);
 | osu!taiko | `.osu` | ✅ | ❌ |
 | StepMania / Etterna | `.sm` | ✅ | ✅ |
 | Quaver | `.qua` | ✅ | ✅ |
-| Friday Night Funkin' | `.json` | ✅ | ✅ |
+| Friday Night Funkin' | `.json` | ✅ | ✅ | (Experimental) |
 
 ### Planned
 
@@ -126,6 +126,13 @@ File.WriteAllText("chart.sm", sm);
 - BMS (`.bms/.bme/.bml`)
 - O2Jam (`.ojn/.ojm`)
 - Clone Hero (`.chart/.mid`)
+
+## Multi-Language Support
+
+- **C# / .NET** - Full feature parity, available via NuGet.
+- **Python** - High-performance bindings using PyO3.
+- **WebAssembly** - Optimized for browser-based tools and games.
+- **C/C++** - Stable C-API for native integration.
 
 ## CLI Tool
 
@@ -168,34 +175,23 @@ cargo build --release
 just qa
 
 # Or manually
-cargo check --all-targets
+cargo check --all-targets --all-features
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
 ```
 
 ## Project Structure
 
 ```text
 rhythm-open-exchange/
-├── src/
-│   ├── lib.rs              # Library entry point
-│   ├── api.rs              # FFI API for C#/native bindings
-│   ├── error.rs            # Error types
-│   ├── codec/
-│   │   ├── mod.rs          # Codec module
-│   │   ├── auto.rs         # Auto-detection & conversion
-│   │   ├── rox.rs          # Native codec (rkyv + zstd)
-│   │   └── formats/        # Format converters
-│   │       ├── osu/        # osu!mania & osu!taiko
-│   │       ├── sm/         # StepMania
-│   │       ├── qua/        # Quaver
-│   │       └── fnf/        # Friday Night Funkin'
-│   └── model/              # Data structures
+├── src/                    # Core library (Rust)
 ├── bindings/
-│   └── csharp/             # C# NuGet package
-├── tests/                  # Test suite
-├── examples/               # Usage examples
+│   ├── api/                # Stable C-API / FFI (Native)
+│   ├── csharp/             # C# Bindings
+│   ├── python/             # Python Bindings
+│   └── wasm/               # WebAssembly Bindings
+├── tests/                  # Integration tests
 ├── assets/                 # Test assets
 └── justfile                # QA automation
 ```

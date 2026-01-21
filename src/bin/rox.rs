@@ -13,6 +13,8 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+#[cfg(feature = "analysis")]
+use rhythm_open_exchange::analysis::RoxAnalysis;
 use rhythm_open_exchange::codec::{auto_decode, auto_encode};
 
 fn main() -> ExitCode {
@@ -59,6 +61,8 @@ COMMANDS:
 
 SUPPORTED FORMATS:
     .rox   - ROX binary format
+    .jrox  - ROX JSON format
+    .yrox  - ROX YAML format
     .osu   - osu!mania
     .sm    - StepMania
     .qua   - Quaver
@@ -167,7 +171,8 @@ fn cmd_info(args: &[String]) -> ExitCode {
     #[allow(clippy::cast_precision_loss)]
     let duration_s = chart.duration_us() as f64 / 1_000_000.0;
     println!("  Duration:      {:.1}s", duration_s);
-    println!("  Hash:          {}", chart.short_hash());
+    #[cfg(feature = "analysis")]
+    println!("Hash: {}", chart.short_hash());
 
     ExitCode::SUCCESS
 }

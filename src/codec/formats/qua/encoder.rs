@@ -93,3 +93,41 @@ impl Encoder for QuaEncoder {
         Ok(yaml.into_bytes())
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_roundtrip() {
+        use super::*;
+        use crate::codec::Decoder;
+        use crate::codec::formats::qua::QuaDecoder;
+        let data = crate::test_utils::get_test_asset("quaver/4K.qua");
+        let chart1 = QuaDecoder::decode(&data).unwrap();
+        let encoded = QuaEncoder::encode(&chart1).unwrap();
+        let chart2 = QuaDecoder::decode(&encoded).unwrap();
+
+        assert_eq!(chart1.key_count(), chart2.key_count());
+
+        // Use deep comparison with tolerance instead of hashes due to YAML float rounding
+        assert_eq!(chart1.notes.len(), chart2.notes.len());
+        for (n1, n2) in chart1.notes.iter().zip(chart2.notes.iter()) {
+            assert_eq!(n1.column, n2.column);
+            assert!(
+                (n1.time_us - n2.time_us).abs() <= 1000,
+                "Note time mismatch"
+            );
+        }
+
+        assert_eq!(chart1.timing_points.len(), chart2.timing_points.len());
+        for (tp1, tp2) in chart1.timing_points.iter().zip(chart2.timing_points.iter()) {
+            assert!(
+                (tp1.time_us - tp2.time_us).abs() <= 1000,
+                "Timing point time mismatch"
+            );
+            if !tp1.is_inherited {
+                assert!((tp1.bpm - tp2.bpm).abs() < 0.01, "BPM mismatch");
+            }
+        }
+    }
+}

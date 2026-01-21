@@ -1,0 +1,15 @@
+[package]
+name = "rox-api"
+version = "0.5.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["analysis", "compression"]
+analysis = ["rhythm-open-exchange/analysis"]
+compression = ["rhythm-open-exchange/compression"]
+
+[dependencies]
+rhythm-open-exchange = { path = "../../", default-features = false }

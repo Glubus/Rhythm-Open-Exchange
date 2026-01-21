@@ -8,7 +8,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>RhythmOpenExchange</PackageId>
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <Authors>Glubus</Authors>
     <Company>Glubus</Company>
     <Product>Rhythm Open Exchange</Product>
@@ -24,12 +24,13 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
-
+  
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\target\release\rhythm_open_exchange.dll" Pack="true" PackagePath="runtimes\win-x64\native\" Condition="Exists('..\..\target\release\rhythm_open_exchange.dll')" />
-    <None Include="..\..\target\release\librhythm_open_exchange.so" Pack="true" PackagePath="runtimes\linux-x64\native\" Condition="Exists('..\..\target\release\librhythm_open_exchange.so')" />
-    <None Include="..\..\target\release\librhythm_open_exchange.dylib" Pack="true" PackagePath="runtimes\osx-x64\native\" Condition="Exists('..\..\target\release\librhythm_open_exchange.dylib')" />
+    <None Include="..\..\target\release\rox_api.dll" Pack="true" PackagePath="runtimes\win-x64\native\" Condition="Exists('..\..\target\release\rox_api.dll')" />
+    <None Include="..\..\target\release\librox_api.so" Pack="true" PackagePath="runtimes\linux-x64\native\" Condition="Exists('..\..\target\release\librox_api.so')" />
+    <None Include="..\..\target\release\librox_api.dylib" Pack="true" PackagePath="runtimes\osx-x64\native\" Condition="Exists('..\..\target\release\librox_api.dylib')" />
   </ItemGroup>
+
 
 </Project>

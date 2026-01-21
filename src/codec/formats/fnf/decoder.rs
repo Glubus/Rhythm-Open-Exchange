@@ -140,3 +140,34 @@ impl Decoder for FnfDecoder {
         Self::decode_with_side(data, FnfSide::Player)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    #[test]
+    #[ignore = "FNF is currently WIP/Unstable"]
+    fn test_decode_asset_fnf_player() {
+        // assets/fnf/test-song.json
+        let data = crate::test_utils::get_test_asset("fnf/test-song.json");
+        let chart =
+            <FnfDecoder as Decoder>::decode(&data).expect("Failed to decode test-song.json");
+
+        // Basic validation
+        assert_eq!(chart.key_count(), 4); // Player side is 4K
+        assert!(!chart.notes.is_empty());
+        assert!(!chart.timing_points.is_empty());
+    }
+
+    #[test]
+    #[ignore = "FNF is currently WIP/Unstable"]
+    fn test_decode_asset_fnf_both() {
+        let data = crate::test_utils::get_test_asset("fnf/test-song.json");
+        let chart = FnfDecoder::decode_with_side(&data, FnfSide::Both)
+            .expect("Failed to decode both sides");
+
+        assert_eq!(chart.key_count(), 8); // Both sides is 8K
+        assert!(chart.metadata.is_coop);
+    }
+}

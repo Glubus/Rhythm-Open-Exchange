@@ -1,9 +1,12 @@
 //! Chart metadata (title, artist, etc.)
 
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Metadata describing the chart and associated media.
-#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Metadata {
     // Identifiers
     /// Optional chart ID (for online databases).
@@ -79,5 +82,30 @@ impl Default for Metadata {
             tags: Vec::new(),
             is_coop: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata_default() {
+        let meta = Metadata::default();
+
+        assert!(meta.title.is_empty());
+        assert!(meta.artist.is_empty());
+        assert!(meta.creator.is_empty());
+        assert_eq!(meta.difficulty_name, "Normal");
+        assert!(meta.difficulty_value.is_none());
+        assert!(meta.audio_file.is_empty());
+        assert!(meta.background_file.is_none());
+        assert_eq!(meta.audio_offset_us, 0);
+        assert_eq!(meta.preview_time_us, 0);
+        assert_eq!(meta.preview_duration_us, 15_000_000); // 15 seconds
+        assert!(meta.source.is_none());
+        assert!(meta.genre.is_none());
+        assert!(meta.language.is_none());
+        assert!(meta.tags.is_empty());
     }
 }

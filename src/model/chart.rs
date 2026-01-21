@@ -1,6 +1,7 @@
 //! Main chart container.
 
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use super::{Hitsound, Metadata, Note, TimingPoint};
 
@@ -11,7 +12,9 @@ pub const ROX_VERSION: u8 = 2;
 pub const ROX_MAGIC: [u8; 4] = [0x52, 0x4F, 0x58, 0x00];
 
 /// A complete VSRG chart in ROX format.
-#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct RoxChart {
     /// Format version for backwards compatibility.
     pub version: u8,
@@ -61,29 +64,6 @@ impl RoxChart {
     #[must_use]
     pub fn note_count(&self) -> usize {
         self.notes.len()
-    }
-
-    /// Compute a hash of the chart.
-    /// Returns a BLAKE3 hash as a hex string.
-    #[must_use]
-    pub fn hash(&self) -> String {
-        let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap_or_default();
-        blake3::hash(&encoded).to_hex().to_string()
-    }
-
-    /// Compute a hash of just the notes (ignoring metadata, timing points, hitsounds).
-    /// Useful for comparing charts with different metadata but same gameplay.
-    /// Returns a BLAKE3 hash as a hex string.
-    #[must_use]
-    pub fn notes_hash(&self) -> String {
-        let encoded = rkyv::to_bytes::<rkyv::rancor::Error>(&self.notes).unwrap_or_default();
-        blake3::hash(&encoded).to_hex().to_string()
-    }
-
-    /// Compute a short hash (first 16 hex chars).
-    #[must_use]
-    pub fn short_hash(&self) -> String {
-        self.hash()[..16].to_string()
     }
 
     /// Validate the chart for consistency and correctness.
@@ -183,5 +163,76 @@ impl RoxChart {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rox_chart_new() {
+        let chart = RoxChart::new(4);
+
+        assert_eq!(chart.version, 2);
+        assert_eq!(chart.key_count(), 4);
+        assert!(chart.timing_points.is_empty());
+        assert!(chart.notes.is_empty());
+        assert!(chart.hitsounds.is_empty());
+    }
+
+    #[test]
+    fn test_rox_chart_new_7k() {
+        let chart = RoxChart::new(7);
+        assert_eq!(chart.key_count(), 7);
+    }
+
+    #[test]
+    fn test_rox_chart_duration_empty() {
+        let chart = RoxChart::new(4);
+        assert_eq!(chart.duration_us(), 0);
+    }
+
+    #[test]
+    fn test_rox_chart_duration_with_notes() {
+        let mut chart = RoxChart::new(4);
+        chart.notes.push(Note::tap(1_000_000, 0));
+        chart.notes.push(Note::tap(2_000_000, 1));
+        chart.notes.push(Note::hold(3_000_000, 500_000, 2)); // ends at 3.5s
+
+        assert_eq!(chart.duration_us(), 3_500_000);
+    }
+
+    #[test]
+    fn test_rox_chart_note_count() {
+        let mut chart = RoxChart::new(4);
+        assert_eq!(chart.note_count(), 0);
+
+        chart.notes.push(Note::tap(0, 0));
+        chart.notes.push(Note::hold(1_000_000, 500_000, 1));
+        chart.notes.push(Note::mine(2_000_000, 2));
+
+        assert_eq!(chart.note_count(), 3);
+    }
+
+    #[test]
+    fn test_rox_chart_validate_valid() {
+        let mut chart = RoxChart::new(4);
+        chart.notes.push(Note::tap(0, 0));
+        chart.notes.push(Note::tap(0, 1));
+        chart.notes.push(Note::tap(0, 2));
+        chart.notes.push(Note::tap(0, 3));
+
+        chart.timing_points.push(TimingPoint::bpm(0, 120.0));
+
+        assert!(chart.validate().is_ok());
+    }
+
+    #[test]
+    fn test_rox_chart_validate_invalid_column() {
+        let mut chart = RoxChart::new(4);
+        chart.notes.push(Note::tap(0, 4)); // Invalid: column 4 doesn't exist in 4K
+
+        assert!(chart.validate().is_err());
     }
 }

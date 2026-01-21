@@ -398,3 +398,36 @@ fn us_to_beat_simple(time_us: i64, bpms: &[(i64, f32)], start_time_us: i64) -> f
 
     current_beat + us_to_beats_at_bpm(time_us - current_time_us, current_bpm)
 }
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    #[cfg(feature = "analysis")]
+    fn test_roundtrip() {
+        use crate::analysis::RoxAnalysis;
+        use crate::codec::Decoder;
+        use crate::codec::Encoder;
+        use crate::codec::formats::sm::SmDecoder;
+        use crate::codec::formats::sm::SmEncoder;
+        let data = crate::test_utils::get_test_asset("stepmania/4k.sm");
+        let chart1 = <SmDecoder as Decoder>::decode(&data).unwrap();
+        let encoded = SmEncoder::encode(&chart1).unwrap();
+        let chart2 = <SmDecoder as Decoder>::decode(&encoded).unwrap();
+
+        assert_eq!(chart1.key_count(), chart2.key_count());
+
+        // SM roundtrip might be tricky due to floating point and grid snapping.
+        // Let's see if hashes match.
+        assert_eq!(
+            chart1.notes_hash(),
+            chart2.notes_hash(),
+            "Notes hash mismatch"
+        );
+        assert_eq!(
+            chart1.timings_hash(),
+            chart2.timings_hash(),
+            "Timings hash mismatch"
+        );
+    }
+}

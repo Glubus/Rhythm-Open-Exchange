@@ -1,4 +1,7 @@
-//! Encoder for converting `RoxChart` to FNF .json format.
+//! [WIP / UNSTABLE] Encoder for converting `RoxChart` to FNF .json format.
+//!
+//! > [!WARNING]
+//! > This encoder is currently Work-In-Progress and may not be fully accurate.
 
 use crate::codec::Encoder;
 use crate::error::RoxResult;
@@ -79,5 +82,38 @@ impl Encoder for FnfEncoder {
             .map_err(|e| crate::error::RoxError::InvalidFormat(format!("JSON error: {e}")))?;
 
         Ok(json.into_bytes())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    #[cfg(feature = "analysis")]
+    #[ignore = "FNF is currently WIP/Unstable"]
+    fn test_roundtrip_both() {
+        use super::*;
+        use crate::analysis::RoxAnalysis;
+        use crate::codec::Decoder;
+        use crate::codec::formats::fnf::FnfDecoder;
+        let data = crate::test_utils::get_test_asset("fnf/test-song.json");
+        // Decode both sides (8K)
+        let chart1 = FnfDecoder::decode(&data).unwrap();
+        let encoded = FnfEncoder::encode(&chart1).unwrap();
+        let chart2 = FnfDecoder::decode(&encoded).unwrap();
+
+        assert_eq!(chart1.key_count(), chart2.key_count());
+        assert_eq!(
+            chart1.notes_hash(),
+            chart2.notes_hash(),
+            "Notes hash mismatch"
+        );
+        // FNF only has one BPM for the whole song in this encoder implementation currently,
+        // but let's check timings hash anyway.
+        assert_eq!(
+            chart1.timings_hash(),
+            chart2.timings_hash(),
+            "Timings hash mismatch"
+        );
     }
 }

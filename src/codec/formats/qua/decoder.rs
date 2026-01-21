@@ -108,3 +108,20 @@ impl Decoder for QuaDecoder {
         Ok(Self::from_qua(&qua))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    #[test]
+    fn test_decode_asset_4k() {
+        let data = crate::test_utils::get_test_asset("quaver/4K.qua");
+        let chart = <QuaDecoder as Decoder>::decode(&data).expect("Failed to decode 4K.qua");
+
+        // Basic validation
+        assert_eq!(chart.key_count(), 4);
+        assert!(!chart.notes.is_empty());
+        assert!(!chart.timing_points.is_empty());
+    }
+}

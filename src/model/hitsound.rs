@@ -1,9 +1,12 @@
 //! Hitsound definitions for keysounded charts.
 
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// A hitsound sample definition.
-#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Hitsound {
     /// Relative path to the audio sample.
     pub file: String,
@@ -28,5 +31,33 @@ impl Hitsound {
             file: file.into(),
             volume: Some(volume.min(100)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hitsound_new() {
+        let hs = Hitsound::new("kick.wav");
+
+        assert_eq!(hs.file, "kick.wav");
+        assert!(hs.volume.is_none());
+    }
+
+    #[test]
+    fn test_hitsound_with_volume() {
+        let hs = Hitsound::with_volume("snare.ogg", 75);
+
+        assert_eq!(hs.file, "snare.ogg");
+        assert_eq!(hs.volume, Some(75));
+    }
+
+    #[test]
+    fn test_hitsound_volume_clamped_to_100() {
+        let hs = Hitsound::with_volume("loud.wav", 150);
+
+        assert_eq!(hs.volume, Some(100));
     }
 }
