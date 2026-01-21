@@ -2,6 +2,7 @@ use rhythm_open_exchange::error::RoxError;
 use rhythm_open_exchange::model::{
     Note as InternalNote, NoteType, RoxChart as InternalChart, TimingPoint as InternalTimingPoint,
 };
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 uniffi::setup_scaffolding!("rox_ffi");
@@ -232,6 +233,16 @@ impl RoxChart {
         // segments is usize in the trait, but usually passed as u64/i64 in FFI.
         // UniFFI supports u64. Cast to usize.
         self.inner.read().unwrap().density(segments as usize)
+    }
+
+    pub fn polyphony(&self) -> HashMap<u32, u32> {
+        use rhythm_open_exchange::analysis::RoxAnalysis;
+        self.inner.read().unwrap().polyphony()
+    }
+
+    pub fn lane_balance(&self) -> Vec<u32> {
+        use rhythm_open_exchange::analysis::RoxAnalysis;
+        self.inner.read().unwrap().lane_balance()
     }
 
     // --- Notes Manipulation ---

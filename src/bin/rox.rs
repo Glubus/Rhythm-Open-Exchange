@@ -171,8 +171,62 @@ fn cmd_info(args: &[String]) -> ExitCode {
     #[allow(clippy::cast_precision_loss)]
     let duration_s = chart.duration_us() as f64 / 1_000_000.0;
     println!("  Duration:      {:.1}s", duration_s);
+
     #[cfg(feature = "analysis")]
-    println!("Hash: {}", chart.short_hash());
+    {
+        println!();
+        println!("=== Hashes ===");
+        println!("  Hash:         {}", chart.hash());
+        println!("  Notes Hash:   {}", chart.notes_hash());
+        println!("  Timings Hash: {}", chart.timings_hash());
+
+        println!();
+        println!("=== Analysis ===");
+        println!(
+            "  BPM:          {:.1} - {:.1} (Mode: {:.1})",
+            chart.bpm_min(),
+            chart.bpm_max(),
+            chart.bpm_mode()
+        );
+        println!(
+            "  NPS:          {:.2} (Max: {:.2})",
+            chart.nps(),
+            chart.highest_nps(1.0)
+        );
+        println!("  Drain Time:   {:.1}s", chart.highest_drain_time());
+
+        println!();
+        println!("  Polyphony:");
+        let mut poly = chart.polyphony().into_iter().collect::<Vec<_>>();
+        poly.sort_by_key(|&(k, _)| k);
+        for (k, v) in poly {
+            let label = match k {
+                1 => "Single",
+                2 => "Jump",
+                3 => "Hand",
+                4 => "Quad",
+                _n => "Cluster",
+            };
+            if k > 4 {
+                println!("    {} ({}): {}", label, k, v);
+            } else {
+                println!("    {}: {}", label, v);
+            }
+        }
+
+        println!();
+        println!("  Lane Balance:");
+        let balance = chart.lane_balance();
+        let total: u32 = balance.iter().sum();
+        for (i, count) in balance.iter().enumerate() {
+            let percentage = if total > 0 {
+                (*count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            println!("    Col {}: {} ({:.1}%)", i + 1, count, percentage);
+        }
+    }
 
     ExitCode::SUCCESS
 }

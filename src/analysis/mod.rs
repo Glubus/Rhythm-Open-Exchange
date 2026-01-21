@@ -1,12 +1,15 @@
 pub mod bpm;
 pub mod hash;
 pub mod nps;
+pub mod pattern;
 
 pub use bpm::{bpm_max, bpm_min, bpm_mode};
 pub use hash::{hash, notes_hash, timings_hash};
 pub use nps::{density, highest_drain_time, highest_nps, lowest_nps, nps};
+pub use pattern::{lane_balance, polyphony};
 
 use crate::model::RoxChart;
+use std::collections::HashMap;
 
 /// Extension trait to add analysis methods directly to `RoxChart`.
 pub trait RoxAnalysis {
@@ -19,6 +22,9 @@ pub trait RoxAnalysis {
     fn highest_nps(&self, window_size_s: f64) -> f64;
     fn lowest_nps(&self, window_size_s: f64) -> f64;
     fn highest_drain_time(&self) -> f64;
+
+    fn polyphony(&self) -> HashMap<u32, u32>;
+    fn lane_balance(&self) -> Vec<u32>;
 
     fn hash(&self) -> String;
     fn notes_hash(&self) -> String;
@@ -51,6 +57,13 @@ impl RoxAnalysis for RoxChart {
     }
     fn highest_drain_time(&self) -> f64 {
         nps::highest_drain_time(self)
+    }
+
+    fn polyphony(&self) -> HashMap<u32, u32> {
+        pattern::polyphony(self)
+    }
+    fn lane_balance(&self) -> Vec<u32> {
+        pattern::lane_balance(self)
     }
 
     fn hash(&self) -> String {
