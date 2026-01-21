@@ -62,3 +62,6 @@ required-features = ["compression"]
 name = "format_bench"
 harness = false
 required-features = ["analysis"]
+
+[workspace]
+members = [".", "bindings/ffi"]

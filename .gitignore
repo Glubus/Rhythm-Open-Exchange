@@ -4,3 +4,8 @@
 *.rox
 *.osu
 !assets/**
+
+# Generated Bindings
+/bindings/ffi/csharp/rox_ffi.cs
+/bindings/ffi/csharp/runtimes/
+/bindings/ffi/python/rox_ffi.py
