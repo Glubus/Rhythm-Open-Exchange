@@ -8,6 +8,6 @@ pub mod parser;
 pub mod types;
 
 pub use decoder::OsuDecoder;
-pub use encoder::{column_to_x, OsuEncoder};
+pub use encoder::{OsuEncoder, column_to_x};
 pub use parser::parse;
 pub use types::*;

@@ -8,14 +8,32 @@
 
 use crate::error::{RoxError, RoxResult};
 
-use super::types::{timing, SmChart, SmFile, SmMetadata, SmNote, SmNoteType};
+use super::types::{SmChart, SmFile, SmMetadata, SmNote, SmNoteType, timing};
+
+// Safety limit: 100MB for .sm files to prevent memory exhaustion
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
 
 /// Parse an SM file from raw bytes.
 ///
+/// # Why this design?
+/// The parser processes tags (`#TAG:VALUE;`) sequentially.
+/// We use `find` and string slicing instead of regex for performance.
+/// Floating point parsing is done with explicit error handling to avoid silent data corruption.
+///
 /// # Errors
 ///
-/// Returns an error if the data is not valid UTF-8 or has invalid format.
+/// Returns an error if:
+/// - The data is not valid UTF-8
+/// - The file is larger than 100MB (Safety)
 pub fn parse(data: &[u8]) -> RoxResult<SmFile> {
+    if data.len() > MAX_FILE_SIZE {
+        return Err(RoxError::InvalidFormat(format!(
+            "File too large: {} bytes (max {}MB)",
+            data.len(),
+            MAX_FILE_SIZE / 1024 / 1024
+        )));
+    }
+
     let content = std::str::from_utf8(data)
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
 
@@ -94,7 +112,13 @@ fn parse_string_field(content: &str, tag: &str) -> Option<String> {
 /// Parse a float field like `#OFFSET:-0.123;`
 fn parse_float_field(content: &str, tag: &str) -> Option<f64> {
     let value_str = parse_string_field(content, tag)?;
-    value_str.parse().ok()
+    match value_str.parse() {
+        Ok(v) => Some(v),
+        Err(_) => {
+            tracing::warn!("Failed to parse float for {}: '{}'", tag, value_str);
+            None
+        }
+    }
 }
 
 /// Parse BPM changes from `#BPMS:beat=bpm,beat=bpm,...;`
@@ -146,6 +170,7 @@ fn parse_stops(content: &str, bpms: &[(i64, f32)]) -> Vec<(i64, i64)> {
             (time_us, duration_us)
         })
         .collect()
+    // No explicit sort needed as parse_pairs sorts by beat
 }
 
 /// Parse comma-separated pairs like `beat=value,beat=value`.
@@ -161,13 +186,14 @@ fn parse_pairs(content: &str, tag: &str) -> Vec<(f64, f64)> {
             continue;
         }
         let parts: Vec<&str> = pair.split('=').collect();
-        if parts.len() == 2
-            && let (Ok(beat), Ok(value)) = (
+        if parts.len() == 2 {
+            match (
                 parts[0].trim().parse::<f64>(),
                 parts[1].trim().parse::<f64>(),
-            )
-        {
-            result.push((beat, value));
+            ) {
+                (Ok(beat), Ok(value)) => result.push((beat, value)),
+                _ => tracing::warn!("Malformed pair in {}: '{}'", tag, pair),
+            }
         }
     }
 
@@ -279,13 +305,23 @@ fn parse_chart(content: &str, bpms: &[(i64, f32)], _stops: &[(i64, i64)]) -> Opt
     }
 
     if header_fields.len() < 5 {
-        return None; // Invalid chart header
+        tracing::warn!("Invalid chart header: missing fields");
+        return None;
     }
 
     chart.stepstype.clone_from(&header_fields[0]);
     chart.description.clone_from(&header_fields[1]);
     chart.difficulty.clone_from(&header_fields[2]);
-    chart.meter = header_fields[3].parse().unwrap_or(1);
+    chart.meter = match header_fields[3].parse() {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!(
+                "Failed to parse meter: '{}', defaulting to 1",
+                header_fields[3]
+            );
+            1
+        }
+    };
 
     // Parse radar values
     for val in header_fields[4].split(',') {

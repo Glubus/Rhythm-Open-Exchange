@@ -18,6 +18,9 @@ enum Section {
     HitObjects,
 }
 
+// Safety limit: 100MB for .osu files
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
+
 /// Parse a .osu file into an `OsuBeatmap`.
 ///
 /// # Why this design?
@@ -32,7 +35,16 @@ enum Section {
 /// Returns an error if:
 /// - The data is not valid UTF-8
 /// - The beatmap is not in mania mode (mode != 3)
+/// - The file is larger than 100MB
 pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
+    if data.len() > MAX_FILE_SIZE {
+        return Err(RoxError::InvalidFormat(format!(
+            "File too large: {} bytes (max {}MB)",
+            data.len(),
+            MAX_FILE_SIZE / 1024 / 1024
+        )));
+    }
+
     let content = std::str::from_utf8(data)
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
 
@@ -81,7 +93,11 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
                 if let Some(tp) = parse_timing_point(line) {
                     beatmap.timing_points.push(tp);
                 } else {
-                     tracing::warn!(line = line_idx + 1, "Failed to parse timing point: {}", line);
+                    tracing::warn!(
+                        line = line_idx + 1,
+                        "Failed to parse timing point: {}",
+                        line
+                    );
                 }
             }
             Section::HitObjects => {
@@ -144,7 +160,9 @@ pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
         let value = value.trim();
         match key.trim() {
             "CircleSize" => difficulty.circle_size = parse_field(value, "CircleSize", 4.0),
-            "OverallDifficulty" => difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0),
+            "OverallDifficulty" => {
+                difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0)
+            }
             "HPDrainRate" => difficulty.hp_drain_rate = parse_field(value, "HPDrainRate", 5.0),
             _ => {}
         }
