@@ -96,7 +96,10 @@ fn parse_hit_object_line(line: &str, beatmap: &mut TaikoBeatmap) {
         let object_type: u32 = match parts[3].parse() {
             Ok(v) => v,
             Err(_) => {
-                tracing::warn!("Failed to parse object_type in taiko object: '{}'", parts[3]);
+                tracing::warn!(
+                    "Failed to parse object_type in taiko object: '{}'",
+                    parts[3]
+                );
                 0
             }
         };

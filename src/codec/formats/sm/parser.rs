@@ -8,7 +8,7 @@
 
 use crate::error::{RoxError, RoxResult};
 
-use super::types::{SmChart, SmFile, SmMetadata, SmNote, SmNoteType, timing};
+use super::types::{timing, SmChart, SmFile, SmMetadata, SmNote, SmNoteType};
 
 // Safety limit: 100MB for .sm files to prevent memory exhaustion
 const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;

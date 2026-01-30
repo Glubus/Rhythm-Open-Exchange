@@ -1,9 +1,17 @@
 //! Parser for .osu file format.
 
+mod objects;
+mod sections;
+mod timing;
+
 use super::types::{
-    OsuBeatmap, OsuDifficulty, OsuGeneral, OsuHitObject, OsuMetadata, OsuTimingPoint,
+    OsuBeatmap,
 };
 use crate::error::{RoxError, RoxResult};
+
+pub use objects::parse_hit_object;
+pub use sections::{parse_difficulty, parse_event, parse_general, parse_metadata};
+pub use timing::parse_timing_point;
 
 /// Current section being parsed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,143 +122,10 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
     Ok(beatmap)
 }
 
-pub fn parse_general(line: &str, general: &mut OsuGeneral) {
-    if let Some((key, value)) = line.split_once(':') {
-        let value = value.trim();
-        match key.trim() {
-            "AudioFilename" => general.audio_filename = value.to_string(),
-            "AudioLeadIn" => general.audio_lead_in = parse_field(value, "AudioLeadIn", 0),
-            "PreviewTime" => general.preview_time = parse_field(value, "PreviewTime", -1),
-            "Mode" => general.mode = parse_field(value, "Mode", 0),
-            _ => {}
-        }
-    }
-}
-
-pub fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
-    if let Some((key, value)) = line.split_once(':') {
-        let value = value.trim();
-        match key.trim() {
-            "Title" => metadata.title = value.to_string(),
-            "TitleUnicode" => metadata.title_unicode = Some(value.to_string()),
-            "Artist" => metadata.artist = value.to_string(),
-            "ArtistUnicode" => metadata.artist_unicode = Some(value.to_string()),
-            "Creator" => metadata.creator = value.to_string(),
-            "Version" => metadata.version = value.to_string(),
-            "Source" => {
-                if !value.is_empty() {
-                    metadata.source = Some(value.to_string());
-                }
-            }
-            "Tags" => {
-                metadata.tags = value
-                    .split_whitespace()
-                    .map(std::string::ToString::to_string)
-                    .collect();
-            }
-            "BeatmapID" => metadata.beatmap_id = value.parse().ok(),
-            "BeatmapSetID" => metadata.beatmap_set_id = value.parse().ok(),
-            _ => {}
-        }
-    }
-}
-
-pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
-    if let Some((key, value)) = line.split_once(':') {
-        let value = value.trim();
-        match key.trim() {
-            "CircleSize" => difficulty.circle_size = parse_field(value, "CircleSize", 4.0),
-            "OverallDifficulty" => {
-                difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0)
-            }
-            "HPDrainRate" => difficulty.hp_drain_rate = parse_field(value, "HPDrainRate", 5.0),
-            _ => {}
-        }
-    }
-}
-
-pub fn parse_event(line: &str, background: &mut Option<String>) {
-    // Format: 0,0,"filename.jpg",0,0
-    let parts: Vec<&str> = line.split(',').collect();
-    if parts.len() >= 3 && parts[0] == "0" && parts[1] == "0" {
-        let filename = parts[2].trim_matches('"');
-        if !filename.is_empty() {
-            *background = Some(filename.to_string());
-        }
-    }
-}
-
-#[must_use]
-pub fn parse_timing_point(line: &str) -> Option<OsuTimingPoint> {
-    let parts: Vec<&str> = line.split(',').collect();
-    if parts.len() < 8 {
-        return None;
-    }
-
-    Some(OsuTimingPoint {
-        time: parts[0].parse().ok()?,
-        beat_length: parts[1].parse().ok()?,
-        meter: parts[2].parse().unwrap_or(4),
-        sample_set: parts[3].parse().unwrap_or(0),
-        sample_index: parts[4].parse().unwrap_or(0),
-        volume: parts[5].parse().unwrap_or(100),
-        uninherited: parts[6] == "1",
-        effects: parts[7].parse().unwrap_or(0),
-    })
-}
-
-fn parse_hit_object(line: &str) -> Option<OsuHitObject> {
-    let parts: Vec<&str> = line.split(',').collect();
-    if parts.len() < 5 {
-        return None;
-    }
-
-    let x: i32 = parts[0].parse().ok()?;
-    let y: i32 = parts[1].parse().ok()?;
-    let time: i32 = parts[2].parse().ok()?;
-    let object_type: u8 = parts[3].parse().ok()?;
-    let hit_sound: u8 = parts[4].parse().ok()?;
-
-    // Check for hold note (type & 128)
-    let end_time = if (object_type & 128) != 0 && parts.len() > 5 {
-        // Hold note format: x,y,time,type,hitSound,endTime:extras
-        let extras = parts[5];
-        extras.split(':').next().and_then(|s| s.parse().ok())
-    } else {
-        None
-    };
-
-    let extras = if parts.len() > 5 {
-        parts[5..].join(",")
-    } else {
-        String::new()
-    };
-
-    Some(OsuHitObject {
-        x,
-        y,
-        time,
-        object_type,
-        hit_sound,
-        end_time,
-        extras,
-    })
-}
-
-/// Helper to parse fields and log on failure
-fn parse_field<T: std::str::FromStr>(value: &str, field_name: &str, default: T) -> T {
-    match value.parse() {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::warn!("Failed to parse {}: '{}', using default", field_name, value);
-            default
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::codec::formats::osu::OsuHitObject;
 
     #[test]
     fn test_parse_timing_point_bpm() {
