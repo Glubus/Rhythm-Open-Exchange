@@ -4,9 +4,7 @@ mod objects;
 mod sections;
 mod timing;
 
-use super::types::{
-    OsuBeatmap,
-};
+use super::types::OsuBeatmap;
 use crate::error::{RoxError, RoxResult};
 
 pub use objects::parse_hit_object;

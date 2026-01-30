@@ -3,12 +3,12 @@ use std::path::Path;
 use crate::error::RoxResult;
 use crate::model::RoxChart;
 
+use super::super::Encoder;
 #[cfg(feature = "compression")]
 use super::super::formats::RoxCodec;
 use super::super::formats::{
     FnfEncoder, JroxEncoder, OsuEncoder, QuaEncoder, SmEncoder, YroxEncoder,
 };
-use super::super::Encoder;
 use super::decode::auto_decode;
 use super::types::OutputFormat;
 

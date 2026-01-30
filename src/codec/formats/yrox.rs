@@ -12,8 +12,18 @@ pub struct YroxDecoder;
 /// YROX (YAML ROX) encoder.
 pub struct YroxEncoder;
 
+// Safety limit: 100MB to prevent memory exhaustion
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
+
 impl Decoder for YroxDecoder {
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
+        if data.len() > MAX_FILE_SIZE {
+            return Err(RoxError::InvalidFormat(format!(
+                "File too large: {} bytes (max {}MB)",
+                data.len(),
+                MAX_FILE_SIZE / 1024 / 1024
+            )));
+        }
         let s = std::str::from_utf8(data)
             .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {}", e)))?;
         serde_yaml::from_str(s).map_err(|e| RoxError::InvalidFormat(e.to_string()))
@@ -51,5 +61,14 @@ mod tests {
 
         assert_eq!(chart.key_count(), decoded.key_count());
         assert_eq!(chart.metadata.title, decoded.metadata.title);
+    }
+
+    #[test]
+    fn test_file_too_large() {
+        let big_data = vec![0; MAX_FILE_SIZE + 1];
+        let result = YroxDecoder::decode(&big_data);
+        assert!(
+            matches!(result, Err(RoxError::InvalidFormat(msg)) if msg.contains("File too large"))
+        );
     }
 }

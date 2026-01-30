@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use rkyv::rancor::Error as RkyvError;
 
 use crate::error::{RoxError, RoxResult};
-use crate::model::{RoxChart, ROX_MAGIC};
+use crate::model::{ROX_MAGIC, RoxChart};
 
 use crate::codec::{Decoder, Encoder};
 
@@ -15,6 +15,9 @@ use crate::codec::{Decoder, Encoder};
 /// Level 3 provides fast compression with good ratio.
 #[cfg(not(target_arch = "wasm32"))]
 const COMPRESSION_LEVEL: i32 = 3;
+
+// Safety limit: 100MB to prevent memory exhaustion
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
 
 /// Native ROX format codec using rkyv for zero-copy binary serialization
 /// and zstd for compression (native only). Uses delta encoding for note timestamps.
@@ -83,6 +86,14 @@ impl Decoder for RoxCodec {
             return Err(RoxError::InvalidFormat(
                 "Invalid ROX file: missing magic bytes".into(),
             ));
+        }
+
+        if data.len() > MAX_FILE_SIZE {
+            return Err(RoxError::InvalidFormat(format!(
+                "File too large: {} bytes (max {}MB)",
+                data.len(),
+                MAX_FILE_SIZE / 1024 / 1024
+            )));
         }
 
         // Decompress the data after magic bytes
@@ -519,5 +530,18 @@ mod tests {
         assert_eq!(decoded.metadata.audio_offset_us, -50_000);
         assert_eq!(decoded.timing_points[0].time_us, -500_000);
         assert_eq!(decoded.notes[0].time_us, -100_000);
+    }
+
+    #[test]
+    fn test_file_too_large() {
+        // Create a header that looks valid until the size check hits
+        let mut big_data = Vec::with_capacity(MAX_FILE_SIZE + 1);
+        big_data.extend_from_slice(&ROX_MAGIC);
+        big_data.resize(MAX_FILE_SIZE + 1, 0);
+
+        let result = RoxCodec::decode(&big_data);
+        assert!(
+            matches!(result, Err(RoxError::InvalidFormat(msg)) if msg.contains("File too large"))
+        );
     }
 }

@@ -12,8 +12,18 @@ pub struct JroxDecoder;
 /// JROX (JSON ROX) encoder.
 pub struct JroxEncoder;
 
+// Safety limit: 100MB to prevent memory exhaustion
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
+
 impl Decoder for JroxDecoder {
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
+        if data.len() > MAX_FILE_SIZE {
+            return Err(RoxError::InvalidFormat(format!(
+                "File too large: {} bytes (max {}MB)",
+                data.len(),
+                MAX_FILE_SIZE / 1024 / 1024
+            )));
+        }
         serde_json::from_slice(data).map_err(|e| RoxError::InvalidFormat(e.to_string()))
     }
 }
@@ -48,5 +58,14 @@ mod tests {
 
         assert_eq!(chart.key_count(), decoded.key_count());
         assert_eq!(chart.metadata.title, decoded.metadata.title);
+    }
+
+    #[test]
+    fn test_file_too_large() {
+        let big_data = vec![0; MAX_FILE_SIZE + 1];
+        let result = JroxDecoder::decode(&big_data);
+        assert!(
+            matches!(result, Err(RoxError::InvalidFormat(msg)) if msg.contains("File too large"))
+        );
     }
 }
