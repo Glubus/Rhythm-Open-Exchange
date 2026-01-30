@@ -8,7 +8,7 @@
 
 use crate::error::{RoxError, RoxResult};
 
-use super::types::{SmChart, SmFile, SmMetadata, SmNote, SmNoteType, timing};
+use super::types::{timing, SmChart, SmFile, SmMetadata, SmNote, SmNoteType};
 
 /// Parse an SM file from raw bytes.
 ///

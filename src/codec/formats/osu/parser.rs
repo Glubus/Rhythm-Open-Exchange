@@ -20,6 +20,13 @@ enum Section {
 
 /// Parse a .osu file into an `OsuBeatmap`.
 ///
+/// # Why this design?
+/// The parser processes the file line-by-line using a state machine (`Section` enum).
+/// This approach was chosen over a full tokenizer/parser generator because:
+/// 1. The .osu format is line-oriented and relatively simple.
+/// 2. Performance is critical for loading large beatmap packs.
+/// 3. It allows for lenient parsing (skipping unknown sections) which is standard in the osu! ecosystem.
+///
 /// # Errors
 ///
 /// Returns an error if:
@@ -32,7 +39,7 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
     let mut beatmap = OsuBeatmap::default();
     let mut section = Section::None;
 
-    for line in content.lines() {
+    for (line_idx, line) in content.lines().enumerate() {
         let line = line.trim();
 
         // Skip empty lines and comments
@@ -73,11 +80,15 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
             Section::TimingPoints => {
                 if let Some(tp) = parse_timing_point(line) {
                     beatmap.timing_points.push(tp);
+                } else {
+                     tracing::warn!(line = line_idx + 1, "Failed to parse timing point: {}", line);
                 }
             }
             Section::HitObjects => {
                 if let Some(ho) = parse_hit_object(line) {
                     beatmap.hit_objects.push(ho);
+                } else {
+                    tracing::warn!(line = line_idx + 1, "Failed to parse hit object: {}", line);
                 }
             }
             Section::None | Section::Editor => {}
@@ -92,9 +103,9 @@ pub fn parse_general(line: &str, general: &mut OsuGeneral) {
         let value = value.trim();
         match key.trim() {
             "AudioFilename" => general.audio_filename = value.to_string(),
-            "AudioLeadIn" => general.audio_lead_in = value.parse().unwrap_or(0),
-            "PreviewTime" => general.preview_time = value.parse().unwrap_or(-1),
-            "Mode" => general.mode = value.parse().unwrap_or(0),
+            "AudioLeadIn" => general.audio_lead_in = parse_field(value, "AudioLeadIn", 0),
+            "PreviewTime" => general.preview_time = parse_field(value, "PreviewTime", -1),
+            "Mode" => general.mode = parse_field(value, "Mode", 0),
             _ => {}
         }
     }
@@ -132,9 +143,9 @@ pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
     if let Some((key, value)) = line.split_once(':') {
         let value = value.trim();
         match key.trim() {
-            "CircleSize" => difficulty.circle_size = value.parse().unwrap_or(4.0),
-            "OverallDifficulty" => difficulty.overall_difficulty = value.parse().unwrap_or(5.0),
-            "HPDrainRate" => difficulty.hp_drain_rate = value.parse().unwrap_or(5.0),
+            "CircleSize" => difficulty.circle_size = parse_field(value, "CircleSize", 4.0),
+            "OverallDifficulty" => difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0),
+            "HPDrainRate" => difficulty.hp_drain_rate = parse_field(value, "HPDrainRate", 5.0),
             _ => {}
         }
     }
@@ -206,6 +217,17 @@ fn parse_hit_object(line: &str) -> Option<OsuHitObject> {
         end_time,
         extras,
     })
+}
+
+/// Helper to parse fields and log on failure
+fn parse_field<T: std::str::FromStr>(value: &str, field_name: &str, default: T) -> T {
+    match value.parse() {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!("Failed to parse {}: '{}', using default", field_name, value);
+            default
+        }
+    }
 }
 
 #[cfg(test)]
