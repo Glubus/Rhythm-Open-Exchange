@@ -314,33 +314,39 @@ pub fn from_string(data: &str) -> RoxResult<RoxChart> {
     let bytes = data.as_bytes();
 
     // Try osu format (with mode detection)
-    if let Ok(chart) = decode_osu_by_mode(bytes) {
-        return Ok(chart);
+    match decode_osu_by_mode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as osu: {}", e),
     }
 
     // Try StepMania
-    if let Ok(chart) = SmDecoder::decode(bytes) {
-        return Ok(chart);
+    match SmDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as StepMania: {}", e),
     }
 
     // Try Quaver
-    if let Ok(chart) = QuaDecoder::decode(bytes) {
-        return Ok(chart);
+    match QuaDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as Quaver: {}", e),
     }
 
     // Try FNF
-    if let Ok(chart) = FnfDecoder::decode(bytes) {
-        return Ok(chart);
+    match FnfDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as FNF: {}", e),
     }
 
     // Try JROX
-    if let Ok(chart) = JroxDecoder::decode(bytes) {
-        return Ok(chart);
+    match JroxDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as JROX: {}", e),
     }
 
     // Try YROX
-    if let Ok(chart) = YroxDecoder::decode(bytes) {
-        return Ok(chart);
+    match YroxDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as YROX: {}", e),
     }
 
     Err(RoxError::InvalidFormat(
@@ -374,38 +380,45 @@ pub fn from_string(data: &str) -> RoxResult<RoxChart> {
 pub fn from_bytes(data: &[u8]) -> RoxResult<RoxChart> {
     // Try ROX binary format first
     #[cfg(feature = "compression")]
-    if let Ok(chart) = RoxCodec::decode(data) {
-        return Ok(chart);
+    match RoxCodec::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as ROX: {}", e),
     }
 
     // Try osu format (with mode detection)
-    if let Ok(chart) = decode_osu_by_mode(data) {
-        return Ok(chart);
+    match decode_osu_by_mode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as osu: {}", e),
     }
 
     // Try StepMania
-    if let Ok(chart) = SmDecoder::decode(data) {
-        return Ok(chart);
+    match SmDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as StepMania: {}", e),
     }
 
     // Try Quaver
-    if let Ok(chart) = QuaDecoder::decode(data) {
-        return Ok(chart);
+    match QuaDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as Quaver: {}", e),
     }
 
     // Try FNF
-    if let Ok(chart) = FnfDecoder::decode(data) {
-        return Ok(chart);
+    match FnfDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as FNF: {}", e),
     }
 
     // Try JROX
-    if let Ok(chart) = JroxDecoder::decode(data) {
-        return Ok(chart);
+    match JroxDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as JROX: {}", e),
     }
 
     // Try YROX
-    if let Ok(chart) = YroxDecoder::decode(data) {
-        return Ok(chart);
+    match YroxDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as YROX: {}", e),
     }
 
     Err(RoxError::InvalidFormat(
