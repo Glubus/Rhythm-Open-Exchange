@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use rkyv::rancor::Error as RkyvError;
 
 use crate::error::{RoxError, RoxResult};
-use crate::model::{ROX_MAGIC, RoxChart};
+use crate::model::{RoxChart, ROX_MAGIC};
 
 use crate::codec::{Decoder, Encoder};
 

@@ -1,3 +1,6 @@
+use rhythm_open_exchange::analysis::pattern_recognition::{
+    AnalysisResult as InternalAnalysisResult,
+};
 use rhythm_open_exchange::error::RoxError;
 use rhythm_open_exchange::model::{
     Note as InternalNote, NoteType, RoxChart as InternalChart, TimingPoint as InternalTimingPoint,
@@ -81,6 +84,39 @@ impl From<&InternalTimingPoint> for FfiTimingPoint {
             signature: tp.signature,
             is_inherited: tp.is_inherited,
             scroll_speed: tp.scroll_speed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiPatternEntry {
+    pub time_start_us: i64,
+    pub time_end_us: i64,
+    pub pattern: String,
+    pub note_count: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FfiAnalysisResult {
+    pub timeline: Vec<FfiPatternEntry>,
+    pub key_count: u8,
+}
+
+impl From<InternalAnalysisResult> for FfiAnalysisResult {
+    fn from(res: InternalAnalysisResult) -> Self {
+        Self {
+            timeline: res
+                .timeline
+                .entries
+                .into_iter()
+                .map(|e| FfiPatternEntry {
+                    time_start_us: e.start_time,
+                    time_end_us: e.end_time,
+                    pattern: e.pattern_type.as_str().to_string(), // Convert enum to string for FFI
+                    note_count: e.note_count as u64,
+                })
+                .collect(),
+            key_count: res.key_count,
         }
     }
 }
@@ -243,6 +279,11 @@ impl RoxChart {
     pub fn lane_balance(&self) -> Vec<u32> {
         use rhythm_open_exchange::analysis::RoxAnalysis;
         self.inner.read().unwrap().lane_balance()
+    }
+
+    pub fn analyze_patterns(&self) -> FfiAnalysisResult {
+        use rhythm_open_exchange::analysis::RoxAnalysis;
+        self.inner.read().unwrap().pattern_analysis().into()
     }
 
     // --- Notes Manipulation ---

@@ -111,12 +111,10 @@ File.WriteAllText("chart.sm", sm);
 
 ## Supported Formats
 
-| Format | Extension | Read | Write |
-|--------|-----------|------|-------|
 | ROX (native binary) | `.rox` | ✅ | ✅ |
 | osu!mania | `.osu` | ✅ | ✅ |
 | osu!taiko | `.osu` | ✅ | ❌ |
-| StepMania / Etterna | `.sm` | ✅ | ✅ |
+| StepMania / Etterna | `.sm/.ssc` | ✅ | ✅ |
 | Quaver | `.qua` | ✅ | ✅ |
 | Friday Night Funkin' | `.json` | ✅ | ✅ | (Experimental) |
 
@@ -129,10 +127,10 @@ File.WriteAllText("chart.sm", sm);
 
 ## Multi-Language Support
 
-- **C# / .NET** - Full feature parity, available via NuGet.
-- **Python** - High-performance bindings using PyO3.
-- **WebAssembly** - Optimized for browser-based tools and games.
-- **C/C++** - Stable C-API for native integration.
+- **C# / .NET** - Full feature parity, located in `bindings/ffi/csharp`.
+- **Python** - High-performance bindings in `bindings/ffi/python`.
+- **WebAssembly** - Optimized for browser-based tools, located in `bindings/wasm`.
+- **C/C++** - Stable C-API via UniFFI in `bindings/ffi`.
 
 ## CLI Tool
 
@@ -212,8 +210,9 @@ This project is licensed under the MIT License.
 
 ## See Also
 
-- [C# Bindings Documentation](bindings/csharp/README.md)
-- [Wiki Documentation](.wiki/)
+- [C# Bindings Documentation](bindings/ffi/csharp/README.md)
+- [Wiki Documentation](wiki.wiki/Home.md)
 - [osu!mania](https://osu.ppy.sh/wiki/en/Game_mode/osu%21mania)
 - [Quaver](https://quavergame.com/)
 - [Etterna](https://etternaonline.com/)
+- [Quattern](https://github.com/Leinadix/Quattern/tree/main)

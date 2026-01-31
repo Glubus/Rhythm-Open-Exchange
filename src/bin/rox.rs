@@ -2,7 +2,7 @@
 //!
 //! Usage:
 //!   rox convert <input> <output>
-//!   rox info <file>
+//!   rox info <file> [-aa|--advanced-analysis]
 //!   rox validate <file>
 //!
 //! Examples:
@@ -54,7 +54,7 @@ USAGE:
 
 COMMANDS:
     convert <input> <output>   Convert between chart formats
-    info <file>                Display chart information
+    info <file> [-aa]          Display chart information (use -aa for advanced analysis)
     validate <file>            Validate a chart file
     help                       Show this help message
     version                    Show version
@@ -117,11 +117,12 @@ fn cmd_convert(args: &[String]) -> ExitCode {
 
 fn cmd_info(args: &[String]) -> ExitCode {
     if args.is_empty() {
-        eprintln!("Usage: rox info <file>");
+        eprintln!("Usage: rox info <file> [-aa|--advanced-analysis]");
         return ExitCode::from(1);
     }
 
     let path = PathBuf::from(&args[0]);
+    let advanced_analysis = args.iter().any(|arg| arg == "-aa" || arg == "--advanced-analysis");
 
     let chart = match auto_decode(&path) {
         Ok(c) => c,
@@ -225,6 +226,36 @@ fn cmd_info(args: &[String]) -> ExitCode {
                 0.0
             };
             println!("    Col {}: {} ({:.1}%)", i + 1, count, percentage);
+        }
+
+        if advanced_analysis {
+            println!();
+            println!("=== Advanced Pattern Analysis ===");
+            let result = chart.pattern_analysis();
+            println!("  Pattern Timeline:");
+            if result.timeline.entries.is_empty() {
+                println!("    No significant patterns detected.");
+            } else {
+                for entry in &result.timeline.entries {
+                    let start_s = entry.start_time as f64 / 1_000_000.0;
+                    let end_s = entry.end_time as f64 / 1_000_000.0;
+                    println!(
+                        "    {0:<8.2} - {1:<8.2} : {2}",
+                        start_s, end_s, entry.pattern_type.as_str()
+                    );
+                }
+            }
+            // Save to output.json
+            match std::fs::File::create("output.json") {
+                Ok(file) => {
+                    if let Err(e) = serde_json::to_writer_pretty(file, &result) {
+                         eprintln!("Error writing output.json: {}", e);
+                    } else {
+                         println!("\n  ✓ Saved detailed analysis to: output.json");
+                    }
+                }
+                Err(e) => eprintln!("Error creating output.json: {}", e),
+            }
         }
     }
 

@@ -2,11 +2,13 @@ pub mod bpm;
 pub mod hash;
 pub mod nps;
 pub mod pattern;
+pub mod pattern_recognition;
 
 pub use bpm::{bpm_max, bpm_min, bpm_mode};
 pub use hash::{hash, notes_hash, timings_hash};
 pub use nps::{density, highest_drain_time, highest_nps, lowest_nps, nps};
 pub use pattern::{lane_balance, polyphony};
+pub use pattern_recognition::analyze as pattern_analysis;
 
 use crate::model::RoxChart;
 use std::collections::HashMap;
@@ -30,6 +32,8 @@ pub trait RoxAnalysis {
     fn notes_hash(&self) -> String;
     fn timings_hash(&self) -> String;
     fn short_hash(&self) -> String;
+
+    fn pattern_analysis(&self) -> pattern_recognition::AnalysisResult;
 }
 
 impl RoxAnalysis for RoxChart {
@@ -82,6 +86,10 @@ impl RoxAnalysis for RoxChart {
         } else {
             h
         }
+    }
+
+    fn pattern_analysis(&self) -> pattern_recognition::AnalysisResult {
+        pattern_recognition::analyze(self)
     }
 }
 

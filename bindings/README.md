@@ -4,14 +4,14 @@ Language bindings for the Rhythm Open Exchange library.
 
 ## Available Bindings
 
-### Python (`python/`) ✅ Working
+### Python (`ffi/python/`) ✅ Working
 
-Python bindings using [PyO3](https://pyo3.rs/) and [maturin](https://www.maturin.rs/).
+Python bindings generated via UniFFI.
 
 ```bash
-cd bindings/python
+cd bindings/ffi/python
 python -m venv .venv
-.venv/Scripts/activate  # or source .venv/bin/activate on Unix
+source .venv/bin/activate  # Or activate depending on OS
 pip install maturin
 maturin develop
 ```
@@ -27,6 +27,10 @@ rox.encode(chart, "output.qua")
 ### JavaScript/WASM (`wasm/`) ✅ Working
 
 WebAssembly bindings using [wasm-bindgen](https://rustwasm.github.io/).
+
+### C# / .NET (`ffi/csharp/`) ✅ Working
+
+C# bindings generated via UniFFI.
 
 > **Note**: WASM uses SHA256 instead of BLAKE3 and no compression (pure Rust).
 

@@ -100,8 +100,8 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         use super::*;
-        use crate::codec::Decoder;
         use crate::codec::formats::qua::QuaDecoder;
+        use crate::codec::Decoder;
         let data = crate::test_utils::get_test_asset("quaver/4K.qua");
         let chart1 = QuaDecoder::decode(&data).unwrap();
         let encoded = QuaEncoder::encode(&chart1).unwrap();

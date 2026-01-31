@@ -9,3 +9,7 @@
 /bindings/ffi/csharp/rox_ffi.cs
 /bindings/ffi/csharp/runtimes/
 /bindings/ffi/python/rox_ffi.py
+
+# Local/Reference
+/Quattern
+/output.json

@@ -220,7 +220,7 @@ mod tests {
 | Format | Extension | Decode | Encode | Status |
 |--------|-----------|--------|--------|--------|
 | osu!mania | `.osu` | ✓ | ✓ | **Implemented** |
-| osu!taiko | `.osu` | ✓ | ✓ | **Implemented** |
+| osu!taiko | `.osu` | ✓ | ✗ | **Implemented (Read-only)** |
 | StepMania / Etterna | `.sm/.ssc` | ✓ | ✓ | **Implemented** |
 | Quaver | `.qua` | ✓ | ✓ | **Implemented** |
 | FNF | `.json` | ✓ | ✓ | **Implemented** |

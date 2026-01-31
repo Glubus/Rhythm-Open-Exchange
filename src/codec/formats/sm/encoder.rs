@@ -406,10 +406,10 @@ mod tests {
     #[cfg(feature = "analysis")]
     fn test_roundtrip() {
         use crate::analysis::RoxAnalysis;
-        use crate::codec::Decoder;
-        use crate::codec::Encoder;
         use crate::codec::formats::sm::SmDecoder;
         use crate::codec::formats::sm::SmEncoder;
+        use crate::codec::Decoder;
+        use crate::codec::Encoder;
         let data = crate::test_utils::get_test_asset("stepmania/4k.sm");
         let chart1 = <SmDecoder as Decoder>::decode(&data).unwrap();
         let encoded = SmEncoder::encode(&chart1).unwrap();
