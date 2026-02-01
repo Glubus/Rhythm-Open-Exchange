@@ -62,17 +62,18 @@ impl Encoder for FnfEncoder {
             type_of_section: 0,
         };
 
+        // Create FNF chart structure
         let fnf = FnfChart {
             song: FnfSong {
-                song: chart.metadata.title.clone(),
+                song: chart.metadata.title.to_string(),
                 bpm: base_bpm,
-                speed: 1.5,
+                speed: chart.metadata.difficulty_value.unwrap_or(1.5).into(),
                 player1: "bf".to_string(),
-                player2: chart.metadata.creator.clone(),
+                player2: chart.metadata.creator.to_string(),
                 needs_voices: false,
                 valid_score: true,
-                notes: vec![section],
-                sections: 1,
+                notes: vec![section], // Assuming fnf_sections should be vec![section]
+                sections: 0, // Will be calculated by FNF game
                 section_lengths: Vec::new(),
             },
         };
@@ -94,8 +95,8 @@ mod tests {
     fn test_roundtrip_both() {
         use super::*;
         use crate::analysis::RoxAnalysis;
-        use crate::codec::formats::fnf::FnfDecoder;
         use crate::codec::Decoder;
+        use crate::codec::formats::fnf::FnfDecoder;
         let data = crate::test_utils::get_test_asset("fnf/test-song.json");
         // Decode both sides (8K)
         let chart1 = FnfDecoder::decode(&data).unwrap();

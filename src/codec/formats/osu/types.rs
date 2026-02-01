@@ -113,7 +113,7 @@ pub struct OsuHitObject {
     /// End time for hold notes (in ms).
     pub end_time: Option<i32>,
     /// Additional parameters.
-    pub extras: String,
+    pub extras: compact_str::CompactString,
 }
 
 impl OsuHitObject {

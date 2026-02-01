@@ -4,36 +4,45 @@ use crate::codec::Encoder;
 use crate::error::RoxResult;
 use crate::model::RoxChart;
 
-use super::types::{QuaChart, QuaHitObject, QuaMode, QuaSliderVelocity, QuaTimingPoint};
+use super::types::{QuaChart, QuaHitObject, QuaSliderVelocity, QuaTimingPoint};
 
 /// Encoder for Quaver beatmaps.
 pub struct QuaEncoder;
 
 impl Encoder for QuaEncoder {
     fn encode(chart: &RoxChart) -> RoxResult<Vec<u8>> {
-        let mode = match chart.key_count() {
-            7 => QuaMode::Keys7,
-            // Default to 4K for unsupported key counts
-            _ => QuaMode::Keys4,
-        };
+
+use compact_str::CompactString;
 
         let mut qua = QuaChart {
-            audio_file: chart.metadata.audio_file.clone(),
+            audio_file: chart.metadata.audio_file.to_string(),
             // Safe: preview_time_us / 1000 fits in i32 for typical beatmaps
             #[allow(clippy::cast_possible_truncation)]
             preview_time: (chart.metadata.preview_time_us / 1000) as i32,
-            background_file: chart.metadata.background_file.clone(),
-            mode,
-            title: chart.metadata.title.clone(),
-            artist: chart.metadata.artist.clone(),
-            creator: chart.metadata.creator.clone(),
-            difficulty_name: chart.metadata.difficulty_name.clone(),
-            source: chart.metadata.source.clone(),
-            tags: if chart.metadata.tags.is_empty() {
-                None
+            background_file: Some(chart
+                .metadata
+                .background_file
+                .as_ref()
+                .unwrap_or(&CompactString::new(""))
+                .to_string()),
+            map_id: if let Some(id) = chart.metadata.chart_id {
+                id as i32
             } else {
-                Some(chart.metadata.tags.join(", "))
+                -1
             },
+            title: chart.metadata.title.to_string(),
+            artist: chart.metadata.artist.to_string(),
+            creator: chart.metadata.creator.to_string(),
+            difficulty_name: chart.metadata.difficulty_name.to_string(),
+            source: Some(chart.metadata.source.clone().unwrap_or_default().to_string()),
+            tags: Some(chart
+                .metadata
+                .tags
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")),
+            description: None,
             initial_scroll_velocity: 1.0,
             bpm_does_not_affect_sv: true,
             ..Default::default()
@@ -100,8 +109,8 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         use super::*;
-        use crate::codec::formats::qua::QuaDecoder;
         use crate::codec::Decoder;
+        use crate::codec::formats::qua::QuaDecoder;
         let data = crate::test_utils::get_test_asset("quaver/4K.qua");
         let chart1 = QuaDecoder::decode(&data).unwrap();
         let encoded = QuaEncoder::encode(&chart1).unwrap();

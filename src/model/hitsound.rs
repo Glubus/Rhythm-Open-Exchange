@@ -1,5 +1,6 @@
 //! Hitsound definitions for keysounded charts.
 
+use compact_str::CompactString;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -9,7 +10,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 )]
 pub struct Hitsound {
     /// Relative path to the audio sample.
-    pub file: String,
+    pub file: CompactString,
     /// Volume (0-100, optional override).
     pub volume: Option<u8>,
 }
@@ -17,7 +18,7 @@ pub struct Hitsound {
 impl Hitsound {
     /// Create a new hitsound with default volume.
     #[must_use]
-    pub fn new(file: impl Into<String>) -> Self {
+    pub fn new(file: impl Into<CompactString>) -> Self {
         Self {
             file: file.into(),
             volume: None,
@@ -26,7 +27,7 @@ impl Hitsound {
 
     /// Create a hitsound with custom volume.
     #[must_use]
-    pub fn with_volume(file: impl Into<String>, volume: u8) -> Self {
+    pub fn with_volume(file: impl Into<CompactString>, volume: u8) -> Self {
         Self {
             file: file.into(),
             volume: Some(volume.min(100)),

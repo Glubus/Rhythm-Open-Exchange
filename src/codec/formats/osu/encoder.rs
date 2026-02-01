@@ -318,8 +318,8 @@ mod tests {
     #[cfg(feature = "analysis")]
     fn test_roundtrip() {
         use crate::analysis::RoxAnalysis;
-        use crate::codec::formats::osu::OsuDecoder;
         use crate::codec::Decoder;
+        use crate::codec::formats::osu::OsuDecoder;
         let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
         let chart1 = <OsuDecoder as Decoder>::decode(&data).unwrap();
         let encoded = OsuEncoder::encode(&chart1).unwrap();

@@ -35,12 +35,12 @@ pub enum NoteType {
 pub struct Note {
     /// Position in microseconds.
     pub time_us: i64,
-    /// Column index (0-indexed).
-    pub column: u8,
     /// Type of note (tap, hold, burst, mine).
     pub note_type: NoteType,
     /// Optional index into `RoxChart.hitsounds` for keysounded notes.
     pub hitsound_index: Option<u16>,
+    /// Column index (0-indexed).
+    pub column: u8,
 }
 
 impl Note {

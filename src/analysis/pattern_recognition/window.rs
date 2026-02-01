@@ -1,7 +1,6 @@
 use super::grid::PatternGrid;
 use super::types::PatternType;
 
-
 use super::bpm::TimingAnalyzer;
 
 /// Performs rolling window analysis across segment boundaries.

@@ -236,7 +236,9 @@ Benchmarks performed on a 50,000 note chart (4K) comparing raw `.osu` parsing vs
 | Metric | .osu Format | .rox Format | Improvement |
 |--------|-------------|-------------|-------------|
 | **File Size** | 1.55 MB | **50 KB** | **97% Smaller** |
-| **Decode Speed** | ~26 ms | **~2.7 ms** | **10x Faster** |
-| **Encode Speed** | N/A | **~4.2 ms** | Lightning Fast |
+| **Decode Speed** | ~6.2 ms | **~0.85 ms** | **7x Faster** |
+| **Encode Speed** | N/A | **~2.6 ms** | Lightning Fast |
+
+> See [Performance Optimizations](Performance-Optimizations.md) for details on how we achieved these numbers.
 
 *Measured on release build via `cargo bench`.*

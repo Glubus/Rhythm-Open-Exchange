@@ -1,5 +1,6 @@
 //! Chart metadata (title, artist, etc.)
 
+use compact_str::CompactString;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -19,21 +20,21 @@ pub struct Metadata {
     pub key_count: u8,
 
     /// Song title.
-    pub title: String,
+    pub title: CompactString,
     /// Song artist.
-    pub artist: String,
+    pub artist: CompactString,
     /// Chart creator/mapper.
-    pub creator: String,
+    pub creator: CompactString,
     /// Difficulty name (e.g., "Hard", "Expert").
-    pub difficulty_name: String,
+    pub difficulty_name: CompactString,
     /// Optional numeric difficulty value (format-dependent).
     pub difficulty_value: Option<f32>,
 
     // Media files
     /// Relative path to the audio file.
-    pub audio_file: String,
+    pub audio_file: CompactString,
     /// Optional relative path to the background image.
-    pub background_file: Option<String>,
+    pub background_file: Option<CompactString>,
 
     // Audio timing
     /// Global audio offset in microseconds.
@@ -45,13 +46,13 @@ pub struct Metadata {
 
     // Additional info
     /// Source (anime, game, original, etc.)
-    pub source: Option<String>,
+    pub source: Option<CompactString>,
     /// Genre (electronic, rock, etc.)
-    pub genre: Option<String>,
+    pub genre: Option<CompactString>,
     /// Language code (JP, EN, KR, etc.)
-    pub language: Option<String>,
+    pub language: Option<CompactString>,
     /// Tags for search/categorization.
-    pub tags: Vec<String>,
+    pub tags: Vec<CompactString>,
 
     // Coop/multiplayer info
     /// Whether this chart is designed for 2-player coop mode.
@@ -66,12 +67,12 @@ impl Default for Metadata {
             chart_id: None,
             chartset_id: None,
             key_count: 4,
-            title: String::new(),
-            artist: String::new(),
-            creator: String::new(),
-            difficulty_name: String::from("Normal"),
+            title: CompactString::new(""),
+            artist: CompactString::new(""),
+            creator: CompactString::new(""),
+            difficulty_name: CompactString::from("Normal"),
             difficulty_value: None,
-            audio_file: String::new(),
+            audio_file: CompactString::new(""),
             background_file: None,
             audio_offset_us: 0,
             preview_time_us: 0,

@@ -1,6 +1,6 @@
 use super::grid::PatternGrid;
-use super::types::PatternType;
 use super::merger::PatternMerger;
+use super::types::PatternType;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -175,5 +175,4 @@ impl PatternTimeline {
             segment_indices,
         }
     }
-
 }

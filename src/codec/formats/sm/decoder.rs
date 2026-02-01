@@ -29,24 +29,24 @@ impl SmDecoder {
         // Map metadata
         rox.metadata = Metadata {
             key_count: chart.column_count,
-            title: sm.metadata.title.clone(),
-            artist: sm.metadata.artist.clone(),
-            creator: sm.metadata.credit.clone(),
-            difficulty_name: chart.difficulty.clone(),
+            title: sm.metadata.title.clone().into(),
+            artist: sm.metadata.artist.clone().into(),
+            creator: sm.metadata.credit.clone().into(),
+            difficulty_name: chart.difficulty.clone().into(),
             #[allow(clippy::cast_precision_loss)]
             difficulty_value: Some(chart.meter as f32),
-            audio_file: sm.metadata.music.clone(),
+            audio_file: sm.metadata.music.clone().into(),
             background_file: if sm.metadata.background.is_empty() {
                 None
             } else {
-                Some(sm.metadata.background.clone())
+                Some(sm.metadata.background.clone().into())
             },
-            audio_offset_us: -sm.offset_us, // SM offset is opposite convention
+            audio_offset_us: -sm.offset_us,
             #[allow(clippy::cast_possible_truncation)]
             preview_time_us: (sm.metadata.sample_start * 1_000_000.0) as i64,
             #[allow(clippy::cast_possible_truncation)]
             preview_duration_us: (sm.metadata.sample_length * 1_000_000.0) as i64,
-            source: None,
+            source: Some(sm.metadata.banner.clone().into()),
             genre: None,
             language: None,
             tags: Vec::new(),

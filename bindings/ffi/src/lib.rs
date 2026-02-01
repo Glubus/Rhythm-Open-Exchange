@@ -1,6 +1,4 @@
-use rhythm_open_exchange::analysis::pattern_recognition::{
-    AnalysisResult as InternalAnalysisResult,
-};
+use rhythm_open_exchange::analysis::pattern_recognition::AnalysisResult as InternalAnalysisResult;
 use rhythm_open_exchange::error::RoxError;
 use rhythm_open_exchange::model::{
     Note as InternalNote, NoteType, RoxChart as InternalChart, TimingPoint as InternalTimingPoint,
@@ -139,43 +137,43 @@ impl RoxChart {
     // --- Metadata ---
 
     pub fn title(&self) -> String {
-        self.inner.read().unwrap().metadata.title.clone()
+        self.inner.read().unwrap().metadata.title.to_string()
     }
 
     pub fn set_title(&self, title: String) {
-        self.inner.write().unwrap().metadata.title = title;
+        self.inner.write().unwrap().metadata.title = title.into();
     }
 
     pub fn artist(&self) -> String {
-        self.inner.read().unwrap().metadata.artist.clone()
+        self.inner.read().unwrap().metadata.artist.to_string()
     }
 
     pub fn set_artist(&self, artist: String) {
-        self.inner.write().unwrap().metadata.artist = artist;
+        self.inner.write().unwrap().metadata.artist = artist.into();
     }
 
     pub fn creator(&self) -> String {
-        self.inner.read().unwrap().metadata.creator.clone()
+        self.inner.read().unwrap().metadata.creator.to_string()
     }
 
     pub fn set_creator(&self, creator: String) {
-        self.inner.write().unwrap().metadata.creator = creator;
+        self.inner.write().unwrap().metadata.creator = creator.into();
     }
 
     pub fn difficulty(&self) -> String {
-        self.inner.read().unwrap().metadata.difficulty_name.clone()
+        self.inner.read().unwrap().metadata.difficulty_name.to_string()
     }
 
     pub fn set_difficulty(&self, difficulty: String) {
-        self.inner.write().unwrap().metadata.difficulty_name = difficulty;
+        self.inner.write().unwrap().metadata.difficulty_name = difficulty.into();
     }
 
     pub fn audio_file(&self) -> String {
-        self.inner.read().unwrap().metadata.audio_file.clone()
+        self.inner.read().unwrap().metadata.audio_file.to_string()
     }
 
     pub fn set_audio_file(&self, audio_file: String) {
-        self.inner.write().unwrap().metadata.audio_file = audio_file;
+        self.inner.write().unwrap().metadata.audio_file = audio_file.into();
     }
 
     pub fn key_count(&self) -> u8 {

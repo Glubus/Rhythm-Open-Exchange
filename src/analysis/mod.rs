@@ -216,15 +216,16 @@ mod tests {
         chart.notes.push(Note::hold(3_000_000, 500_000, 2)); // ends at 3.5s
 
         // Known hash values for this specific chart configuration
+        let hash = chart.hash();
         assert_eq!(
-            chart.hash(),
-            "81066bfbd1e257fd6a4838168b6f7eff7f58657dee4c09aeeb6fd3d76d39753f"
+            hash, "2c0964de10711f16489a3db2796afe320ace9cbe2e28a142e226e28620d1e8d4",
+            "Hash verification failed"
         );
         assert_eq!(
             chart.notes_hash(),
-            "d94e91bdf1d5a6813cf9b8beeb4983171abbe64780f8e141b236f6d924d6204f"
+            "dcdccda1c57c13043c67373c71bc17769a5d77e3c7eb2f258549125b87162ea5"
         );
-        assert_eq!(chart.short_hash(), "81066bfbd1e257fd");
+        assert_eq!(chart.short_hash(), "2c0964de10711f16");
     }
 
     #[test]

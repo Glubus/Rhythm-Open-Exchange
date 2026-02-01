@@ -122,7 +122,9 @@ fn cmd_info(args: &[String]) -> ExitCode {
     }
 
     let path = PathBuf::from(&args[0]);
-    let advanced_analysis = args.iter().any(|arg| arg == "-aa" || arg == "--advanced-analysis");
+    let advanced_analysis = args
+        .iter()
+        .any(|arg| arg == "-aa" || arg == "--advanced-analysis");
 
     let chart = match auto_decode(&path) {
         Ok(c) => c,
@@ -241,7 +243,9 @@ fn cmd_info(args: &[String]) -> ExitCode {
                     let end_s = entry.end_time as f64 / 1_000_000.0;
                     println!(
                         "    {0:<8.2} - {1:<8.2} : {2}",
-                        start_s, end_s, entry.pattern_type.as_str()
+                        start_s,
+                        end_s,
+                        entry.pattern_type.as_str()
                     );
                 }
             }
@@ -249,9 +253,9 @@ fn cmd_info(args: &[String]) -> ExitCode {
             match std::fs::File::create("output.json") {
                 Ok(file) => {
                     if let Err(e) = serde_json::to_writer_pretty(file, &result) {
-                         eprintln!("Error writing output.json: {}", e);
+                        eprintln!("Error writing output.json: {}", e);
                     } else {
-                         println!("\n  ✓ Saved detailed analysis to: output.json");
+                        println!("\n  ✓ Saved detailed analysis to: output.json");
                     }
                 }
                 Err(e) => eprintln!("Error creating output.json: {}", e),

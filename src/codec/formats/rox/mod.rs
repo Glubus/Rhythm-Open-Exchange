@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use rkyv::rancor::Error as RkyvError;
 
 use crate::error::{RoxError, RoxResult};
-use crate::model::{RoxChart, ROX_MAGIC};
+use crate::model::{ROX_MAGIC, RoxChart};
 
 use crate::codec::{Decoder, Encoder};
 
@@ -461,6 +461,9 @@ mod tests {
         // Note without keysound
         chart.notes.push(Note::tap(750_000, 1));
 
+        // Sort notes
+        chart.notes.sort_by_key(|n| n.time_us);
+
         // Encode and decode
         let encoded = RoxCodec::encode(&chart).expect("Encoding failed");
         let decoded = RoxCodec::decode(&encoded).expect("Decoding failed");
@@ -470,9 +473,11 @@ mod tests {
         assert_eq!(decoded.hitsounds[2].volume, Some(60));
 
         // Verify note-hitsound links
-        assert_eq!(decoded.notes[0].hitsound_index, Some(0));
-        assert_eq!(decoded.notes[1].hitsound_index, Some(1));
-        assert!(decoded.notes[3].hitsound_index.is_none());
+        // Sorted order: Kick (0), Hihat (1), Snare (2), Tap (3)
+        assert_eq!(decoded.notes[0].hitsound_index, Some(0)); // Kick (t=0)
+        assert_eq!(decoded.notes[1].hitsound_index, Some(2)); // Hihat (t=250k)
+        assert_eq!(decoded.notes[2].hitsound_index, Some(1)); // Snare (t=500k)
+        assert!(decoded.notes[3].hitsound_index.is_none());   // Tap (t=750k)
     }
 
     #[test]

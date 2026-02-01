@@ -51,73 +51,158 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
         )));
     }
 
-    let content = std::str::from_utf8(data)
-        .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
+    // Validate UTF-8 upfront
+    if std::str::from_utf8(data).is_err() {
+        return Err(RoxError::InvalidFormat("Invalid UTF-8".to_string()));
+    }
 
     let mut beatmap = OsuBeatmap::default();
+    // Estimate capacity based on file size (approx 40 bytes per HitObject line)
+    // This reduces reallocations for large files
+    beatmap.hit_objects.reserve(data.len() / 40);
     let mut section = Section::None;
 
-    for (line_idx, line) in content.lines().enumerate() {
-        let line = line.trim();
+    let mut start = 0;
+    let mut line_idx = 0;
 
-        // Skip empty lines and comments
-        if line.is_empty() || line.starts_with("//") {
-            continue;
+    // Iterate over newlines using SIMD-accelerated memchr
+    for end in memchr::memchr_iter(b'\n', data) {
+        let mut line_bytes = &data[start..end];
+
+        // Handle CRLF (trim \r)
+        if !line_bytes.is_empty() && line_bytes[line_bytes.len() - 1] == b'\r' {
+            line_bytes = &line_bytes[..line_bytes.len() - 1];
         }
 
-        // Check for format version
-        if line.starts_with("osu file format v") {
-            beatmap.format_version = line
-                .strip_prefix("osu file format v")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(14);
-            continue;
-        }
+        process_line(line_bytes, line_idx, &mut section, &mut beatmap);
 
-        // Check for section headers
-        if line.starts_with('[') && line.ends_with(']') {
-            section = match &line[1..line.len() - 1] {
-                "General" => Section::General,
-                "Editor" => Section::Editor,
-                "Metadata" => Section::Metadata,
-                "Difficulty" => Section::Difficulty,
-                "Events" => Section::Events,
-                "TimingPoints" => Section::TimingPoints,
-                "HitObjects" => Section::HitObjects,
-                _ => Section::None,
-            };
-            continue;
-        }
+        start = end + 1;
+        line_idx += 1;
+    }
 
-        // Parse based on section
-        match section {
-            Section::General => parse_general(line, &mut beatmap.general),
-            Section::Metadata => parse_metadata(line, &mut beatmap.metadata),
-            Section::Difficulty => parse_difficulty(line, &mut beatmap.difficulty),
-            Section::Events => parse_event(line, &mut beatmap.background),
-            Section::TimingPoints => {
-                if let Some(tp) = parse_timing_point(line) {
-                    beatmap.timing_points.push(tp);
-                } else {
-                    tracing::warn!(
-                        line = line_idx + 1,
-                        "Failed to parse timing point: {}",
-                        line
-                    );
-                }
-            }
-            Section::HitObjects => {
-                if let Some(ho) = parse_hit_object(line) {
-                    beatmap.hit_objects.push(ho);
-                } else {
-                    tracing::warn!(line = line_idx + 1, "Failed to parse hit object: {}", line);
-                }
-            }
-            Section::None | Section::Editor => {}
-        }
+    // Process the last line if there is no trailing newline
+    if start < data.len() {
+        let line_bytes = &data[start..];
+        process_line(line_bytes, line_idx, &mut section, &mut beatmap);
     }
 
     Ok(beatmap)
+}
+
+#[inline(always)]
+fn process_line(
+    line_bytes: &[u8],
+    line_idx: usize,
+    section: &mut Section,
+    beatmap: &mut OsuBeatmap,
+) {
+    if is_skippable(line_bytes) {
+        return;
+    }
+
+    if let Some(new_section) = try_parse_section(line_bytes) {
+        *section = new_section;
+        return;
+    }
+
+    if is_format_version(line_bytes) {
+        parse_format_version(line_bytes, beatmap);
+        return;
+    }
+
+    handle_section_content(section, line_bytes, line_idx, beatmap);
+}
+
+#[inline(always)]
+fn is_skippable(line_bytes: &[u8]) -> bool {
+    line_bytes.is_empty()
+        || (line_bytes.len() >= 2 && line_bytes[0] == b'/' && line_bytes[1] == b'/')
+}
+
+#[inline(always)]
+fn is_format_version(line_bytes: &[u8]) -> bool {
+    line_bytes.starts_with(b"osu file format v")
+}
+
+#[inline(always)]
+fn parse_format_version(line_bytes: &[u8], beatmap: &mut OsuBeatmap) {
+    let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
+    beatmap.format_version = line
+        .strip_prefix("osu file format v")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(14);
+}
+
+#[inline(always)]
+fn try_parse_section(line_bytes: &[u8]) -> Option<Section> {
+    if line_bytes.len() > 2 && line_bytes[0] == b'[' && line_bytes[line_bytes.len() - 1] == b']' {
+        let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
+        let section_name = &line[1..line.len() - 1];
+        Some(match section_name {
+            "General" => Section::General,
+            "Editor" => Section::Editor,
+            "Metadata" => Section::Metadata,
+            "Difficulty" => Section::Difficulty,
+            "Events" => Section::Events,
+            "TimingPoints" => Section::TimingPoints,
+            "HitObjects" => Section::HitObjects,
+            _ => Section::None,
+        })
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn handle_section_content(
+    section: &mut Section,
+    line_bytes: &[u8],
+    line_idx: usize,
+    beatmap: &mut OsuBeatmap,
+) {
+    match section {
+        Section::HitObjects => {
+            if let Some(ho) =
+                crate::codec::formats::osu::parser::objects::parse_hit_object_bytes(line_bytes)
+            {
+                beatmap.hit_objects.push(ho);
+            } else {
+                let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
+                tracing::warn!(line = line_idx + 1, "Failed to parse hit object: {}", line);
+            }
+        }
+        _ => handle_text_section(section, line_bytes, line_idx, beatmap),
+    }
+}
+
+#[inline(always)]
+fn handle_text_section(
+    section: &mut Section,
+    line_bytes: &[u8],
+    line_idx: usize,
+    beatmap: &mut OsuBeatmap,
+) {
+    let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
+    let line = line.trim();
+    match section {
+        Section::General => parse_general(line, &mut beatmap.general),
+        Section::Metadata => parse_metadata(line, &mut beatmap.metadata),
+        Section::Difficulty => parse_difficulty(line, &mut beatmap.difficulty),
+        Section::Events => parse_event(line, &mut beatmap.background),
+        Section::TimingPoints => {
+            if let Some(tp) = parse_timing_point(line) {
+                beatmap.timing_points.push(tp);
+            } else {
+                tracing::warn!(
+                    line = line_idx + 1,
+                    "Failed to parse timing point: {}",
+                    line
+                );
+            }
+        }
+        Section::HitObjects => unreachable!(),
+        Section::None | Section::Editor => {}
+    }
 }
 
 #[cfg(test)]
@@ -177,7 +262,7 @@ mod tests {
             object_type: 1,
             hit_sound: 0,
             end_time: None,
-            extras: String::new(),
+            extras: compact_str::CompactString::new(""),
         };
         assert_eq!(ho.column(7), 0);
 

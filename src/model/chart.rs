@@ -80,36 +80,16 @@ impl RoxChart {
     ///
     /// Returns an error if any validation check fails.
     pub fn validate(&self) -> Result<(), crate::RoxError> {
-        // Check column bounds
+        // 1. Check metadata consistency
         let key_count = self.key_count();
-        for note in &self.notes {
-            if note.column >= key_count {
-                return Err(crate::RoxError::InvalidColumn {
-                    column: note.column,
-                    key_count,
-                });
-            }
-        }
-
-        // Check coop mode requires even key count
         if self.metadata.is_coop && !key_count.is_multiple_of(2) {
             return Err(crate::RoxError::InvalidFormat(format!(
                 "Coop mode requires even key count, got {key_count}"
             )));
         }
 
-        // Check hold/burst durations > 0
-        for note in &self.notes {
-            let duration = note.duration_us();
-            if (note.is_hold() || note.is_burst()) && duration <= 0 {
-                return Err(crate::RoxError::InvalidHoldDuration {
-                    time_us: note.time_us,
-                    duration_us: duration,
-                });
-            }
-        }
-
-        // Check timing points sorted by time
+        // 2. Check timing points sorted by time
+        // This is O(T)
         let mut prev_time = i64::MIN;
         for tp in &self.timing_points {
             if tp.time_us < prev_time {
@@ -120,46 +100,62 @@ impl RoxChart {
             }
             prev_time = tp.time_us;
         }
-        // Check BPM timing point requirements only if chart has notes
+
         if !self.notes.is_empty() {
             // Check at least one BPM timing point exists
-            let first_bpm = self.timing_points.iter().find(|tp| !tp.is_inherited);
-            let Some(_first_bpm) = first_bpm else {
+            if !self.timing_points.iter().any(|tp| !tp.is_inherited) {
                 return Err(crate::RoxError::NoBpmTimingPoint);
-            };
-
-            // Strict check removed: Real-world maps sometimes have notes slightly before the first BPM.
-            // Engines should handle this by extending the first BPM backwards.
-            /*
-            // Check first BPM is at or before first note
-            if let Some(first_note) = self.notes.first()
-                && first_bpm.time_us > first_note.time_us
-            {
-                return Err(crate::RoxError::BpmAfterFirstNote {
-                    bpm_time_us: first_bpm.time_us,
-                    note_time_us: first_note.time_us,
-                });
             }
-            */
         }
 
-        // Check for overlapping notes on same column
-        // Group notes by column, then check for overlaps
-        for col in 0..key_count {
-            let mut col_notes: Vec<_> = self.notes.iter().filter(|n| n.column == col).collect();
-            col_notes.sort_by_key(|n| n.time_us);
+        // 3. Single pass validation for notes O(N)
+        // We track the last end time for each column to detect overlaps.
+        // This requires notes to be sorted globally by time, or at least per column.
+        // The previous implementation sorted per-column. Here we assume global sort or sorted-per-column input.
+        // However, to strictly guarantee O(N) overlap checks without allocation, we track per-column state.
+        let mut last_end_times = vec![i64::MIN; key_count as usize];
 
-            for window in col_notes.windows(2) {
-                let prev = window[0];
-                let curr = window[1];
-                let prev_end = prev.end_time_us();
-                if curr.time_us < prev_end {
-                    return Err(crate::RoxError::OverlappingNotes {
-                        column: col,
-                        time_us: curr.time_us,
-                    });
-                }
+        // We verify that notes are strictly sorted by time overall.
+        // If they are not, `validate` fails. This enforces strict ordering.
+        let mut prev_note_time = i64::MIN;
+
+        for note in &self.notes {
+            // 3a. Check global sort order
+            if note.time_us < prev_note_time {
+                return Err(crate::RoxError::NotesNotSorted {
+                    prev_time_us: prev_note_time,
+                    time_us: note.time_us,
+                });
             }
+            prev_note_time = note.time_us;
+
+            // 3b. Check column bounds
+            if note.column >= key_count {
+                return Err(crate::RoxError::InvalidColumn {
+                    column: note.column,
+                    key_count,
+                });
+            }
+
+            // 3c. Check durations
+            let duration = note.duration_us();
+            if (note.is_hold() || note.is_burst()) && duration <= 0 {
+                return Err(crate::RoxError::InvalidHoldDuration {
+                    time_us: note.time_us,
+                    duration_us: duration,
+                });
+            }
+
+            // 3d. Check overlaps on specific column
+            let col_idx = note.column as usize;
+            if note.time_us < last_end_times[col_idx] {
+                // Overlap detected!
+                return Err(crate::RoxError::OverlappingNotes {
+                    column: note.column,
+                    time_us: note.time_us,
+                });
+            }
+            last_end_times[col_idx] = note.end_time_us();
         }
 
         Ok(())

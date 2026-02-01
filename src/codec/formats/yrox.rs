@@ -12,11 +12,10 @@ pub struct YroxDecoder;
 /// YROX (YAML ROX) encoder.
 pub struct YroxEncoder;
 
-// Safety limit: 100MB to prevent memory exhaustion
-const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
-
 impl Decoder for YroxDecoder {
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
+        // Safety limit: 100MB
+        const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
         if data.len() > MAX_FILE_SIZE {
             return Err(RoxError::InvalidFormat(format!(
                 "File too large: {} bytes (max {}MB)",
@@ -24,9 +23,11 @@ impl Decoder for YroxDecoder {
                 MAX_FILE_SIZE / 1024 / 1024
             )));
         }
-        let s = std::str::from_utf8(data)
-            .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {}", e)))?;
-        serde_yaml::from_str(s).map_err(|e| RoxError::InvalidFormat(e.to_string()))
+
+        let chart: RoxChart = serde_yaml::from_slice(data)
+            .map_err(|e| RoxError::InvalidFormat(format!("YROX parse error: {e}")))?;
+
+        Ok(chart)
     }
 }
 
@@ -47,6 +48,8 @@ impl Format for YroxEncoder {
 
 #[cfg(test)]
 mod tests {
+    use compact_str::ToCompactString;
+
     use super::*;
     use crate::codec::{Decoder, Encoder};
     use crate::model::RoxChart;
@@ -54,7 +57,7 @@ mod tests {
     #[test]
     fn test_yrox_roundtrip() {
         let mut chart = RoxChart::new(4);
-        chart.metadata.title = "Yrox Test".to_string();
+        chart.metadata.title = "Yrox Test".to_compact_string();
 
         let encoded = YroxEncoder::encode(&chart).unwrap();
         let decoded = YroxDecoder::decode(&encoded).unwrap();
@@ -65,7 +68,9 @@ mod tests {
 
     #[test]
     fn test_file_too_large() {
-        let big_data = vec![0; MAX_FILE_SIZE + 1];
+        // Safety limit: 100MB to prevent memory exhaustion
+        let max_file_size: usize = 100 * 1024 * 1024;
+        let big_data = vec![0; max_file_size + 1];
         let result = YroxDecoder::decode(&big_data);
         assert!(
             matches!(result, Err(RoxError::InvalidFormat(msg)) if msg.contains("File too large"))

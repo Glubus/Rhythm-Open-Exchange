@@ -34,9 +34,16 @@ impl FnfDecoder {
         // Map metadata
         chart.metadata = Metadata {
             key_count,
-            title: fnf.song.song.clone(),
-            creator: fnf.song.player2.clone(),
-            difficulty_name: "Normal".to_string(),
+            title: fnf.song.song.clone().into(),
+            artist: "Unknown".into(),
+            creator: fnf.song.player2.clone().into(),
+            difficulty_name: "Normal".into(),
+            audio_file: "Inst.ogg".into(),
+            // FNF usually has a separate Voices track, but we'll map Inst as main audio
+            background_file: None,
+            preview_time_us: 0,
+            source: Some("Friday Night Funkin'".into()),
+            tags: vec!["fnf".into()],
             is_coop: side == FnfSide::Both, // true for 8K coop mode
             ..Default::default()
         };

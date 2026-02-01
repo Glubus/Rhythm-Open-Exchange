@@ -33,17 +33,21 @@ use super::types::InputFormat;
 pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     let path = path.as_ref();
     let format = InputFormat::from_path(path)?;
-    let data = std::fs::read(path)?;
+
+    let file = std::fs::File::open(path)?;
+    // SAFETY: We assume the file is not modified concurrently.
+    let mmap = unsafe { memmap2::Mmap::map(&file)? };
+    let data = &*mmap;
 
     match format {
         #[cfg(feature = "compression")]
-        InputFormat::Rox => RoxCodec::decode(&data),
-        InputFormat::Jrox => JroxDecoder::decode(&data),
-        InputFormat::Yrox => YroxDecoder::decode(&data),
-        InputFormat::Osu | InputFormat::Taiko => decode_osu_by_mode(&data),
-        InputFormat::Sm => SmDecoder::decode(&data),
-        InputFormat::Qua => QuaDecoder::decode(&data),
-        InputFormat::Fnf => FnfDecoder::decode(&data),
+        InputFormat::Rox => RoxCodec::decode(data),
+        InputFormat::Jrox => JroxDecoder::decode(data),
+        InputFormat::Yrox => YroxDecoder::decode(data),
+        InputFormat::Osu | InputFormat::Taiko => decode_osu_by_mode(data),
+        InputFormat::Sm => SmDecoder::decode(data),
+        InputFormat::Qua => QuaDecoder::decode(data),
+        InputFormat::Fnf => FnfDecoder::decode(data),
     }
 }
 

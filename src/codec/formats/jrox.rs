@@ -24,7 +24,15 @@ impl Decoder for JroxDecoder {
                 MAX_FILE_SIZE / 1024 / 1024
             )));
         }
-        serde_json::from_slice(data).map_err(|e| RoxError::InvalidFormat(e.to_string()))
+        // JROX is essentially JSON-serialized ROX
+        // Since Metadata uses String in serde but ROX uses CompactString, we might need manual mapping
+        // But since CompactString implements Deserialize, it should handle string data seamlessly
+        // The error likely comes from where we construct ROX struct manually or vice versa
+
+        let chart: RoxChart = serde_json::from_slice(data)
+            .map_err(|e| RoxError::InvalidFormat(format!("JROX parse error: {e}")))?;
+
+        Ok(chart)
     }
 }
 
@@ -44,6 +52,8 @@ impl Format for JroxEncoder {
 
 #[cfg(test)]
 mod tests {
+    use compact_str::ToCompactString;
+
     use super::*;
     use crate::codec::{Decoder, Encoder};
     use crate::model::RoxChart;
@@ -51,7 +61,7 @@ mod tests {
     #[test]
     fn test_jrox_roundtrip() {
         let mut chart = RoxChart::new(4);
-        chart.metadata.title = "Jrox Test".to_string();
+        chart.metadata.title = "Jrox Test".to_compact_string();
 
         let encoded = JroxEncoder::encode(&chart).unwrap();
         let decoded = JroxDecoder::decode(&encoded).unwrap();

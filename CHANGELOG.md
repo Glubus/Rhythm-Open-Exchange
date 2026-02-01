@@ -5,9 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-02-01
+
+### Performance
+
+- **Aggressive Optimization of `.osu` Parser**:
+  - Implemented **SIMD** parsing using `memchr` and `atoi` for the `HitObjects` section.
+  - Switched to **Zero-Copy I/O** using `memmap2`.
+  - Optimized memory usage with `compact_str` for metadata fields and `Vec` pre-allocation.
+  - **Result**: ~58% reduction in load time (14.6ms -> 6.2ms for 50k objects).
+- **Data Layout Optimization**:
+  - Reordered `Note` struct fields to minimize padding (size reduced from 40 to 32 bytes).
+  - significantly improved `RoxChart` binary encoding/decoding speed:
+    - **Decode**: ~0.82ms (from ~2.7ms)
+    - **Encode**: ~1.69ms
+    - **Throughput**: ~61 Million Notes/sec
+
+### Documentation
+
+- Added `wiki.wiki/Performance-Optimizations.md` detailing the optimization techniques.
+- Updated `wiki.wiki/Format-Converters.md` with new benchmark results.
+
 ## [0.6.0] - 2026-01-31
 
 ### Added
+
 - **Pattern Recognition**: Full rewrite of the module to match Quattern C# implementation (1:1 port).
   - Implemented `CrossSegmentAnalyzer` (sliding window) for timeline generation.
   - Implemented `TimingAnalyzer` for density-based BPM calculation.
@@ -18,16 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI**: Added `-aa` flag to `rox info` command.
 
 ### Documentation
+
 - Added `wiki.wiki/Pattern-Recognition.md` detailing the algorithms and decisions.
 - Updated all README links and status tables.
 
 ### Fixed
+
 - Fixed documentation discrepancies regarding `osu!taiko` (now marked as read-only).
 - Fixed broken links in `README.md` files.
 
 ## [0.5.6] - 2026-01-31
 
 ### Changed
+
 - Standardized strict `MAX_FILE_SIZE` (100MB) checks across all format parsers, including `jrox`, `yrox`, and `rox`, to prevent memory exhaustion.
 
 ## [0.5.5] - 2026-01-31
