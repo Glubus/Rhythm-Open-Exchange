@@ -73,7 +73,7 @@ impl Encoder for FnfEncoder {
                 needs_voices: false,
                 valid_score: true,
                 notes: vec![section], // Assuming fnf_sections should be vec![section]
-                sections: 0, // Will be calculated by FNF game
+                sections: 0,          // Will be calculated by FNF game
                 section_lengths: Vec::new(),
             },
         };
@@ -95,8 +95,8 @@ mod tests {
     fn test_roundtrip_both() {
         use super::*;
         use crate::analysis::RoxAnalysis;
-        use crate::codec::Decoder;
         use crate::codec::formats::fnf::FnfDecoder;
+        use crate::codec::Decoder;
         let data = crate::test_utils::get_test_asset("fnf/test-song.json");
         // Decode both sides (8K)
         let chart1 = FnfDecoder::decode(&data).unwrap();
