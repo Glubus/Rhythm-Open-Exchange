@@ -38,6 +38,7 @@
 - [Notes](Notes) — Tap, Hold, Burst, Mine
 - [Hitsounds](Hitsounds) — Keysound system
 - [Codec API](Codec-API) — Encoder/Decoder traits
+- [Decisions](Decisions) — Architectural decisions and standards
 
 ## Quick Start
 
