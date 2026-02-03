@@ -47,7 +47,7 @@ pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
         match key.trim() {
             "CircleSize" => difficulty.circle_size = parse_field(value, "CircleSize", 4.0),
             "OverallDifficulty" => {
-                difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0)
+                difficulty.overall_difficulty = parse_field(value, "OverallDifficulty", 5.0);
             }
             "HPDrainRate" => difficulty.hp_drain_rate = parse_field(value, "HPDrainRate", 5.0),
             _ => {}
@@ -68,11 +68,10 @@ pub fn parse_event(line: &str, background: &mut Option<String>) {
 
 /// Helper to parse fields and log on failure
 fn parse_field<T: std::str::FromStr>(value: &str, field_name: &str, default: T) -> T {
-    match value.parse() {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::warn!("Failed to parse {}: '{}', using default", field_name, value);
-            default
-        }
+    if let Ok(v) = value.parse() {
+        v
+    } else {
+        tracing::warn!("Failed to parse {}: '{}', using default", field_name, value);
+        default
     }
 }

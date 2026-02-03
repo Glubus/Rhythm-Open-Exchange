@@ -67,7 +67,7 @@ impl Encoder for FnfEncoder {
             song: FnfSong {
                 song: chart.metadata.title.to_string(),
                 bpm: base_bpm,
-                speed: chart.metadata.difficulty_value.unwrap_or(1.5).into(),
+                speed: chart.metadata.difficulty_value.unwrap_or(1.5),
                 player1: "bf".to_string(),
                 player2: chart.metadata.creator.to_string(),
                 needs_voices: false,
@@ -95,8 +95,8 @@ mod tests {
     fn test_roundtrip_both() {
         use super::*;
         use crate::analysis::RoxAnalysis;
-        use crate::codec::formats::fnf::FnfDecoder;
         use crate::codec::Decoder;
+        use crate::codec::formats::fnf::FnfDecoder;
         let data = crate::test_utils::get_test_asset("fnf/test-song.json");
         // Decode both sides (8K)
         let chart1 = FnfDecoder::decode(&data).unwrap();

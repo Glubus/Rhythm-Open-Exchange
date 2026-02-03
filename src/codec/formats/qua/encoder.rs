@@ -27,7 +27,7 @@ impl Encoder for QuaEncoder {
                     .to_string(),
             ),
             map_id: if let Some(id) = chart.metadata.chart_id {
-                id as i32
+                i32::try_from(id).unwrap_or(-1)
             } else {
                 -1
             },
@@ -48,7 +48,7 @@ impl Encoder for QuaEncoder {
                     .metadata
                     .tags
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(compact_str::CompactString::as_str)
                     .collect::<Vec<_>>()
                     .join(" "),
             ),
@@ -119,8 +119,8 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         use super::*;
-        use crate::codec::formats::qua::QuaDecoder;
         use crate::codec::Decoder;
+        use crate::codec::formats::qua::QuaDecoder;
         let data = crate::test_utils::get_test_asset("quaver/4K.qua");
         let chart1 = QuaDecoder::decode(&data).unwrap();
         let encoded = QuaEncoder::encode(&chart1).unwrap();

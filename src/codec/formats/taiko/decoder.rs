@@ -61,14 +61,14 @@ impl TaikoDecoder {
             difficulty_name: beatmap.metadata.version.clone().into(),
             difficulty_value: Some(beatmap.difficulty.overall_difficulty),
             audio_file: beatmap.general.audio_filename.clone().into(),
-            background_file: beatmap.background.clone().map(|s| s.into()),
+            background_file: beatmap.background.clone().map(Into::into),
             audio_offset_us: i64::from(beatmap.general.audio_lead_in) * 1000,
             preview_time_us: if beatmap.general.preview_time > 0 {
                 i64::from(beatmap.general.preview_time) * 1000
             } else {
                 0
             },
-            source: beatmap.metadata.source.clone().map(|s| s.into()),
+            source: beatmap.metadata.source.clone().map(Into::into),
             tags: beatmap
                 .metadata
                 .tags

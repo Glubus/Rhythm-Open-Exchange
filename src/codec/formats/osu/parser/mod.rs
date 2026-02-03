@@ -89,7 +89,6 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
     Ok(beatmap)
 }
 
-#[inline(always)]
 fn process_line(
     line_bytes: &[u8],
     line_idx: usize,
@@ -113,18 +112,15 @@ fn process_line(
     handle_section_content(section, line_bytes, line_idx, beatmap);
 }
 
-#[inline(always)]
 fn is_skippable(line_bytes: &[u8]) -> bool {
     line_bytes.is_empty()
         || (line_bytes.len() >= 2 && line_bytes[0] == b'/' && line_bytes[1] == b'/')
 }
 
-#[inline(always)]
 fn is_format_version(line_bytes: &[u8]) -> bool {
     line_bytes.starts_with(b"osu file format v")
 }
 
-#[inline(always)]
 fn parse_format_version(line_bytes: &[u8], beatmap: &mut OsuBeatmap) {
     let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
     beatmap.format_version = line
@@ -133,7 +129,6 @@ fn parse_format_version(line_bytes: &[u8], beatmap: &mut OsuBeatmap) {
         .unwrap_or(14);
 }
 
-#[inline(always)]
 fn try_parse_section(line_bytes: &[u8]) -> Option<Section> {
     if line_bytes.len() > 2 && line_bytes[0] == b'[' && line_bytes[line_bytes.len() - 1] == b']' {
         let line = unsafe { std::str::from_utf8_unchecked(line_bytes) };
@@ -153,7 +148,6 @@ fn try_parse_section(line_bytes: &[u8]) -> Option<Section> {
     }
 }
 
-#[inline(always)]
 fn handle_section_content(
     section: &mut Section,
     line_bytes: &[u8],
@@ -175,7 +169,6 @@ fn handle_section_content(
     }
 }
 
-#[inline(always)]
 fn handle_text_section(
     section: &mut Section,
     line_bytes: &[u8],

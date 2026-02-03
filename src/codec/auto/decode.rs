@@ -3,12 +3,12 @@ use std::path::Path;
 use crate::error::{RoxError, RoxResult};
 use crate::model::RoxChart;
 
+use super::super::Decoder;
 #[cfg(feature = "compression")]
 use super::super::formats::RoxCodec;
 use super::super::formats::{
     FnfDecoder, JroxDecoder, OsuDecoder, QuaDecoder, SmDecoder, TaikoDecoder, YroxDecoder,
 };
-use super::super::Decoder;
 use super::types::InputFormat;
 
 /// Decode a chart from a file, auto-detecting the format from the extension.

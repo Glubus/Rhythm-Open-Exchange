@@ -56,11 +56,7 @@ impl PatternMerger {
         let p1_priority = Self::get_priority(p1);
         let p2_priority = Self::get_priority(p2);
 
-        if p1_priority >= p2_priority {
-            p1
-        } else {
-            p2
-        }
+        if p1_priority >= p2_priority { p1 } else { p2 }
     }
 
     fn get_priority(p: PatternType) -> i32 {

@@ -8,7 +8,7 @@
 
 use crate::error::{RoxError, RoxResult};
 
-use super::types::{timing, SmChart, SmFile, SmMetadata, SmNote, SmNoteType};
+use super::types::{SmChart, SmFile, SmMetadata, SmNote, SmNoteType, timing};
 
 // Safety limit: 100MB for .sm files to prevent memory exhaustion
 const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
@@ -112,12 +112,11 @@ fn parse_string_field(content: &str, tag: &str) -> Option<String> {
 /// Parse a float field like `#OFFSET:-0.123;`
 fn parse_float_field(content: &str, tag: &str) -> Option<f64> {
     let value_str = parse_string_field(content, tag)?;
-    match value_str.parse() {
-        Ok(v) => Some(v),
-        Err(_) => {
-            tracing::warn!("Failed to parse float for {}: '{}'", tag, value_str);
-            None
-        }
+    if let Ok(v) = value_str.parse() {
+        Some(v)
+    } else {
+        tracing::warn!("Failed to parse float for {}: '{}'", tag, value_str);
+        None
     }
 }
 
@@ -187,12 +186,13 @@ fn parse_pairs(content: &str, tag: &str) -> Vec<(f64, f64)> {
         }
         let parts: Vec<&str> = pair.split('=').collect();
         if parts.len() == 2 {
-            match (
+            if let (Ok(beat), Ok(value)) = (
                 parts[0].trim().parse::<f64>(),
                 parts[1].trim().parse::<f64>(),
             ) {
-                (Ok(beat), Ok(value)) => result.push((beat, value)),
-                _ => tracing::warn!("Malformed pair in {}: '{}'", tag, pair),
+                result.push((beat, value));
+            } else {
+                tracing::warn!("Malformed pair in {}: '{}'", tag, pair);
             }
         }
     }
@@ -312,15 +312,14 @@ fn parse_chart(content: &str, bpms: &[(i64, f32)], _stops: &[(i64, i64)]) -> Opt
     chart.stepstype.clone_from(&header_fields[0]);
     chart.description.clone_from(&header_fields[1]);
     chart.difficulty.clone_from(&header_fields[2]);
-    chart.meter = match header_fields[3].parse() {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::warn!(
-                "Failed to parse meter: '{}', defaulting to 1",
-                header_fields[3]
-            );
-            1
-        }
+    chart.meter = if let Ok(v) = header_fields[3].parse() {
+        v
+    } else {
+        tracing::warn!(
+            "Failed to parse meter: '{}', defaulting to 1",
+            header_fields[3]
+        );
+        1
     };
 
     // Parse radar values

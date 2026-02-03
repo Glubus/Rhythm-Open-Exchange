@@ -1,8 +1,8 @@
-use super::RoxCodec;
 use super::MAX_FILE_SIZE;
+use super::RoxCodec;
 use crate::codec::{Decoder, Encoder};
 use crate::error::RoxError;
-use crate::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint, ROX_MAGIC};
+use crate::model::{Hitsound, Metadata, Note, ROX_MAGIC, RoxChart, TimingPoint};
 
 #[test]
 fn test_roundtrip() {

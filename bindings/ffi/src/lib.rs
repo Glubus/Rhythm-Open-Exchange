@@ -161,7 +161,12 @@ impl RoxChart {
     }
 
     pub fn difficulty(&self) -> String {
-        self.inner.read().unwrap().metadata.difficulty_name.to_string()
+        self.inner
+            .read()
+            .unwrap()
+            .metadata
+            .difficulty_name
+            .to_string()
     }
 
     pub fn set_difficulty(&self, difficulty: String) {

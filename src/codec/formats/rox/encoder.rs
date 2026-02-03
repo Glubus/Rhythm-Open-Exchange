@@ -4,7 +4,7 @@ use rkyv::rancor::Error as RkyvError;
 
 use crate::codec::Encoder;
 use crate::error::{RoxError, RoxResult};
-use crate::model::{RoxChart, ROX_MAGIC};
+use crate::model::{ROX_MAGIC, RoxChart};
 
 use super::RoxCodec;
 

@@ -85,31 +85,28 @@ fn parse_hit_object_line(line: &str, beatmap: &mut TaikoBeatmap) {
 
     // Format: x,y,time,type,hitSound,...
     if parts.len() >= 5 {
-        let time_ms: f64 = match parts[2].parse() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!("Failed to parse time_ms in taiko object: '{}'", parts[2]);
-                0.0
-            }
+        let time_ms: f64 = if let Ok(v) = parts[2].parse() {
+            v
+        } else {
+            tracing::warn!("Failed to parse time_ms in taiko object: '{}'", parts[2]);
+            0.0
         };
 
-        let object_type: u32 = match parts[3].parse() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!(
-                    "Failed to parse object_type in taiko object: '{}'",
-                    parts[3]
-                );
-                0
-            }
+        let object_type: u32 = if let Ok(v) = parts[3].parse() {
+            v
+        } else {
+            tracing::warn!(
+                "Failed to parse object_type in taiko object: '{}'",
+                parts[3]
+            );
+            0
         };
 
-        let hitsound: u32 = match parts[4].parse() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!("Failed to parse hitsound in taiko object: '{}'", parts[4]);
-                0
-            }
+        let hitsound: u32 = if let Ok(v) = parts[4].parse() {
+            v
+        } else {
+            tracing::warn!("Failed to parse hitsound in taiko object: '{}'", parts[4]);
+            0
         };
 
         beatmap.hit_objects.push(TaikoHitObject {

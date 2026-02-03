@@ -38,16 +38,16 @@ impl QuaDecoder {
             creator: qua.creator.clone().into(),
             difficulty_name: qua.difficulty_name.clone().into(),
             audio_file: qua.audio_file.clone().into(),
-            background_file: qua.background_file.clone().map(|s| s.into()),
+            background_file: qua.background_file.clone().map(Into::into),
             preview_time_us: i64::from(qua.preview_time) * 1000,
-            source: qua.source.clone().map(|s| s.into()),
+            source: qua.source.clone().map(Into::into),
             // Quaver tags are space-separated in a single string
             tags: qua
                 .tags
                 .as_deref()
                 .unwrap_or("")
                 .split_whitespace()
-                .map(|s| s.into())
+                .map(Into::into)
                 .collect(),
             ..Default::default()
         };

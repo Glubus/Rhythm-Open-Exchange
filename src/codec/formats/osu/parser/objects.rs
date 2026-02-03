@@ -1,5 +1,6 @@
 use super::super::types::OsuHitObject;
 
+#[must_use]
 pub fn parse_hit_object(line: &str) -> Option<OsuHitObject> {
     parse_hit_object_bytes(line.as_bytes())
 }

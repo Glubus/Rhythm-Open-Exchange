@@ -4,9 +4,9 @@ use rkyv::rancor::Error as RkyvError;
 
 use crate::codec::Decoder;
 use crate::error::{RoxError, RoxResult};
-use crate::model::{RoxChart, ROX_MAGIC};
+use crate::model::{ROX_MAGIC, RoxChart};
 
-use super::{RoxCodec, MAX_FILE_SIZE};
+use super::{MAX_FILE_SIZE, RoxCodec};
 
 /// Decompress data (zstd on native, passthrough on WASM).
 #[cfg(not(target_arch = "wasm32"))]

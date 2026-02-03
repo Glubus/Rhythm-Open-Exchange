@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use rhythm_open_exchange::codec::formats::osu::OsuDecoder;
 use rhythm_open_exchange::codec::{Decoder, Encoder, RoxCodec};
 use std::fs;
@@ -23,9 +23,7 @@ fn bench_rox_50k(c: &mut Criterion) {
     let mut group = c.benchmark_group("ROX_50K");
     group.sample_size(20); // Sufficient for stable results on large map
 
-    group.bench_function("encode", |b| {
-        b.iter(|| RoxCodec::encode(black_box(&chart)))
-    });
+    group.bench_function("encode", |b| b.iter(|| RoxCodec::encode(black_box(&chart))));
 
     group.bench_function("decode", |b| {
         b.iter(|| RoxCodec::decode(black_box(&rox_data)))
