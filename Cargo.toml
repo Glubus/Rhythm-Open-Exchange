@@ -6,13 +6,9 @@ license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
 keywords = [
     "resources",
-    "build-time",
-    "xml",
-    "config",
     "osu",
     "vsrg",
-    "etterna",
-    "mania",
+    "calc",
     "beatmap",
 ]
 categories = ["config", "development-tools::build-utils"]
