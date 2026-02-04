@@ -81,6 +81,15 @@ fn bench_limit_large(c: &mut Criterion) {
         b.iter(|| RoxCodec::decode(black_box(&rox_data)))
     });
 
+    // Benchmark auto_decode (includes file read/mmap time)
+    let asset_path = Path::new("assets/osu/mania_4K_50K_notes.osu");
+    group.bench_function("auto_decode_io", |b| {
+        b.iter(|| {
+            // We use the path directly
+            rhythm_open_exchange::codec::auto_decode(black_box(asset_path)).unwrap()
+        })
+    });
+
     group.finish();
 }
 

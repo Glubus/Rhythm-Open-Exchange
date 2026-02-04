@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageId>RhythmOpenExchange</PackageId>
+    <Version>0.5.0</Version>
+    <Authors>Glubus</Authors>
+    <Company>Glubus</Company>
+    <Description>Universal format converter for VSRG (Vertical Scrolling Rhythm Games) - Native Bindings.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Glubus/rhythm-open-exchange</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Glubus/rhythm-open-exchange</RepositoryUrl>
+    <PackageTags>rhythm-game;vsrg;osu;stepmania;quaver;fnf;converter</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="rox_ffi.cs" />
+  </ItemGroup>
+
+  <!-- Native libraries should be placed in runtimes/ structure by CI before packing -->
+  <ItemGroup>
+    <Content Include="runtimes\**\*.*">
+      <Pack>true</Pack>
+      <PackagePath>runtimes</PackagePath>
+    </Content>
+  </ItemGroup>
+
+</Project>

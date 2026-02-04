@@ -31,13 +31,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhythm-open-exchange = "0.4"
+rhythm-open-exchange = "0.5"
 ```
 
 ### C# / .NET
 
 ```bash
-dotnet add package RhythmOpenExchange
+dotnet add package RhythmOpenExchange --version 0.5.0
 ```
 
 ### From Source
@@ -49,7 +49,7 @@ cargo build --release
 ```
 
 ## Quick Start
-
+<!-- slide -->
 ### Creating a Chart
 
 ```rust
@@ -111,14 +111,12 @@ File.WriteAllText("chart.sm", sm);
 
 ## Supported Formats
 
-| Format | Extension | Read | Write |
-|--------|-----------|------|-------|
 | ROX (native binary) | `.rox` | ✅ | ✅ |
 | osu!mania | `.osu` | ✅ | ✅ |
 | osu!taiko | `.osu` | ✅ | ❌ |
-| StepMania / Etterna | `.sm` | ✅ | ✅ |
+| StepMania / Etterna | `.sm/.ssc` | ✅ | ✅ |
 | Quaver | `.qua` | ✅ | ✅ |
-| Friday Night Funkin' | `.json` | ✅ | ✅ |
+| Friday Night Funkin' | `.json` | ✅ | ✅ | (Experimental) |
 
 ### Planned
 
@@ -126,6 +124,13 @@ File.WriteAllText("chart.sm", sm);
 - BMS (`.bms/.bme/.bml`)
 - O2Jam (`.ojn/.ojm`)
 - Clone Hero (`.chart/.mid`)
+
+## Multi-Language Support
+
+- **C# / .NET** - Full feature parity, located in `bindings/ffi/csharp`.
+- **Python** - High-performance bindings in `bindings/ffi/python`.
+- **WebAssembly** - Optimized for browser-based tools, located in `bindings/wasm`.
+- **C/C++** - Stable C-API via UniFFI in `bindings/ffi`.
 
 ## CLI Tool
 
@@ -144,8 +149,8 @@ ROX is built for extreme efficiency. Benchmarks on a 50,000 note chart (4K):
 | Metric | .osu Format | .rox Format | Improvement |
 |--------|-------------|-------------|-------------|
 | **File Size** | 1.55 MB | **50 KB** | **97% Smaller** |
-| **Decode Speed** | ~26 ms | **~2.7 ms** | **10x Faster** |
-| **Encode Speed** | N/A | **~4.2 ms** | Lightning Fast |
+| **Decode Speed** | ~26 ms | **~0.82 ms** | **30x Faster** |
+| **Encode Speed** | N/A | **~1.69 ms** | Lightning Fast |
 
 ## Development
 
@@ -168,34 +173,23 @@ cargo build --release
 just qa
 
 # Or manually
-cargo check --all-targets
+cargo check --all-targets --all-features
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
 ```
 
 ## Project Structure
 
 ```text
 rhythm-open-exchange/
-├── src/
-│   ├── lib.rs              # Library entry point
-│   ├── api.rs              # FFI API for C#/native bindings
-│   ├── error.rs            # Error types
-│   ├── codec/
-│   │   ├── mod.rs          # Codec module
-│   │   ├── auto.rs         # Auto-detection & conversion
-│   │   ├── rox.rs          # Native codec (rkyv + zstd)
-│   │   └── formats/        # Format converters
-│   │       ├── osu/        # osu!mania & osu!taiko
-│   │       ├── sm/         # StepMania
-│   │       ├── qua/        # Quaver
-│   │       └── fnf/        # Friday Night Funkin'
-│   └── model/              # Data structures
+├── src/                    # Core library (Rust)
 ├── bindings/
-│   └── csharp/             # C# NuGet package
-├── tests/                  # Test suite
-├── examples/               # Usage examples
+│   ├── api/                # Stable C-API / FFI (Native)
+│   ├── csharp/             # C# Bindings
+│   ├── python/             # Python Bindings
+│   └── wasm/               # WebAssembly Bindings
+├── tests/                  # Integration tests
 ├── assets/                 # Test assets
 └── justfile                # QA automation
 ```
@@ -216,8 +210,9 @@ This project is licensed under the MIT License.
 
 ## See Also
 
-- [C# Bindings Documentation](bindings/csharp/README.md)
-- [Wiki Documentation](.wiki/)
+- [C# Bindings Documentation](bindings/ffi/csharp/README.md)
+- [Wiki Documentation](wiki.wiki/Home.md)
 - [osu!mania](https://osu.ppy.sh/wiki/en/Game_mode/osu%21mania)
 - [Quaver](https://quavergame.com/)
 - [Etterna](https://etternaonline.com/)
+- [Quattern](https://github.com/Leinadix/Quattern/tree/main)

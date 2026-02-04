@@ -1,9 +1,13 @@
 //! Chart metadata (title, artist, etc.)
 
+use compact_str::CompactString;
 use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Metadata describing the chart and associated media.
-#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Metadata {
     // Identifiers
     /// Optional chart ID (for online databases).
@@ -16,21 +20,21 @@ pub struct Metadata {
     pub key_count: u8,
 
     /// Song title.
-    pub title: String,
+    pub title: CompactString,
     /// Song artist.
-    pub artist: String,
+    pub artist: CompactString,
     /// Chart creator/mapper.
-    pub creator: String,
+    pub creator: CompactString,
     /// Difficulty name (e.g., "Hard", "Expert").
-    pub difficulty_name: String,
+    pub difficulty_name: CompactString,
     /// Optional numeric difficulty value (format-dependent).
     pub difficulty_value: Option<f32>,
 
     // Media files
     /// Relative path to the audio file.
-    pub audio_file: String,
+    pub audio_file: CompactString,
     /// Optional relative path to the background image.
-    pub background_file: Option<String>,
+    pub background_file: Option<CompactString>,
 
     // Audio timing
     /// Global audio offset in microseconds.
@@ -42,13 +46,13 @@ pub struct Metadata {
 
     // Additional info
     /// Source (anime, game, original, etc.)
-    pub source: Option<String>,
+    pub source: Option<CompactString>,
     /// Genre (electronic, rock, etc.)
-    pub genre: Option<String>,
+    pub genre: Option<CompactString>,
     /// Language code (JP, EN, KR, etc.)
-    pub language: Option<String>,
+    pub language: Option<CompactString>,
     /// Tags for search/categorization.
-    pub tags: Vec<String>,
+    pub tags: Vec<CompactString>,
 
     // Coop/multiplayer info
     /// Whether this chart is designed for 2-player coop mode.
@@ -63,12 +67,12 @@ impl Default for Metadata {
             chart_id: None,
             chartset_id: None,
             key_count: 4,
-            title: String::new(),
-            artist: String::new(),
-            creator: String::new(),
-            difficulty_name: String::from("Normal"),
+            title: CompactString::new(""),
+            artist: CompactString::new(""),
+            creator: CompactString::new(""),
+            difficulty_name: CompactString::from("Normal"),
             difficulty_value: None,
-            audio_file: String::new(),
+            audio_file: CompactString::new(""),
             background_file: None,
             audio_offset_us: 0,
             preview_time_us: 0,
@@ -79,5 +83,30 @@ impl Default for Metadata {
             tags: Vec::new(),
             is_coop: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata_default() {
+        let meta = Metadata::default();
+
+        assert!(meta.title.is_empty());
+        assert!(meta.artist.is_empty());
+        assert!(meta.creator.is_empty());
+        assert_eq!(meta.difficulty_name, "Normal");
+        assert!(meta.difficulty_value.is_none());
+        assert!(meta.audio_file.is_empty());
+        assert!(meta.background_file.is_none());
+        assert_eq!(meta.audio_offset_us, 0);
+        assert_eq!(meta.preview_time_us, 0);
+        assert_eq!(meta.preview_duration_us, 15_000_000); // 15 seconds
+        assert!(meta.source.is_none());
+        assert!(meta.genre.is_none());
+        assert!(meta.language.is_none());
+        assert!(meta.tags.is_empty());
     }
 }

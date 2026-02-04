@@ -34,9 +34,16 @@ impl FnfDecoder {
         // Map metadata
         chart.metadata = Metadata {
             key_count,
-            title: fnf.song.song.clone(),
-            creator: fnf.song.player2.clone(),
-            difficulty_name: "Normal".to_string(),
+            title: fnf.song.song.clone().into(),
+            artist: "Unknown".into(),
+            creator: fnf.song.player2.clone().into(),
+            difficulty_name: "Normal".into(),
+            audio_file: "Inst.ogg".into(),
+            // FNF usually has a separate Voices track, but we'll map Inst as main audio
+            background_file: None,
+            preview_time_us: 0,
+            source: Some("Friday Night Funkin'".into()),
+            tags: vec!["fnf".into()],
             is_coop: side == FnfSide::Both, // true for 8K coop mode
             ..Default::default()
         };
@@ -138,5 +145,36 @@ impl Decoder for FnfDecoder {
     /// Decode FNF chart, extracting player notes only (4K).
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
         Self::decode_with_side(data, FnfSide::Player)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    #[test]
+    #[ignore = "FNF is currently WIP/Unstable"]
+    fn test_decode_asset_fnf_player() {
+        // assets/fnf/test-song.json
+        let data = crate::test_utils::get_test_asset("fnf/test-song.json");
+        let chart =
+            <FnfDecoder as Decoder>::decode(&data).expect("Failed to decode test-song.json");
+
+        // Basic validation
+        assert_eq!(chart.key_count(), 4); // Player side is 4K
+        assert!(!chart.notes.is_empty());
+        assert!(!chart.timing_points.is_empty());
+    }
+
+    #[test]
+    #[ignore = "FNF is currently WIP/Unstable"]
+    fn test_decode_asset_fnf_both() {
+        let data = crate::test_utils::get_test_asset("fnf/test-song.json");
+        let chart = FnfDecoder::decode_with_side(&data, FnfSide::Both)
+            .expect("Failed to decode both sides");
+
+        assert_eq!(chart.key_count(), 8); // Both sides is 8K
+        assert!(chart.metadata.is_coop);
     }
 }

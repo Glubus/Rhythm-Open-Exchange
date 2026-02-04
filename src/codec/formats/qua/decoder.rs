@@ -33,19 +33,22 @@ impl QuaDecoder {
                 None
             },
             key_count,
-            title: qua.title.clone(),
-            artist: qua.artist.clone(),
-            creator: qua.creator.clone(),
-            difficulty_name: qua.difficulty_name.clone(),
-            audio_file: qua.audio_file.clone(),
-            background_file: qua.background_file.clone(),
+            title: qua.title.clone().into(),
+            artist: qua.artist.clone().into(),
+            creator: qua.creator.clone().into(),
+            difficulty_name: qua.difficulty_name.clone().into(),
+            audio_file: qua.audio_file.clone().into(),
+            background_file: qua.background_file.clone().map(Into::into),
             preview_time_us: i64::from(qua.preview_time) * 1000,
-            source: qua.source.clone(),
+            source: qua.source.clone().map(Into::into),
+            // Quaver tags are space-separated in a single string
             tags: qua
                 .tags
-                .as_ref()
-                .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
-                .unwrap_or_default(),
+                .as_deref()
+                .unwrap_or("")
+                .split_whitespace()
+                .map(Into::into)
+                .collect(),
             ..Default::default()
         };
 
@@ -106,5 +109,22 @@ impl Decoder for QuaDecoder {
     fn decode(data: &[u8]) -> RoxResult<RoxChart> {
         let qua = parser::parse(data)?;
         Ok(Self::from_qua(&qua))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    #[test]
+    fn test_decode_asset_4k() {
+        let data = crate::test_utils::get_test_asset("quaver/4K.qua");
+        let chart = <QuaDecoder as Decoder>::decode(&data).expect("Failed to decode 4K.qua");
+
+        // Basic validation
+        assert_eq!(chart.key_count(), 4);
+        assert!(!chart.notes.is_empty());
+        assert!(!chart.timing_points.is_empty());
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! Usage:
 //!   rox convert <input> <output>
-//!   rox info <file>
+//!   rox info <file> [-aa|--advanced-analysis]
 //!   rox validate <file>
 //!
 //! Examples:
@@ -13,6 +13,8 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+#[cfg(feature = "analysis")]
+use rhythm_open_exchange::analysis::RoxAnalysis;
 use rhythm_open_exchange::codec::{auto_decode, auto_encode};
 
 fn main() -> ExitCode {
@@ -52,13 +54,15 @@ USAGE:
 
 COMMANDS:
     convert <input> <output>   Convert between chart formats
-    info <file>                Display chart information
+    info <file> [-aa]          Display chart information (use -aa for advanced analysis)
     validate <file>            Validate a chart file
     help                       Show this help message
     version                    Show version
 
 SUPPORTED FORMATS:
     .rox   - ROX binary format
+    .jrox  - ROX JSON format
+    .yrox  - ROX YAML format
     .osu   - osu!mania
     .sm    - StepMania
     .qua   - Quaver
@@ -113,11 +117,14 @@ fn cmd_convert(args: &[String]) -> ExitCode {
 
 fn cmd_info(args: &[String]) -> ExitCode {
     if args.is_empty() {
-        eprintln!("Usage: rox info <file>");
+        eprintln!("Usage: rox info <file> [-aa|--advanced-analysis]");
         return ExitCode::from(1);
     }
 
     let path = PathBuf::from(&args[0]);
+    let advanced_analysis = args
+        .iter()
+        .any(|arg| arg == "-aa" || arg == "--advanced-analysis");
 
     let chart = match auto_decode(&path) {
         Ok(c) => c,
@@ -167,7 +174,94 @@ fn cmd_info(args: &[String]) -> ExitCode {
     #[allow(clippy::cast_precision_loss)]
     let duration_s = chart.duration_us() as f64 / 1_000_000.0;
     println!("  Duration:      {:.1}s", duration_s);
-    println!("  Hash:          {}", chart.short_hash());
+
+    #[cfg(feature = "analysis")]
+    {
+        println!();
+        println!("=== Hashes ===");
+        println!("  Hash:         {}", chart.hash());
+        println!("  Notes Hash:   {}", chart.notes_hash());
+        println!("  Timings Hash: {}", chart.timings_hash());
+
+        println!();
+        println!("=== Analysis ===");
+        println!(
+            "  BPM:          {:.1} - {:.1} (Mode: {:.1})",
+            chart.bpm_min(),
+            chart.bpm_max(),
+            chart.bpm_mode()
+        );
+        println!(
+            "  NPS:          {:.2} (Max: {:.2})",
+            chart.nps(),
+            chart.highest_nps(1.0)
+        );
+        println!("  Drain Time:   {:.1}s", chart.highest_drain_time());
+
+        println!();
+        println!("  Polyphony:");
+        let mut poly = chart.polyphony().into_iter().collect::<Vec<_>>();
+        poly.sort_by_key(|&(k, _)| k);
+        for (k, v) in poly {
+            let label = match k {
+                1 => "Single",
+                2 => "Jump",
+                3 => "Hand",
+                4 => "Quad",
+                _n => "Cluster",
+            };
+            if k > 4 {
+                println!("    {} ({}): {}", label, k, v);
+            } else {
+                println!("    {}: {}", label, v);
+            }
+        }
+
+        println!();
+        println!("  Lane Balance:");
+        let balance = chart.lane_balance();
+        let total: u32 = balance.iter().sum();
+        for (i, count) in balance.iter().enumerate() {
+            let percentage = if total > 0 {
+                (*count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            println!("    Col {}: {} ({:.1}%)", i + 1, count, percentage);
+        }
+
+        if advanced_analysis {
+            println!();
+            println!("=== Advanced Pattern Analysis ===");
+            let result = chart.pattern_analysis();
+            println!("  Pattern Timeline:");
+            if result.timeline.entries.is_empty() {
+                println!("    No significant patterns detected.");
+            } else {
+                for entry in &result.timeline.entries {
+                    let start_s = entry.start_time as f64 / 1_000_000.0;
+                    let end_s = entry.end_time as f64 / 1_000_000.0;
+                    println!(
+                        "    {0:<8.2} - {1:<8.2} : {2}",
+                        start_s,
+                        end_s,
+                        entry.pattern_type.as_str()
+                    );
+                }
+            }
+            // Save to output.json
+            match std::fs::File::create("output.json") {
+                Ok(file) => {
+                    if let Err(e) = serde_json::to_writer_pretty(file, &result) {
+                        eprintln!("Error writing output.json: {}", e);
+                    } else {
+                        println!("\n  ✓ Saved detailed analysis to: output.json");
+                    }
+                }
+                Err(e) => eprintln!("Error creating output.json: {}", e),
+            }
+        }
+    }
 
     ExitCode::SUCCESS
 }

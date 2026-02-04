@@ -33,25 +33,32 @@ impl OsuDecoder {
                 .metadata
                 .title_unicode
                 .clone()
-                .unwrap_or_else(|| beatmap.metadata.title.clone()),
+                .unwrap_or_else(|| beatmap.metadata.title.clone())
+                .into(),
             artist: beatmap
                 .metadata
                 .artist_unicode
                 .clone()
-                .unwrap_or_else(|| beatmap.metadata.artist.clone()),
-            creator: beatmap.metadata.creator.clone(),
-            difficulty_name: beatmap.metadata.version.clone(),
+                .unwrap_or_else(|| beatmap.metadata.artist.clone())
+                .into(),
+            creator: beatmap.metadata.creator.clone().into(),
+            difficulty_name: beatmap.metadata.version.clone().into(),
             difficulty_value: Some(beatmap.difficulty.overall_difficulty),
-            audio_file: beatmap.general.audio_filename.clone(),
-            background_file: beatmap.background.clone(),
+            audio_file: beatmap.general.audio_filename.clone().into(),
+            background_file: beatmap.background.clone().map(Into::into),
             audio_offset_us: i64::from(beatmap.general.audio_lead_in) * 1000,
             preview_time_us: if beatmap.general.preview_time > 0 {
                 i64::from(beatmap.general.preview_time) * 1000
             } else {
                 0
             },
-            source: beatmap.metadata.source.clone(),
-            tags: beatmap.metadata.tags.clone(),
+            source: beatmap.metadata.source.clone().map(Into::into),
+            tags: beatmap
+                .metadata
+                .tags
+                .iter()
+                .map(|s| s.clone().into())
+                .collect(),
             ..Default::default()
         };
 
@@ -156,5 +163,88 @@ impl Decoder for OsuDecoder {
         }
 
         Ok(Self::from_beatmap(&beatmap))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    #[test]
+    fn test_decode_sample_7k() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let chart = <OsuDecoder as Decoder>::decode(&data).expect("Failed to decode");
+
+        assert_eq!(chart.key_count(), 7);
+        assert!(!chart.notes.is_empty());
+        assert!(!chart.timing_points.is_empty());
+        assert_eq!(chart.metadata.difficulty_name, "7K Awakened");
+        assert_eq!(chart.metadata.creator, "arcwinolivirus");
+    }
+
+    #[test]
+    fn test_decode_metadata() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let chart = <OsuDecoder as Decoder>::decode(&data).unwrap();
+
+        // Check unicode title is used
+        assert!(chart.metadata.title.contains("宙の旋律") || chart.metadata.title.contains("Sora"));
+        assert!(!chart.metadata.audio_file.is_empty());
+        assert!(chart.metadata.background_file.is_some());
+    }
+
+    #[test]
+    fn test_decode_timing_points() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let chart = <OsuDecoder as Decoder>::decode(&data).unwrap();
+
+        // Should have at least one BPM point
+        let bpm_points: Vec<_> = chart
+            .timing_points
+            .iter()
+            .filter(|tp| !tp.is_inherited)
+            .collect();
+        assert!(!bpm_points.is_empty());
+
+        // First timing point should be around 186 BPM
+        let first_bpm = &bpm_points[0];
+        assert!((first_bpm.bpm - 186.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_decode_notes_sorted() {
+        let data = crate::test_utils::get_test_asset("osu/mania_7k.osu");
+        let chart = <OsuDecoder as Decoder>::decode(&data).unwrap();
+
+        // Notes should be sorted by time
+        for window in chart.notes.windows(2) {
+            assert!(window[0].time_us <= window[1].time_us);
+        }
+    }
+
+    #[test]
+    fn test_decode_hitsounds() {
+        let data = crate::test_utils::get_test_asset("osu/mania_hitsound.osu");
+        let chart = <OsuDecoder as Decoder>::decode(&data).expect("Failed to decode");
+
+        // Should have 4K
+        assert_eq!(chart.key_count(), 4);
+
+        // Should have 4 unique hitsound samples
+        assert_eq!(chart.hitsounds.len(), 4);
+
+        // Should have 276 notes with hitsounds
+        let notes_with_hs = chart
+            .notes
+            .iter()
+            .filter(|n| n.hitsound_index.is_some())
+            .count();
+        assert_eq!(notes_with_hs, 276);
+
+        // Verify hitsound files are parsed correctly
+        let hs_files: Vec<&str> = chart.hitsounds.iter().map(|h| h.file.as_str()).collect();
+        assert!(hs_files.contains(&"RimShot.wav"));
+        assert!(hs_files.contains(&"KICK 2.wav"));
     }
 }

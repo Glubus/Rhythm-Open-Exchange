@@ -5,9 +5,11 @@
 //! use rhythm_open_exchange::prelude::*;
 //! ```
 
+#[cfg(feature = "compression")]
+pub use crate::codec::RoxCodec;
 pub use crate::codec::{
-    Decoder, Encoder, Format, InputFormat, OutputFormat, RoxCodec, auto_convert, auto_decode,
-    auto_encode, from_bytes, from_string,
+    Decoder, Encoder, Format, InputFormat, OutputFormat, auto_convert, auto_decode, auto_encode,
+    from_bytes, from_string,
 };
 pub use crate::error::{RoxError, RoxResult};
 pub use crate::model::{Hitsound, Metadata, Note, NoteType, RoxChart, TimingPoint};

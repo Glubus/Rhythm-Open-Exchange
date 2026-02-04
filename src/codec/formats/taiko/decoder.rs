@@ -49,25 +49,32 @@ impl TaikoDecoder {
                 .metadata
                 .title_unicode
                 .clone()
-                .unwrap_or_else(|| beatmap.metadata.title.clone()),
+                .unwrap_or_else(|| beatmap.metadata.title.clone())
+                .into(),
             artist: beatmap
                 .metadata
                 .artist_unicode
                 .clone()
-                .unwrap_or_else(|| beatmap.metadata.artist.clone()),
-            creator: beatmap.metadata.creator.clone(),
-            difficulty_name: beatmap.metadata.version.clone(),
+                .unwrap_or_else(|| beatmap.metadata.artist.clone())
+                .into(),
+            creator: beatmap.metadata.creator.clone().into(),
+            difficulty_name: beatmap.metadata.version.clone().into(),
             difficulty_value: Some(beatmap.difficulty.overall_difficulty),
-            audio_file: beatmap.general.audio_filename.clone(),
-            background_file: beatmap.background.clone(),
+            audio_file: beatmap.general.audio_filename.clone().into(),
+            background_file: beatmap.background.clone().map(Into::into),
             audio_offset_us: i64::from(beatmap.general.audio_lead_in) * 1000,
             preview_time_us: if beatmap.general.preview_time > 0 {
                 i64::from(beatmap.general.preview_time) * 1000
             } else {
                 0
             },
-            source: beatmap.metadata.source.clone(),
-            tags: beatmap.metadata.tags.clone(),
+            source: beatmap.metadata.source.clone().map(Into::into),
+            tags: beatmap
+                .metadata
+                .tags
+                .iter()
+                .map(|s| s.clone().into())
+                .collect(),
             ..Default::default()
         };
 

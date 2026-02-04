@@ -21,12 +21,12 @@
 
 mod auto;
 pub mod formats;
-mod rox;
 mod traits;
 
 pub use auto::{
     InputFormat, OutputFormat, auto_convert, auto_decode, auto_encode, decode_with_format,
     encode_with_format, from_bytes, from_string,
 };
-pub use rox::RoxCodec;
+#[cfg(feature = "compression")]
+pub use formats::RoxCodec;
 pub use traits::{Decoder, Encoder, Format, convert, convert_file};

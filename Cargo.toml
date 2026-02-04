@@ -1,13 +1,24 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.4.1"
+version = "0.6.2"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
-keywords = ["resources", "build-time", "xml", "config"]
+keywords = [
+    "resources",
+    "osu",
+    "vsrg",
+    "calc",
+    "beatmap",
+]
 categories = ["config", "development-tools::build-utils"]
 readme = "README.md"
 description = "A try to create the ffmpeg of vsrg"
+
+[[bin]]
+name = "rox-cli"
+path = "src/bin/rox.rs"
+required-features = ["compression", "analysis"]
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -15,6 +26,9 @@ crate-type = ["rlib", "cdylib"]
 [features]
 default = []
 wasm = []
+compression = ["dep:zstd"]
+analysis = []
+all = ["compression", "analysis"]
 
 [dependencies]
 rkyv = { version = "0.8" }
@@ -24,20 +38,34 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 thiserror = "2.0.17"
+tracing = "0.1.44"
+blake3 = "1.8.2"
+memmap2 = "0.9.9"
+memchr = "2.7.6"
+atoi = "2.0.0"
+compact_str = { version = "0.9.0", features = ["serde", "rkyv"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-zstd = "0.13"
-
-[dependencies.blake3]
-version = "1.8.2"
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 criterion = "0.8.1"
+tempfile = "3.17"
 
 [[bench]]
 name = "codec_bench"
 harness = false
+required-features = ["compression"]
 
 [[bench]]
 name = "format_bench"
 harness = false
+
+[[bench]]
+name = "rox_only"
+harness = false
+required-features = ["compression"]
+
+
+[workspace]
+members = [".", "bindings/ffi"]

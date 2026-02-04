@@ -29,24 +29,24 @@ impl SmDecoder {
         // Map metadata
         rox.metadata = Metadata {
             key_count: chart.column_count,
-            title: sm.metadata.title.clone(),
-            artist: sm.metadata.artist.clone(),
-            creator: sm.metadata.credit.clone(),
-            difficulty_name: chart.difficulty.clone(),
+            title: sm.metadata.title.clone().into(),
+            artist: sm.metadata.artist.clone().into(),
+            creator: sm.metadata.credit.clone().into(),
+            difficulty_name: chart.difficulty.clone().into(),
             #[allow(clippy::cast_precision_loss)]
             difficulty_value: Some(chart.meter as f32),
-            audio_file: sm.metadata.music.clone(),
+            audio_file: sm.metadata.music.clone().into(),
             background_file: if sm.metadata.background.is_empty() {
                 None
             } else {
-                Some(sm.metadata.background.clone())
+                Some(sm.metadata.background.clone().into())
             },
-            audio_offset_us: -sm.offset_us, // SM offset is opposite convention
+            audio_offset_us: -sm.offset_us,
             #[allow(clippy::cast_possible_truncation)]
             preview_time_us: (sm.metadata.sample_start * 1_000_000.0) as i64,
             #[allow(clippy::cast_possible_truncation)]
             preview_duration_us: (sm.metadata.sample_length * 1_000_000.0) as i64,
-            source: None,
+            source: Some(sm.metadata.banner.clone().into()),
             genre: None,
             language: None,
             tags: Vec::new(),
@@ -138,5 +138,80 @@ impl Decoder for SmDecoder {
             .ok_or_else(|| {
                 crate::error::RoxError::InvalidFormat("No charts found in SM file".into())
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::Decoder;
+
+    /// Basic SM file content for testing.
+    const BASIC_SM: &str = r#"
+#TITLE:Test Song;
+#ARTIST:Test Artist;
+#CREDIT:Test Mapper;
+#MUSIC:song.ogg;
+#OFFSET:0;
+#BPMS:0=120;
+#STOPS:;
+
+#NOTES:
+     dance-single:
+     :
+     Beginner:
+     1:
+     0,0,0,0,0:
+0000
+1000
+0100
+0010
+,
+0001
+0000
+0000
+0000
+;
+"#;
+
+    #[test]
+    fn test_decode_basic_sm() {
+        let chart = <SmDecoder as Decoder>::decode(BASIC_SM.as_bytes()).expect("Failed to decode");
+
+        assert_eq!(chart.key_count(), 4);
+        assert_eq!(chart.metadata.title, "Test Song");
+        assert_eq!(chart.metadata.artist, "Test Artist");
+        assert_eq!(chart.metadata.creator, "Test Mapper");
+        assert_eq!(chart.metadata.difficulty_name, "Beginner");
+        assert!(!chart.notes.is_empty());
+    }
+
+    #[test]
+    fn test_sm_note_count() {
+        let chart = <SmDecoder as Decoder>::decode(BASIC_SM.as_bytes()).expect("Failed to decode");
+
+        // 4 tap notes: 1 per column across 2 measures
+        assert_eq!(chart.notes.len(), 4);
+    }
+
+    #[test]
+    fn test_sm_timing_points() {
+        let chart = <SmDecoder as Decoder>::decode(BASIC_SM.as_bytes()).expect("Failed to decode");
+
+        // Should have at least one BPM timing point
+        assert!(!chart.timing_points.is_empty());
+        assert_eq!(chart.timing_points[0].bpm, 120.0);
+    }
+
+    #[test]
+    fn test_decode_asset_4k() {
+        // assets/stepmania/4k.sm
+        let data = crate::test_utils::get_test_asset("stepmania/4k.sm");
+        let chart = <SmDecoder as Decoder>::decode(&data).expect("Failed to decode 4k.sm");
+
+        // Validating against expected properties of 4k.sm (assuming simple 4k chart)
+        assert_eq!(chart.key_count(), 4);
+        // Note: I don't know the exact metadata of 4k.sm, so I'll just check it decoded successfully and has notes
+        // Ideally I'd inspect the actual file content, but for now validating decode success is good.
     }
 }

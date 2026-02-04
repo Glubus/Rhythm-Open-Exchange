@@ -9,12 +9,30 @@ use crate::error::{RoxError, RoxResult};
 
 use super::types::{TaikoBeatmap, TaikoHitObject, TaikoHitsound};
 
+// Safety limit: 100MB
+const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
+
 /// Parse a Taiko beatmap from raw bytes.
+///
+/// # Why this design?
+/// This parser reuses the `osu` parser logic for common sections (`[General]`, `[Metadata]`).
+/// It only implements custom logic for `[HitObjects]` to extract Taiko-specific data.
+/// This avoids code duplication while allowing specialization.
 ///
 /// # Errors
 ///
-/// Returns an error if the data is not valid UTF-8 or has invalid format.
+/// Returns an error if:
+/// - The data is not valid UTF-8
+/// - The file is larger than 100MB
 pub fn parse(data: &[u8]) -> RoxResult<TaikoBeatmap> {
+    if data.len() > MAX_FILE_SIZE {
+        return Err(RoxError::InvalidFormat(format!(
+            "File too large: {} bytes (max {}MB)",
+            data.len(),
+            MAX_FILE_SIZE / 1024 / 1024
+        )));
+    }
+
     let content = std::str::from_utf8(data)
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
 
@@ -67,9 +85,29 @@ fn parse_hit_object_line(line: &str, beatmap: &mut TaikoBeatmap) {
 
     // Format: x,y,time,type,hitSound,...
     if parts.len() >= 5 {
-        let time_ms: f64 = parts[2].parse().unwrap_or(0.0);
-        let object_type: u32 = parts[3].parse().unwrap_or(0);
-        let hitsound: u32 = parts[4].parse().unwrap_or(0);
+        let time_ms: f64 = if let Ok(v) = parts[2].parse() {
+            v
+        } else {
+            tracing::warn!("Failed to parse time_ms in taiko object: '{}'", parts[2]);
+            0.0
+        };
+
+        let object_type: u32 = if let Ok(v) = parts[3].parse() {
+            v
+        } else {
+            tracing::warn!(
+                "Failed to parse object_type in taiko object: '{}'",
+                parts[3]
+            );
+            0
+        };
+
+        let hitsound: u32 = if let Ok(v) = parts[4].parse() {
+            v
+        } else {
+            tracing::warn!("Failed to parse hitsound in taiko object: '{}'", parts[4]);
+            0
+        };
 
         beatmap.hit_objects.push(TaikoHitObject {
             time_ms,

@@ -38,6 +38,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: cargo test --all
 
+  bench:
+    name: Bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - run: cargo bench
+
+
   # Optional: Test WASM build
   wasm:
     name: WASM Build

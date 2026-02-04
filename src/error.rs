@@ -35,6 +35,9 @@ pub enum RoxError {
     #[error("Overlapping notes on column {column} at time {time_us}µs")]
     OverlappingNotes { column: u8, time_us: i64 },
 
+    #[error("Notes not sorted by time (found {time_us}µs after {prev_time_us}µs)")]
+    NotesNotSorted { prev_time_us: i64, time_us: i64 },
+
     #[error("No BPM timing point found (at least one is required)")]
     NoBpmTimingPoint,
 
