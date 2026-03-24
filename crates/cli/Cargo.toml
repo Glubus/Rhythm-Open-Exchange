@@ -1,0 +1,8 @@
+[package]
+name = "rox-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rox"
+path = "src/main.rs"
