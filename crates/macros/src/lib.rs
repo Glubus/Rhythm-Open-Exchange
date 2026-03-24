@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -36,9 +38,15 @@ fn parse_extensions(input: &DeriveInput) -> syn::Result<Vec<String>> {
             continue;
         }
         let meta = attr.parse_args::<Meta>()?;
-        if let Meta::NameValue(nv) = meta {
-            if nv.path.is_ident("extensions") {
+        match meta {
+            Meta::NameValue(nv) if nv.path.is_ident("extensions") => {
                 return extract_string_array(&nv.value);
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "expected #[format(extensions = [\"ext1\", \"ext2\"])]",
+                ));
             }
         }
     }
