@@ -4,7 +4,9 @@
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
+pub mod codec;
 pub mod error;
 pub mod model;
 
 pub use error::{RoxError, RoxResult};
+pub use model::{Hitsound, Metadata, Note, NoteType, RoxChart, TimingPoint};
