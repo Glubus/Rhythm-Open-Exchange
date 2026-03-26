@@ -1,6 +1,9 @@
 use crate::error::{RoxError, RoxResult};
 use crate::model::RoxChart;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
 /// Runs all validators in sequence. First error wins.
 ///
 /// Order: metadata → timing points → notes sorted → note columns → note overlaps → note durations
