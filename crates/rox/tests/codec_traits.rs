@@ -1,4 +1,4 @@
-use rox::codec::{Decoder, Encoder, Format};
+use rox::codec::{convert, Decoder, Encoder, Format};
 use rox::model::{Note, RoxChart};
 use rox::RoxResult;
 
@@ -37,6 +37,25 @@ fn test_encode_valid_chart_succeeds() {
 #[test]
 fn test_decode_validates_output() {
     assert!(CountCodec::decode(&[]).is_ok());
+}
+
+#[test]
+fn test_convert_decodes_then_encodes() {
+    let chart = RoxChart::new(4);
+    let encoded = CountCodec::encode(&chart).unwrap();
+    let result = convert::<CountCodec, CountCodec>(&encoded);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_convert_propagates_decode_error() {
+    struct FailDecoder;
+    impl Decoder for FailDecoder {
+        fn decode_inner(_: &[u8]) -> RoxResult<RoxChart> {
+            Err(rox::RoxError::InvalidFormat("always fails".into()))
+        }
+    }
+    assert!(convert::<FailDecoder, CountCodec>(&[]).is_err());
 }
 
 #[test]

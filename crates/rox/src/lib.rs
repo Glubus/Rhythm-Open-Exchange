@@ -7,7 +7,10 @@ extern crate alloc;
 pub mod codec;
 pub mod error;
 pub mod model;
+pub mod prelude;
 
-pub use codec::{Decoder, Encoder, Format};
+pub use codec::{convert, Decoder, Encoder, Format};
+#[cfg(feature = "std")]
+pub use codec::convert_file;
 pub use error::{RoxError, RoxResult};
 pub use model::{Hitsound, Metadata, Note, NoteType, RoxChart, TimingPoint};
