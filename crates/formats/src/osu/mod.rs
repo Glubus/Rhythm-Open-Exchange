@@ -2,5 +2,7 @@ pub mod decoder;
 pub mod encoder;
 pub mod parser;
 pub mod types;
+
 pub use decoder::OsuDecoder;
-pub use encoder::OsuEncoder;
+pub use encoder::{column_to_x, OsuEncoder};
+pub use types::OsuHitObject;
