@@ -38,7 +38,8 @@ pub fn from_fnf(fnf: &FnfChart, side: FnfSide) -> RoxChart {
     };
     let mut chart = RoxChart::new(key_count);
     chart.metadata = build_metadata(fnf, side);
-    build_timing_and_notes(fnf, side, &mut chart);
+    build_timing_points(fnf, &mut chart);
+    build_notes(fnf, side, &mut chart);
     chart.notes.sort_by_key(|n| n.time_us);
     chart.timing_points.sort_by_key(TimingPoint::time_us);
     chart
@@ -58,54 +59,48 @@ fn build_metadata(fnf: &FnfChart, side: FnfSide) -> Metadata {
     }
 }
 
-fn build_timing_and_notes(fnf: &FnfChart, side: FnfSide, chart: &mut RoxChart) {
-    // Always emit the initial BPM at time 0
+fn resolve_column(raw_lane: u8, must_hit_section: bool, side: FnfSide) -> Option<u8> {
+    let (is_player, base_lane) = if raw_lane < 4 {
+        (must_hit_section, raw_lane)
+    } else {
+        (!must_hit_section, raw_lane - 4)
+    };
+    match side {
+        FnfSide::Player => is_player.then_some(base_lane),
+        FnfSide::Opponent => (!is_player).then_some(base_lane),
+        FnfSide::Both => Some(if is_player { base_lane + 4 } else { base_lane }),
+    }
+}
+
+fn build_timing_points(fnf: &FnfChart, chart: &mut RoxChart) {
     chart.timing_points.push(TimingPoint::bpm(0, fnf.song.bpm));
     for section in &fnf.song.notes {
         if section.change_bpm
             && section.bpm > 0.0
             && let Some(first) = section.section_notes.first()
         {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
             let time_us = (first.time_ms() * 1000.0) as i64;
             if time_us > 0 {
                 chart.timing_points.push(TimingPoint::bpm(time_us, section.bpm));
             }
         }
+    }
+}
+
+fn build_notes(fnf: &FnfChart, side: FnfSide, chart: &mut RoxChart) {
+    for section in &fnf.song.notes {
         add_section_notes(section, side, chart);
     }
 }
 
 fn add_section_notes(section: &FnfSection, side: FnfSide, chart: &mut RoxChart) {
     for fnf_note in &section.section_notes {
-        let raw_lane = fnf_note.lane();
-        let (is_player, base_lane) = if raw_lane < 4 {
-            (section.must_hit_section, raw_lane)
-        } else {
-            (!section.must_hit_section, raw_lane - 4)
-        };
-        let column = match side {
-            FnfSide::Player => {
-                if is_player {
-                    Some(base_lane)
-                } else {
-                    None
-                }
-            }
-            FnfSide::Opponent => {
-                if is_player {
-                    None
-                } else {
-                    Some(base_lane)
-                }
-            }
-            FnfSide::Both => Some(if is_player { base_lane + 4 } else { base_lane }),
-        };
-        if let Some(col) = column {
-            #[allow(clippy::cast_possible_truncation)]
+        if let Some(col) = resolve_column(fnf_note.lane(), section.must_hit_section, side) {
+            #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
             let time_us = (fnf_note.time_ms() * 1000.0) as i64;
             let note = if fnf_note.is_hold() {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic duration
                 let dur_us = (fnf_note.duration_ms() * 1000.0) as i64;
                 Note::hold(time_us, dur_us, col)
             } else {
