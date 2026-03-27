@@ -59,24 +59,20 @@ fn build_metadata(fnf: &FnfChart, side: FnfSide) -> Metadata {
 }
 
 fn build_timing_and_notes(fnf: &FnfChart, side: FnfSide, chart: &mut RoxChart) {
-    let mut added_initial_bpm = false;
-    let mut current_bpm = fnf.song.bpm;
+    // Always emit the initial BPM at time 0
+    chart.timing_points.push(TimingPoint::bpm(0, fnf.song.bpm));
     for section in &fnf.song.notes {
-        if section.change_bpm && section.bpm > 0.0 {
-            if let Some(first) = section.section_notes.first() {
-                #[allow(clippy::cast_possible_truncation)]
-                let time_us = (first.time_ms() * 1000.0) as i64;
+        if section.change_bpm
+            && section.bpm > 0.0
+            && let Some(first) = section.section_notes.first()
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            let time_us = (first.time_ms() * 1000.0) as i64;
+            if time_us > 0 {
                 chart.timing_points.push(TimingPoint::bpm(time_us, section.bpm));
-                current_bpm = section.bpm;
             }
-        } else if !added_initial_bpm {
-            chart.timing_points.push(TimingPoint::bpm(0, current_bpm));
-            added_initial_bpm = true;
         }
         add_section_notes(section, side, chart);
-    }
-    if !added_initial_bpm {
-        chart.timing_points.push(TimingPoint::bpm(0, fnf.song.bpm));
     }
 }
 
