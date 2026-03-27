@@ -126,21 +126,17 @@ mod tests {
     use rox::codec::Decoder;
     use rstest::rstest;
 
+    use super::super::types::{AlternationState, ColumnLayout};
+
     #[rstest]
-    fn test_decode_taiko_asset() {
+    #[case(ColumnLayout::Dkkd)]
+    #[case(ColumnLayout::Dkdk)]
+    fn test_decode_asset(#[case] layout: ColumnLayout) {
         let data = rox_test_utils::get_test_asset("osu/taiko.osu");
-        let chart = TaikoDecoder::decode(&data).expect("decode failed");
+        let mut state = AlternationState::new(layout);
+        let chart = TaikoDecoder::decode_with_state(&data, &mut state).expect("decode failed");
         assert_eq!(chart.key_count, 4);
         assert!(!chart.notes.is_empty());
         assert!(!chart.timing_points.is_empty());
-    }
-
-    #[rstest]
-    fn test_decode_with_dkkd_layout() {
-        use super::super::types::{AlternationState, ColumnLayout};
-        let data = rox_test_utils::get_test_asset("osu/taiko.osu");
-        let mut state = AlternationState::new(ColumnLayout::Dkkd);
-        let chart = TaikoDecoder::decode_with_state(&data, &mut state).expect("decode failed");
-        assert_eq!(chart.key_count, 4);
     }
 }

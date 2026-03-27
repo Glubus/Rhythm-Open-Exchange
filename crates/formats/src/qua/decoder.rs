@@ -106,18 +106,14 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    fn test_decode_4k_asset() {
-        let data = rox_test_utils::get_test_asset("quaver/4K.qua");
+    #[case("quaver/4K.qua", 4)]
+    #[case("quaver/7K.qua", 7)]
+    fn test_decode_asset(#[case] asset: &str, #[case] expected_keys: u8) {
+        let data = rox_test_utils::get_test_asset(asset);
         let chart = QuaDecoder::decode(&data).expect("decode failed");
-        assert_eq!(chart.key_count, 4);
+        assert_eq!(chart.key_count, expected_keys);
         assert!(!chart.notes.is_empty());
-    }
-
-    #[rstest]
-    fn test_decode_7k_asset() {
-        let data = rox_test_utils::get_test_asset("quaver/7K.qua");
-        let chart = QuaDecoder::decode(&data).expect("decode failed");
-        assert_eq!(chart.key_count, 7);
+        assert!(!chart.timing_points.is_empty());
     }
 
     #[rstest]
