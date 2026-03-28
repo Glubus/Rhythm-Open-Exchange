@@ -2,7 +2,7 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rox::codec::{Decoder, Encoder};
 use rox_formats::{
     FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecodeOptions, OsuDecoder, OsuEncoder,
-    QuaDecoder, QuaEncoder, SmDecoder, SmEncoder, TaikoDecoder,
+    QuaDecoder, QuaEncoder, RoxNativeCodec, SmDecoder, SmEncoder, TaikoDecoder,
 };
 use rox_test_utils::get_test_asset;
 
@@ -157,11 +157,56 @@ fn bench_format_comparison(c: &mut Criterion) {
     group.finish();
 }
 
+// ---------------------------------------------------------------------------
+// Heavy chart (50K notes) — decode comparison across formats
+// ---------------------------------------------------------------------------
+
+fn bench_heavy(c: &mut Criterion) {
+    let osu_50k_data = get_test_asset("osu/mania_4K_50K_notes.osu");
+    let opts = OsuDecodeOptions { re_arrange_bpm: true };
+    let chart_50k = OsuDecoder::decode_with_options(&osu_50k_data, &opts)
+        .expect("50K decode failed");
+
+    let jrox_50k = JroxEncoder::encode(&chart_50k).expect("jrox encode failed");
+    let rox_50k = RoxNativeCodec::encode(&chart_50k).expect("rox encode failed");
+
+    eprintln!(
+        "\n[heavy/50K] sizes — osu: {}KB  jrox: {}KB  rox(zstd): {}KB",
+        osu_50k_data.len() / 1024,
+        jrox_50k.len() / 1024,
+        rox_50k.len() / 1024,
+    );
+
+    let mut group = c.benchmark_group("heavy/50K_notes");
+
+    group.bench_function("osu/decode", |b| {
+        b.iter(|| OsuDecoder::decode_with_options(&osu_50k_data, &opts).unwrap())
+    });
+    group.bench_function("jrox/decode", |b| {
+        b.iter(|| JroxDecoder::decode(&jrox_50k).unwrap())
+    });
+    group.bench_function("rox/decode", |b| {
+        b.iter(|| RoxNativeCodec::decode(&rox_50k).unwrap())
+    });
+    group.bench_function("osu/encode", |b| {
+        b.iter(|| OsuEncoder::encode(&chart_50k).unwrap())
+    });
+    group.bench_function("jrox/encode", |b| {
+        b.iter(|| JroxEncoder::encode(&chart_50k).unwrap())
+    });
+    group.bench_function("rox/encode", |b| {
+        b.iter(|| RoxNativeCodec::encode(&chart_50k).unwrap())
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_decode,
     bench_encode,
     bench_roundtrip,
     bench_format_comparison,
+    bench_heavy,
 );
 criterion_main!(benches);
