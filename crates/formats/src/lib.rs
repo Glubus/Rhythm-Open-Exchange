@@ -20,7 +20,7 @@ pub mod yrox;
 
 pub use fnf::{FnfDecoder, FnfEncoder, FnfSide};
 pub use jrox::{JroxDecoder, JroxEncoder};
-pub use osu::{OsuDecoder, OsuEncoder};
+pub use osu::{OsuDecodeOptions, OsuDecoder, OsuEncoder};
 pub use rox_native::RoxNativeCodec;
 pub use sm::{SmDecoder, SmEncoder};
 pub use taiko::TaikoDecoder;

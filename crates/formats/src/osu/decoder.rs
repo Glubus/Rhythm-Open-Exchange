@@ -14,10 +14,44 @@ use rox_macros::Format;
 
 use super::parser;
 
+/// Options for [`OsuDecoder::decode_with_options`].
+#[derive(Debug, Clone, Default)]
+pub struct OsuDecodeOptions {
+    /// Re-arrange the first BPM timing point to 1µs before the first note when
+    /// it would otherwise fail the `BpmAfterFirstNote` validation.
+    ///
+    /// **Warning:** this silently repairs broken beatmaps. Prefer fixing the
+    /// source file. Emits a `tracing::warn!` when the repair is applied.
+    pub re_arrange_bpm: bool,
+}
+
 /// Decoder for osu!mania beatmaps.
 #[derive(Format)]
 #[format(extensions = ["osu"])]
 pub struct OsuDecoder;
+
+impl OsuDecoder {
+    /// Decode with explicit options.
+    ///
+    /// # Errors
+    /// Returns an error if parsing or validation fails. With
+    /// [`OsuDecodeOptions::re_arrange_bpm`] enabled, `BpmAfterFirstNote` is
+    /// repaired instead of surfaced.
+    pub fn decode_with_options(data: &[u8], opts: &OsuDecodeOptions) -> RoxResult<RoxChart> {
+        let beatmap = parser::parse(data)?;
+        if beatmap.general.mode != 3 {
+            return Err(RoxError::InvalidFormat(
+                format!("Not a mania beatmap (mode={}, expected 3)", beatmap.general.mode),
+            ));
+        }
+        let mut chart = from_beatmap(&beatmap);
+        if opts.re_arrange_bpm {
+            re_arrange_bpm_if_needed(&mut chart);
+        }
+        chart.validate()?;
+        Ok(chart)
+    }
+}
 
 impl Decoder for OsuDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
@@ -28,6 +62,27 @@ impl Decoder for OsuDecoder {
             ));
         }
         Ok(from_beatmap(&beatmap))
+    }
+}
+
+/// Shifts the first BPM timing point to 1µs before the first note when it
+/// would fail `BpmAfterFirstNote` validation.
+fn re_arrange_bpm_if_needed(chart: &mut RoxChart) {
+    let Some(first_note_time) = chart.notes.iter().map(|n| n.time_us).min() else {
+        return;
+    };
+    let Some(tp) = chart.timing_points.iter_mut().find(|tp| tp.is_bpm()) else {
+        return;
+    };
+    if let TimingPoint::Bpm { time_us, .. } = tp {
+        if *time_us <= first_note_time { return; }
+        tracing::warn!(
+            bpm_time_us = *time_us,
+            note_time_us = first_note_time,
+            "BPM timing point is after first note — re-arranging to {}µs (re_arrange_bpm mode)",
+            first_note_time - 1,
+        );
+        *time_us = first_note_time - 1;
     }
 }
 
@@ -158,5 +213,25 @@ mod tests {
         let chart = OsuDecoder::decode(&data).expect("decode failed");
         assert_eq!(chart.key_count, 4);
         assert_eq!(chart.hitsounds.len(), 4);
+    }
+
+    #[rstest]
+    fn test_decode_50k_fails_without_re_arrange() {
+        let data = rox_test_utils::get_test_asset("osu/mania_4K_50K_notes.osu");
+        assert!(OsuDecoder::decode(&data).is_err());
+    }
+
+    #[rstest]
+    fn test_decode_50k_succeeds_with_re_arrange() {
+        let data = rox_test_utils::get_test_asset("osu/mania_4K_50K_notes.osu");
+        let opts = OsuDecodeOptions { re_arrange_bpm: true };
+        let chart = OsuDecoder::decode_with_options(&data, &opts).expect("decode failed");
+        assert_eq!(chart.key_count, 4);
+        assert!(!chart.notes.is_empty());
+        // first BPM must be <= first note
+        let first_note = chart.notes.iter().map(|n| n.time_us).min().unwrap();
+        let first_bpm = chart.timing_points.iter().find(|tp| tp.is_bpm())
+            .map(|tp| tp.time_us()).unwrap();
+        assert!(first_bpm <= first_note);
     }
 }

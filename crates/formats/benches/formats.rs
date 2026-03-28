@@ -1,8 +1,8 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rox::codec::{Decoder, Encoder};
 use rox_formats::{
-    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, QuaDecoder,
-    QuaEncoder, SmDecoder, SmEncoder, TaikoDecoder,
+    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecodeOptions, OsuDecoder, OsuEncoder,
+    QuaDecoder, QuaEncoder, SmDecoder, SmEncoder, TaikoDecoder,
 };
 use rox_test_utils::get_test_asset;
 
@@ -18,6 +18,13 @@ fn bench_decode(c: &mut Criterion) {
 
     let osu_7k = get_test_asset("osu/mania_7k.osu");
     group.bench_function("osu/7K", |b| b.iter(|| OsuDecoder::decode(&osu_7k).unwrap()));
+
+    // Heavy asset: requires re_arrange_bpm to bypass BpmAfterFirstNote validation
+    let osu_50k = get_test_asset("osu/mania_4K_50K_notes.osu");
+    let opts = OsuDecodeOptions { re_arrange_bpm: true };
+    group.bench_function("osu/4K_50K_notes", |b| {
+        b.iter(|| OsuDecoder::decode_with_options(&osu_50k, &opts).unwrap())
+    });
 
     let taiko = get_test_asset("osu/taiko.osu");
     group.bench_function("taiko", |b| b.iter(|| TaikoDecoder::decode(&taiko).unwrap()));
