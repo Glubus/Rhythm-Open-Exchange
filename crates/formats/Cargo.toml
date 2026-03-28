@@ -40,3 +40,8 @@ zstd = { version = "0.13" }
 [dev-dependencies]
 rstest.workspace = true
 rox-test-utils.workspace = true
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "formats"
+harness = false

@@ -123,7 +123,6 @@ fn build_notes(beatmap: &TaikoBeatmap, state: &mut AlternationState, chart: &mut
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rox::codec::Decoder;
     use rstest::rstest;
 
     use super::super::types::{AlternationState, ColumnLayout};
