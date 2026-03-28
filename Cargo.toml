@@ -17,7 +17,7 @@ license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
 
 [workspace.dependencies]
-rstest = "0.23"
+rstest = "0.26.1"
 rox = { path = "crates/rox" }
 rox-macros = { path = "crates/macros" }
 rox-formats = { path = "crates/formats" }
