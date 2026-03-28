@@ -1,75 +1,57 @@
 # Rhythm Open Exchange (ROX)
 
-**ROX** is a compact binary format for **VSRG** (Vertical Scrolling Rhythm Games). It serves as a universal pivot format for converting between different rhythm game formats.
+**ROX** is a universal pivot format for VSRG (Vertical Scrolling Rhythm Games). It converts between game-specific chart formats using a shared in-memory representation — `RoxChart`.
 
-## Features
+## Crates
 
-- **Compact Binary** — Uses [bincode](https://github.com/bincode-org/bincode) for minimal file size
-- **Microsecond Precision** — `i64` timestamps for accurate timing
-- **VSRG Focused** — Optimized for games like osu!mania, Quaver, Etterna, StepMania
-- **Keysound Support** — Optional hitsounds per note for BMS/O2Jam compatibility
-- **Content Hash** — BLAKE3 hash for integrity verification
-
-## File Structure
-
-| Field | Type | Description |
-|-------|------|-------------|
-| Magic | `[u8; 4]` | `ROX\0` (0x524F5800) |
-| Version | `u8` | Format version (currently 1) |
-| KeyCount | `u8` | Number of columns (4K, 7K, etc.) |
-| Metadata | `Metadata` | Title, artist, difficulty, etc. |
-| TimingPoints | `Vec<TimingPoint>` | BPM and SV changes |
-| Notes | `Vec<Note>` | All notes in the chart |
-| Hitsounds | `Vec<Hitsound>` | Keysound samples |
-
-## Note Types
-
-| Type | Description |
-|------|-------------|
-| `Tap` | Single tap note |
-| `Hold { duration_us }` | Long note (must hold) |
-| `Burst { duration_us }` | Roll note (rapid tapping) |
-| `Mine` | Avoid note |
-
-## Documentation
-
-- [Metadata](Metadata) — Song info, difficulty, media paths
-- [Timing Points](Timing-Points) — BPM and scroll velocity
-- [Notes](Notes) — Tap, Hold, Burst, Mine
-- [Hitsounds](Hitsounds) — Keysound system
-- [Codec API](Codec-API) — Encoder/Decoder traits
-- [Decisions](Decisions) — Architectural decisions and standards
+| Crate | Purpose |
+|-------|---------|
+| `rox` | Core model, codec traits, validation — `no_std` compatible |
+| `rox-formats` | Encoders/decoders for all supported formats |
+| `rox-analysis` | Chart analysis — BPM, NPS, pattern recognition *(planned)* |
+| `rox-cli` | `rox` command-line tool *(planned)* |
+| `rox-macros` | `#[derive(Format)]` macro |
 
 ## Quick Start
 
 ```rust
-use rhythm_open_exchange::{RoxChart, RoxCodec, Encoder, Decoder, Note, TimingPoint};
+use rox::prelude::*;
+use rox_formats::{OsuDecoder, RoxNativeCodec};
 
-// Create a chart
-let mut chart = RoxChart::new(4); // 4K
-chart.metadata.title = "My Song".into();
-chart.timing_points.push(TimingPoint::bpm(0, 180.0));
-chart.notes.push(Note::tap(1_000_000, 0)); // 1s at column 0
+// Decode an osu!mania beatmap
+let data = std::fs::read("song.osu")?;
+let chart = OsuDecoder::decode(&data)?;
 
-// Encode
-let bytes = RoxCodec::encode(&chart)?;
-
-// Decode
-let decoded = RoxCodec::decode(&bytes)?;
-
-// Hash
-println!("{}", chart.short_hash());
+// Re-encode as native ROX binary
+let encoded = RoxNativeCodec::encode(&chart)?;
+std::fs::write("song.rox", encoded)?;
 ```
 
-## Supported Conversions
+## Convert Between Formats
 
-See [Format Converters](Format-Converters) for the full list of supported formats and conversion status.
+```rust
+use rox::codec::convert;
+use rox_formats::{OsuDecoder, SmEncoder};
 
-## Project Links
+let osu_data = std::fs::read("song.osu")?;
+let sm_data = convert::<OsuDecoder, SmEncoder>(&osu_data)?;
+```
 
-- [GitHub Repository](https://github.com/your-username/Rhythm-Open-Exchange)
-- [README](../README.md)
+Auto-detect by file extension (requires `std`):
 
-## License
+```rust
+use rox_formats::auto_convert;
 
-MIT
+auto_convert("song.osu", "song.sm")?;
+```
+
+## Documentation
+
+- [Notes](Notes) — Tap, Hold, Burst, Mine
+- [Timing Points](Timing-Points) — BPM and scroll velocity
+- [Metadata](Metadata) — Song info, difficulty, media paths
+- [Hitsounds](Hitsounds) — Per-note keysound system
+- [Codec API](Codec-API) — Encoder/Decoder traits and validation
+- [Format Converters](Format-Converters) — Supported formats and conversion matrix
+- [Performance Optimizations](Performance-Optimizations) — Benchmarks, rkyv+zstd
+- [Decisions](Decisions) — Architectural decisions log

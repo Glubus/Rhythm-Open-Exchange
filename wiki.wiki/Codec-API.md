@@ -1,213 +1,131 @@
 # Codec API
 
-The codec API provides traits and implementations for encoding/decoding ROX charts to various formats.
+The codec API defines how chart data flows in and out of the `RoxChart` model.
 
 ## Traits
 
 ### Encoder
 
-Convert a `RoxChart` to bytes, file, or string:
+Implement `encode_inner`. The `encode` method calls `validate()` first — do not override it.
 
 ```rust
 pub trait Encoder {
-    /// Encode a chart to raw bytes.
+    fn encode_inner(chart: &RoxChart) -> RoxResult<Vec<u8>>;
+
+    // Validates then calls encode_inner
     fn encode(chart: &RoxChart) -> RoxResult<Vec<u8>>;
 
-    /// Encode a chart to a file path.
+    // Writes to a file path (requires std)
     fn encode_to_path(chart: &RoxChart, path: impl AsRef<Path>) -> RoxResult<()>;
 
-    /// Encode a chart to a String (for text-based formats like .osu).
+    // Returns UTF-8 string (for text formats like .osu, .sm)
     fn encode_to_string(chart: &RoxChart) -> RoxResult<String>;
 }
 ```
 
-
 ### Decoder
 
-Convert bytes or file to a `RoxChart`:
+Implement `decode_inner`. The `decode` method calls `validate()` after — do not override it.
 
 ```rust
 pub trait Decoder {
-    /// Decode a chart from raw bytes.
+    fn decode_inner(data: &[u8]) -> RoxResult<RoxChart>;
+
+    // Calls decode_inner then validates
     fn decode(data: &[u8]) -> RoxResult<RoxChart>;
 
-    /// Decode a chart from a file path.
+    // Reads from a file path (requires std)
     fn decode_from_path(path: impl AsRef<Path>) -> RoxResult<RoxChart>;
 }
 ```
 
-## RoxCodec
+### Format
 
-The native ROX format codec:
-
-```rust
-use rhythm_open_exchange::{RoxCodec, RoxChart, Encoder, Decoder};
-
-let chart = RoxChart::new(4);
-
-// Encode to bytes
-let bytes = RoxCodec::encode(&chart)?;
-
-// Encode to file
-RoxCodec::encode_to_path(&chart, "chart.rox")?;
-
-// Decode from bytes
-let decoded = RoxCodec::decode(&bytes)?;
-
-// Decode from file
-let loaded = RoxCodec::decode_from_path("chart.rox")?;
-```
-
-## Binary Format
-
-RoxCodec uses bincode with:
-
-| Setting | Value |
-|---------|-------|
-| Byte order | Little-endian |
-| Integer encoding | Variable-length |
-| String encoding | Length-prefixed |
-
-### File Structure
-
-```
-┌──────────────────────────────────────┐
-│ Magic Bytes (4 bytes)                │
-│ "ROX\0" = [0x52, 0x4F, 0x58, 0x00]   │
-├──────────────────────────────────────┤
-│ Bincode-encoded RoxChart             │
-│ - version: u8                        │
-│ - key_count: u8                      │
-│ - metadata: Metadata                 │
-│ - timing_points: Vec<TimingPoint>    │
-│ - notes: Vec<Note>                   │
-│ - hitsounds: Vec<Hitsound>           │
-└──────────────────────────────────────┘
-```
-
-## Error Handling
-
-The `RoxResult<T>` type alias wraps `Result<T, RoxError>`:
+Provides file extension metadata. Use `#[derive(Format)]` to avoid boilerplate.
 
 ```rust
-pub type RoxResult<T> = Result<T, RoxError>;
-
-pub enum RoxError {
-    Io(std::io::Error),
-    Decode(bincode::error::DecodeError),
-    Encode(bincode::error::EncodeError),
-    InvalidFormat(String),
-    UnsupportedVersion(u8),
-    InvalidColumn { column: u8, key_count: u8 },
+pub trait Format {
+    const EXTENSIONS: &'static [&'static str];
+    fn supports_extension(ext: &str) -> bool;
 }
 ```
 
-### Common Errors
+```rust
+#[derive(Format)]
+#[format(extensions = ["osu"])]
+pub struct OsuDecoder;
+```
 
-| Error | Cause |
-|-------|-------|
-| `InvalidFormat` | Missing/wrong magic bytes |
-| `Decode` | Corrupted or invalid data |
-| `InvalidColumn` | Note column >= key_count |
-| `Io` | File read/write failure |
+## Conversion Utilities
+
+```rust
+// Convert bytes from format D to format E (ROX as pivot)
+pub fn convert<D: Decoder, E: Encoder>(data: &[u8]) -> RoxResult<Vec<u8>>;
+
+// Convert files by path (requires std)
+pub fn convert_file<D: Decoder, E: Encoder>(input: &Path, output: &Path) -> RoxResult<()>;
+```
 
 ## Validation
 
-Charts are validated before encoding:
+`RoxChart::validate()` runs automatically on every `encode` and `decode` call. It checks:
+
+| Rule | Error |
+|------|-------|
+| `key_count > 0` | `InvalidKeyCount` |
+| Co-op requires even key count | `InvalidCoopKeyCount` |
+| Timing points sorted | `TimingPointsNotSorted` |
+| At least one BPM point when notes exist | `NoBpmTimingPoint` |
+| First BPM ≤ first note time | `BpmAfterFirstNote` |
+| Notes sorted by time | `NotesNotSorted` |
+| Column < key_count for all notes | `InvalidColumn` |
+| No overlapping notes per column | `OverlappingNotes` |
+| Hold/burst duration > 0 | `InvalidHoldDuration` |
+
+## Error Types
 
 ```rust
-let mut chart = RoxChart::new(4);
-chart.notes.push(Note::tap(0, 5)); // Invalid column!
-
-match RoxCodec::encode(&chart) {
-    Ok(_) => println!("Encoded successfully"),
-    Err(RoxError::InvalidColumn { column, key_count }) => {
-        println!("Column {} invalid for {}K", column, key_count);
-    }
-    Err(e) => println!("Other error: {}", e),
+pub enum RoxError {
+    Io(std::io::Error),              // file read/write
+    Serialize(String),               // encoding failed
+    Deserialize(String),             // decoding failed
+    InvalidFormat(String),           // missing magic, bad structure
+    UnsupportedVersion(u8),
+    InvalidColumn { column: u8, key_count: u8 },
+    InvalidHoldDuration { time_us: i64, duration_us: i64 },
+    TimingPointsNotSorted { prev_time_us: i64, time_us: i64 },
+    OverlappingNotes { column: u8, time_us: i64 },
+    NotesNotSorted { prev_time_us: i64, time_us: i64 },
+    NoBpmTimingPoint,
+    BpmAfterFirstNote { bpm_time_us: i64, note_time_us: i64 },
+    ParseError { line: usize, message: String },
+    UnsupportedFormat(String),
+    InvalidKeyCount,
+    InvalidCoopKeyCount(u8),
 }
 ```
 
-## Implementing Custom Codecs
+## Implementing a New Format
 
-To support other formats, implement `Encoder` and/or `Decoder`:
+See [Format Converters](Format-Converters) for the full guide.
 
 ```rust
-use rhythm_open_exchange::{Decoder, Encoder, RoxChart, RoxResult, RoxError};
+use rox::codec::{Decoder, Encoder};
+use rox::error::{RoxError, RoxResult};
+use rox::model::RoxChart;
+use rox_macros::Format;
 
-pub struct OsuCodec;
+#[derive(Format)]
+#[format(extensions = ["xyz"])]
+pub struct XyzDecoder;
 
-impl Decoder for OsuCodec {
-    fn decode(data: &[u8]) -> RoxResult<RoxChart> {
+impl Decoder for XyzDecoder {
+    fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
         let content = std::str::from_utf8(data)
             .map_err(|e| RoxError::InvalidFormat(e.to_string()))?;
-        
-        let mut chart = RoxChart::new(4); // Parse key count from [Difficulty]
-        
-        // Parse [General], [Metadata], [Editor], [Difficulty]
-        // Parse [TimingPoints]
-        // Parse [HitObjects]
-        
+        let mut chart = RoxChart::new(4);
+        // parse content into chart...
         Ok(chart)
     }
 }
-
-impl Encoder for OsuCodec {
-    fn encode(chart: &RoxChart) -> RoxResult<Vec<u8>> {
-        let mut output = String::new();
-        
-        output.push_str("osu file format v14\n\n");
-        output.push_str("[General]\n");
-        // ... format chart data
-        
-        Ok(output.into_bytes())
-    }
-}
 ```
-
-## Batch Processing
-
-Process multiple files:
-
-```rust
-use std::path::Path;
-use rhythm_open_exchange::{RoxCodec, Decoder, Encoder};
-
-fn convert_directory(input_dir: &Path, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    for entry in std::fs::read_dir(input_dir)? {
-        let path = entry?.path();
-        
-        if path.extension().map_or(false, |e| e == "rox") {
-            let chart = RoxCodec::decode_from_path(&path)?;
-            
-            let output_path = output_dir.join(
-                path.file_stem().unwrap()
-            ).with_extension("rox");
-            
-            RoxCodec::encode_to_path(&chart, output_path)?;
-        }
-    }
-    
-    Ok(())
-}
-```
-
-## Size Optimization
-
-ROX is designed for minimal file size:
-
-| Component | Optimization |
-|-----------|--------------|
-| Integers | Variable-length encoding |
-| Strings | Length-prefixed (no null terminators) |
-| Optionals | Single byte discriminant |
-| Enums | Minimal discriminant size |
-
-Typical sizes:
-
-| Chart Complexity | Approximate Size |
-|-----------------|------------------|
-| Simple (100 notes) | ~500 bytes |
-| Medium (500 notes) | ~2 KB |
-| Dense (2000 notes) | ~8 KB |
-| Marathon (5000+ notes) | ~20 KB |
