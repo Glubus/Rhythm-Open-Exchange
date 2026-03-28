@@ -40,12 +40,12 @@ fn write_metadata_section(out: &mut String, chart: &RoxChart) {
     let first_bpm_time = chart.timing_points.iter()
         .find(|tp| tp.is_bpm())
         .map_or(0, rox::model::TimingPoint::time_us);
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let offset = first_bpm_time as f64 / 1_000_000.0;
     let _ = writeln!(out, "#OFFSET:{offset:.6};");
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let sample_start = chart.metadata.preview_time_us as f64 / 1_000_000.0;
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let sample_length = chart.metadata.preview_duration_us as f64 / 1_000_000.0;
     let _ = writeln!(out, "#SAMPLESTART:{sample_start:.3};");
     let _ = writeln!(out, "#SAMPLELENGTH:{sample_length:.3};");
@@ -90,7 +90,7 @@ fn write_notes_section(out: &mut String, chart: &RoxChart) {
     let _ = writeln!(out, "     {stepstype}:");
     let _ = writeln!(out, "     :");
     let _ = writeln!(out, "     {difficulty}:");
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // value is non-negative in valid input; meter fits in u32
     let meter = chart.metadata.difficulty_value.unwrap_or(1.0) as u32;
     let _ = writeln!(out, "     {meter}:");
     let _ = writeln!(out, "     0,0,0,0,0:");
@@ -104,14 +104,14 @@ fn write_notes_section(out: &mut String, chart: &RoxChart) {
 }
 
 fn us_to_beats_at_bpm(us: i64, bpm: f32) -> f64 {
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let seconds = us as f64 / 1_000_000.0;
     seconds * f64::from(bpm) / 60.0
 }
 
 fn us_to_beat_simple(time_us: i64, bpms: &[(i64, f32)], start_time_us: i64) -> f64 {
     if bpms.is_empty() {
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
         return (time_us - start_time_us) as f64 / 1_000_000.0 * 120.0 / 60.0;
     }
     let mut current_time = start_time_us;
@@ -135,7 +135,7 @@ fn encode_measures(out: &mut String, chart: &RoxChart, bpms: &[(i64, f32)], star
     }
     let max_time = chart.notes.iter().map(rox::model::Note::end_time_us).max().unwrap_or(0);
     let total_beats = us_to_beat_simple(max_time, bpms, start_time_us);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // value is non-negative in valid input; measure count fits in usize
     let total_measures = if total_beats > 0.0 { (total_beats / 4.0).ceil() as usize + 1 } else { 1 };
     let events = build_events(chart);
     let measure_events = group_into_measures(&events, bpms, start_time_us, total_measures);
@@ -176,7 +176,7 @@ fn group_into_measures(
         let raw_beat = us_to_beat_simple(time_us, bpms, start_time_us);
         if raw_beat < 0.0 { continue; }
         let beat = (raw_beat * GRID).round() / GRID;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // value is non-negative in valid input; measure index fits in usize
         let measure_idx = (beat / 4.0).floor() as usize;
         let beat_in_measure = beat % 4.0;
         if measure_idx >= measure_events.len() {
@@ -199,7 +199,7 @@ fn write_measure(out: &mut String, events: &[(f64, u8, char)], key_count: u8) {
     let mut best = 192usize;
     'outer: for &div in &DIVISORS {
         for (beat_in_measure, _, _) in events {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             let ideal = beat_in_measure * (div as f64) / 4.0;
             if (ideal - ideal.round()).abs() > 0.001 { continue 'outer; }
         }
@@ -210,9 +210,9 @@ fn write_measure(out: &mut String, events: &[(f64, u8, char)], key_count: u8) {
     for i in 0..best {
         let mut line: Vec<char> = vec!['0'; key_count as usize];
         for (beat_in_measure, col, ch) in events {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             let pos = beat_in_measure * (best as f64) / 4.0;
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             if (pos - i as f64).abs() < 0.001 && (*col as usize) < line.len() {
                 line[*col as usize] = *ch;
             }

@@ -74,14 +74,14 @@ pub mod timing {
     pub fn rows_to_us(rows: f64, bpm: f32) -> i64 {
         let beats = rows / ROWS_PER_BEAT;
         let seconds = beats / (f64::from(bpm) / 60.0);
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         let result = (seconds * 1_000_000.0) as i64;
         result
     }
 
     #[must_use]
     pub fn us_to_rows(us: i64, bpm: f32) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
         let seconds = us as f64 / 1_000_000.0;
         seconds * (f64::from(bpm) / 60.0) * ROWS_PER_BEAT
     }

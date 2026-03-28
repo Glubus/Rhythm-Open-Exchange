@@ -22,7 +22,7 @@ pub fn parse(data: &[u8]) -> RoxResult<SmFile> {
     let mut sm = SmFile::default();
     parse_metadata(content, &mut sm.metadata);
     if let Some(offset) = parse_float_field(content, "#OFFSET:") {
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         { sm.offset_us = (offset * 1_000_000.0) as i64; }
     }
     sm.bpms = parse_bpms(content);
@@ -66,7 +66,7 @@ fn parse_bpms(content: &str) -> Vec<(i64, f32)> {
             current_time_us += timing::rows_to_us(rows_elapsed, current_bpm);
             current_beat = beat;
         }
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic BPM value
         let bpm_f32 = bpm as f32;
         result.push((current_time_us, bpm_f32));
         current_bpm = bpm_f32;
@@ -99,7 +99,7 @@ fn parse_pairs(content: &str, tag: &str) -> Vec<(f64, f64)> {
     result
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // retained: will be used when BPM-interpolated timing is wired into the public API
 fn beat_to_us(target_beat: f64, bpms: &[(i64, f32)]) -> i64 {
     if bpms.is_empty() {
         return timing::rows_to_us(target_beat * timing::ROWS_PER_BEAT, 120.0);
@@ -184,7 +184,7 @@ fn parse_measures(lines: &[&str], start_idx: usize, bpms: &[(i64, f32)], chart: 
             continue;
         }
         if is_note_line(line) {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation)] // column count fits in u8 for any realistic chart width
             if line.len() as u8 > chart.column_count { chart.column_count = line.len() as u8; }
             current_measure_lines.push(lines[idx]); // push original (not stripped) for column count
         }
@@ -202,16 +202,16 @@ fn parse_measure_notes(
 ) {
     if lines.is_empty() { return; }
     let num_lines = lines.len();
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let rows_per_line = timing::ROWS_PER_MEASURE / num_lines as f64;
     for (line_idx, line) in lines.iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
         let row = measure_num as f64 * timing::ROWS_PER_MEASURE + line_idx as f64 * rows_per_line;
         let time_us = row_to_us(row, bpms);
         for (col, ch) in line.chars().enumerate() {
             let note_type = SmNoteType::from_char(ch);
             if note_type.is_note() {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_truncation)] // column fits in u8 for any realistic chart width
                 notes.push(SmNote { time_us, column: col as u8, note_type });
             }
         }

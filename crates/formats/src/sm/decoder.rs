@@ -41,15 +41,15 @@ fn build_metadata(sm: &SmFile, chart: &SmChart) -> Metadata {
         artist: sm.metadata.artist.clone().into(),
         creator: sm.metadata.credit.clone().into(),
         difficulty_name: chart.difficulty.clone().into(),
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
         difficulty_value: Some(chart.meter as f32),
         audio_file: sm.metadata.music.clone().into(),
         background_file: if sm.metadata.background.is_empty() {
             None } else { Some(sm.metadata.background.clone().into()) },
         audio_offset_us: -sm.offset_us,
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         preview_time_us: (sm.metadata.sample_start * 1_000_000.0) as i64,
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         preview_duration_us: (sm.metadata.sample_length * 1_000_000.0) as i64,
         ..Metadata::default()
     }
@@ -62,7 +62,7 @@ fn convert_notes(chart: &SmChart, rox: &mut RoxChart) {
     let mut pending_rolls: Vec<(i64, u8)> = Vec::new();
     for note in &sorted {
         match note.note_type {
-            #[allow(clippy::match_same_arms)]
+            #[allow(clippy::match_same_arms)] // Tap and Lift both map to tap in the ROX model; kept separate for forward-compatibility
             SmNoteType::Tap | SmNoteType::Lift => rox.notes.push(Note::tap(note.time_us, note.column)),
             SmNoteType::HoldHead => pending_holds.push((note.time_us, note.column)),
             SmNoteType::RollHead => pending_rolls.push((note.time_us, note.column)),

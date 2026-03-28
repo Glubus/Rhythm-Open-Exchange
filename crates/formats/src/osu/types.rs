@@ -66,7 +66,7 @@ impl OsuTimingPoint {
     #[must_use]
     pub fn bpm(&self) -> Option<f32> {
         if self.uninherited && self.beat_length > 0.0 {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic BPM value
             Some((60_000.0 / self.beat_length) as f32)
         } else {
             None
@@ -79,7 +79,7 @@ impl OsuTimingPoint {
         if self.uninherited {
             1.0
         } else {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic SV value
             let sv = (-100.0 / self.beat_length) as f32;
             sv
         }
@@ -105,7 +105,7 @@ impl OsuHitObject {
 
     #[must_use]
     pub fn column(&self, key_count: u8) -> u8 {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // value is non-negative in valid input; column fits in u8
         {
             let col = (self.x * i32::from(key_count)) / 512;
             col as u8

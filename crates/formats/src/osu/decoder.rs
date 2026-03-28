@@ -32,7 +32,7 @@ impl Decoder for OsuDecoder {
 }
 
 pub(crate) fn from_beatmap(beatmap: &super::types::OsuBeatmap) -> RoxChart {
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // value is non-negative in valid input; key count fits in u8
     let key_count = beatmap.difficulty.circle_size as u8;
     let mut chart = RoxChart::new(key_count);
     chart.metadata = build_metadata(beatmap);
@@ -47,9 +47,9 @@ fn build_metadata(beatmap: &super::types::OsuBeatmap) -> Metadata {
     let artist = beatmap.metadata.artist_unicode.clone()
         .unwrap_or_else(|| beatmap.metadata.artist.clone());
     Metadata {
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
         chart_id: beatmap.metadata.beatmap_id.map(|id| id as u64),
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
         chartset_id: beatmap.metadata.beatmap_set_id.map(|id| id as u64),
         title: title.into(),
         artist: artist.into(),
@@ -68,7 +68,7 @@ fn build_metadata(beatmap: &super::types::OsuBeatmap) -> Metadata {
 
 fn build_timing_points(beatmap: &super::types::OsuBeatmap, chart: &mut RoxChart) {
     for tp in &beatmap.timing_points {
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (tp.time * 1000.0) as i64;
         if tp.uninherited {
             if let Some(bpm) = tp.bpm() {
@@ -121,7 +121,7 @@ fn assign_hitsound(
             Some(vol) => Hitsound::with_volume(filename, vol),
             None => Hitsound::new(filename),
         };
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // hitsound index fits in u16 for any realistic chart
         let idx = chart.hitsounds.len() as u16;
         chart.hitsounds.push(hs);
         map.insert(filename.to_string(), idx);

@@ -76,7 +76,7 @@ impl FnfNote {
     }
     #[must_use]
     pub fn lane(&self) -> u8 {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // value is non-negative in valid input; lane fits in u8
         {
             self.0.get(1).copied().unwrap_or(0.0) as u8
         }

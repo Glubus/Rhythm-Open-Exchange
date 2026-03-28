@@ -42,7 +42,7 @@ fn parse_taiko(data: &[u8]) -> RoxResult<TaikoBeatmap> {
     let hit_objects = osu_bm.hit_objects.iter().map(|ho| {
         use super::types::{TaikoHitObject, TaikoHitsound};
         TaikoHitObject {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             time_ms: f64::from(ho.time),
             hitsound: TaikoHitsound::from_bits_truncate(u32::from(ho.hit_sound)),
             object_type: u32::from(ho.object_type),
@@ -73,9 +73,9 @@ fn build_metadata(beatmap: &TaikoBeatmap) -> Metadata {
     let artist = beatmap.metadata.artist_unicode.clone()
         .unwrap_or_else(|| beatmap.metadata.artist.clone());
     Metadata {
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
         chart_id: beatmap.metadata.beatmap_id.map(|id| id as u64),
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
         chartset_id: beatmap.metadata.beatmap_set_id.map(|id| id as u64),
         title: title.into(),
         artist: artist.into(),
@@ -92,7 +92,7 @@ fn build_metadata(beatmap: &TaikoBeatmap) -> Metadata {
 fn build_timing_points(beatmap: &TaikoBeatmap, chart: &mut RoxChart) {
     for tp in &beatmap.timing_points {
         if tp.uninherited && let Some(bpm) = tp.bpm() {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
             let time_us = (tp.time * 1000.0) as i64;
             chart.timing_points.push(TimingPoint::Bpm { time_us, bpm, signature: tp.meter });
         }
@@ -105,7 +105,7 @@ fn build_timing_points(beatmap: &TaikoBeatmap, chart: &mut RoxChart) {
 fn build_notes(beatmap: &TaikoBeatmap, state: &mut AlternationState, chart: &mut RoxChart) {
     for ho in &beatmap.hit_objects {
         if (ho.object_type & 8) != 0 { continue; } // skip spinners
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (ho.time_ms * 1000.0) as i64;
         let is_big = ho.hitsound.is_big();
         let columns = if ho.hitsound.is_kat() {

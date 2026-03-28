@@ -54,11 +54,11 @@ fn build_section_notes(chart: &RoxChart) -> Vec<FnfNote> {
         .notes
         .iter()
         .map(|note| {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             let time_ms = note.time_us as f64 / 1000.0;
             match &note.note_type {
                 NoteType::Hold { duration_us } | NoteType::Burst { duration_us } => {
-                    #[allow(clippy::cast_precision_loss)]
+                    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
                     let dur_ms = *duration_us as f64 / 1000.0;
                     FnfNote::hold(time_ms, note.column, dur_ms)
                 }

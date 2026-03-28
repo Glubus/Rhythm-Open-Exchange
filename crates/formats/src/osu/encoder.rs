@@ -63,7 +63,7 @@ fn write_metadata(out: &mut String, chart: &RoxChart) {
         let _ = writeln!(out, "Tags:{}", tags.join(" "));
     }
     let _ = writeln!(out, "BeatmapID:{}", chart.metadata.chart_id.unwrap_or(0));
-    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_wrap)] // ms→µs i64: safe for any realistic timestamp or duration
     let _ = writeln!(out, "BeatmapSetID:{}", chart.metadata.chartset_id.map_or(-1i64, |id| id as i64));
     out.push('\n');
 }
@@ -86,7 +86,7 @@ fn write_events(out: &mut String, chart: &RoxChart) {
 fn write_timing_points(out: &mut String, chart: &RoxChart) {
     out.push_str("[TimingPoints]\n");
     for tp in &chart.timing_points {
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
         let time_ms = tp.time_us() as f64 / 1000.0;
         match tp {
             TimingPoint::Sv { scroll_speed, .. } => {
@@ -105,7 +105,7 @@ fn write_timing_points(out: &mut String, chart: &RoxChart) {
 fn write_hit_objects(out: &mut String, chart: &RoxChart) {
     out.push_str("[HitObjects]\n");
     for note in &chart.notes {
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
         let time_ms = (note.time_us / 1000) as i32;
         let x = column_to_x(note.column, chart.key_count);
         match &note.note_type {
@@ -113,7 +113,7 @@ fn write_hit_objects(out: &mut String, chart: &RoxChart) {
                 let _ = writeln!(out, "{x},192,{time_ms},1,0,0:0:0:0:");
             }
             NoteType::Hold { duration_us } | NoteType::Burst { duration_us } => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
                 let end_time = time_ms + (*duration_us / 1000) as i32;
                 let _ = writeln!(out, "{x},192,{time_ms},128,0,{end_time}:0:0:0:0:");
             }
