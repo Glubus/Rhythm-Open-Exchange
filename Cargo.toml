@@ -4,9 +4,9 @@ members = [
     "crates/macros",
     "crates/formats",
     "crates/analysis",
-    "crates/cli",
     "crates/uniffi",
     "crates/test-utils",
+    "apps/rox-cli",
 ]
 resolver = "2"
 

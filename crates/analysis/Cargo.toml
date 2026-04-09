@@ -2,5 +2,18 @@
 name = "rox-analysis"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ROX chart analysis — BPM, NPS, pattern stats, and fast hashing"
+
+[lib]
+crate-type = ["rlib"]
 
 [dependencies]
+rox = { workspace = true }
+rkyv = { version = "0.8", default-features = false, features = ["alloc"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[dev-dependencies]
+rstest.workspace = true
+rox-test-utils.workspace = true
