@@ -1,26 +1,43 @@
+#![warn(clippy::pedantic)]
 use rkyv::rancor::Error as RkyvError;
 use rox::model::RoxChart;
 use xxhash_rust::xxh3::xxh3_128;
 
 /// Compute xxh3-128 hash of the full chart (rkyv-serialized).
+///
+/// # Panics
+///
+/// Panics if rkyv serialization fails (should never happen for valid `RoxChart` data).
+#[must_use]
 pub fn hash(chart: &RoxChart) -> String {
-    let bytes = rkyv::to_bytes::<RkyvError>(chart).unwrap_or_default();
+    let bytes = rkyv::to_bytes::<RkyvError>(chart).expect("rkyv serialization must not fail");
     format!("{:032x}", xxh3_128(&bytes))
 }
 
 /// Compute xxh3-128 hash of notes only.
+///
+/// # Panics
+///
+/// Panics if rkyv serialization fails (should never happen for valid `RoxChart` data).
+#[must_use]
 pub fn notes_hash(chart: &RoxChart) -> String {
-    let bytes = rkyv::to_bytes::<RkyvError>(&chart.notes).unwrap_or_default();
+    let bytes = rkyv::to_bytes::<RkyvError>(&chart.notes).expect("rkyv serialization must not fail");
     format!("{:032x}", xxh3_128(&bytes))
 }
 
 /// Compute xxh3-128 hash of timing points only.
+///
+/// # Panics
+///
+/// Panics if rkyv serialization fails (should never happen for valid `RoxChart` data).
+#[must_use]
 pub fn timings_hash(chart: &RoxChart) -> String {
-    let bytes = rkyv::to_bytes::<RkyvError>(&chart.timing_points).unwrap_or_default();
+    let bytes = rkyv::to_bytes::<RkyvError>(&chart.timing_points).expect("rkyv serialization must not fail");
     format!("{:032x}", xxh3_128(&bytes))
 }
 
 /// First 16 hex chars of the full hash (64-bit prefix).
+#[must_use]
 pub fn short_hash(chart: &RoxChart) -> String {
     hash(chart)[..16].to_string()
 }
@@ -65,6 +82,13 @@ mod tests {
         with_tp.timing_points.push(TimingPoint::bpm(0, 180.0));
         // notes_hash must be identical — timing change should not affect it
         assert_eq!(notes_hash(&chart_with_notes), notes_hash(&with_tp));
+    }
+
+    #[rstest]
+    fn test_timings_hash_ignores_notes(chart_with_notes: RoxChart) {
+        let mut with_extra_note = chart_with_notes.clone();
+        with_extra_note.notes.push(Note::tap(9_000_000, 3));
+        assert_eq!(timings_hash(&chart_with_notes), timings_hash(&with_extra_note));
     }
 
     #[rstest]
