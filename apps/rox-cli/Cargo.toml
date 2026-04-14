@@ -1,0 +1,16 @@
+[package]
+name = "rox-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ROX CLI — convert, inspect, and validate VSRG chart files"
+
+[[bin]]
+name = "rox"
+path = "src/main.rs"
+
+[dependencies]
+rox = { workspace = true }
+rox-formats = { workspace = true }
+rox-analysis = { workspace = true }

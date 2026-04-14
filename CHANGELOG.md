@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-03-27
+
+### Breaking Changes
+
+- **Workspace split**: Library is now a multi-crate workspace under `crates/`. Crates: `rox`, `rox-formats`, `rox-analysis`, `rox-cli`, `rox-macros`, `rox-test-utils`
+- **`TimingPoint` is now an enum**: Use `TimingPoint::Bpm { time_us, bpm, signature }` and `TimingPoint::Sv { time_us, scroll_speed }`. Constructors: `TimingPoint::bpm(time_us, bpm)` and `TimingPoint::sv(time_us, scroll_speed)`
+- **`key_count` moved**: From `Metadata` to `RoxChart` directly
+- **`.rox` binary format v3**: Files encoded with version 2 are rejected with `RoxError::UnsupportedVersion(2)`. The `TimingPoint` enum has a different rkyv binary layout than the old struct
+
+### Added
+
+- `rox-macros`: `#[derive(Format)]` proc-macro — generates `impl Format for T` from `#[format(extensions = [...])]`
+- `validate()` enforced at trait level via Template Method — `Encoder::encode` and `Decoder::decode` call `validate()` automatically
+- Six focused validators: `validate_metadata`, `validate_timing_points`, `validate_notes_sorted`, `validate_note_columns`, `validate_note_overlaps`, `validate_note_durations`
+- `BpmAfterFirstNote` error variant now actually checked in `validate_timing_points` (was defined but never called in v0.6.x)
+- `no_std + alloc` support in `rox` crate
+- `rox-test-utils`: internal dev-only crate for test asset loading
+- `convert<D, E>` and `convert_file<D, E>` generic utilities in `rox`
+- `rox::prelude` module for convenient wildcard imports
+
 ## [0.6.2] - 2026-02-02
 
 ### Changed

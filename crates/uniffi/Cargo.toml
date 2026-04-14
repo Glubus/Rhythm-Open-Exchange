@@ -1,0 +1,6 @@
+[package]
+name = "rox-uniffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

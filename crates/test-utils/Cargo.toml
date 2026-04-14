@@ -1,0 +1,10 @@
+[package]
+name = "rox-test-utils"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+rstest.workspace = true
