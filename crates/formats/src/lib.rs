@@ -26,7 +26,7 @@ pub use sm::{SmDecoder, SmEncoder};
 pub use taiko::TaikoDecoder;
 
 #[cfg(feature = "std")]
-pub use auto::{auto_convert, auto_decode, auto_encode};
+pub use auto::{auto_convert, auto_decode, auto_decode_bytes, auto_encode};
 #[cfg(feature = "std")]
 pub use qua::{QuaDecoder, QuaEncoder};
 #[cfg(feature = "std")]

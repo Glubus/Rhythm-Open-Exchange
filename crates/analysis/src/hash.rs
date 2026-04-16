@@ -1,7 +1,9 @@
 #![warn(clippy::pedantic)]
 use rkyv::rancor::Error as RkyvError;
-use rox::model::RoxChart;
+use rox::model::{NoteType, RoxChart};
 use xxhash_rust::xxh3::xxh3_128;
+
+use crate::bpm::bpm_mode;
 
 /// Compute xxh3-128 hash of the full chart (rkyv-serialized).
 ///
@@ -40,6 +42,28 @@ pub fn timings_hash(chart: &RoxChart) -> String {
 #[must_use]
 pub fn short_hash(chart: &RoxChart) -> String {
     hash(chart)[..16].to_string()
+}
+
+/// Hash notes after scaling timings so dominant BPM = `target_bpm`.
+/// Stable across rate variants of the same chart for the same `target_bpm`.
+#[must_use]
+pub fn normalized_notes_hash(chart: &RoxChart, target_bpm: f64) -> String {
+    let mode = bpm_mode(chart);
+    if mode <= 0.0 || target_bpm <= 0.0 {
+        return notes_hash(chart);
+    }
+    let mult = target_bpm / mode;
+    let mut scaled = chart.clone();
+    for note in &mut scaled.notes {
+        note.time_us = (note.time_us as f64 * mult) as i64;
+        match &mut note.note_type {
+            NoteType::Hold { duration_us } | NoteType::Burst { duration_us } => {
+                *duration_us = (*duration_us as f64 * mult) as i64;
+            }
+            NoteType::Tap | NoteType::Mine => {}
+        }
+    }
+    notes_hash(&scaled)
 }
 
 #[cfg(test)]

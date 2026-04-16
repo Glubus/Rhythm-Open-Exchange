@@ -24,6 +24,17 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     decode_bytes(fmt, &data)
 }
 
+/// Decode in-memory bytes to a `RoxChart`, detecting the format from a path hint
+/// (the bytes are not read from disk; only the extension of `path_hint` is used).
+///
+/// # Errors
+///
+/// Returns `UnsupportedFormat` if the extension is unknown, or a decode error on failure.
+pub fn auto_decode_bytes(path_hint: impl AsRef<Path>, bytes: &[u8]) -> RoxResult<RoxChart> {
+    let fmt = detect(path_hint.as_ref())?;
+    decode_bytes(fmt, bytes)
+}
+
 /// Encode a `RoxChart` to a file, detecting the format from the file extension.
 ///
 /// # Errors
