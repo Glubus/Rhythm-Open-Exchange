@@ -33,8 +33,8 @@ impl McEncoder {
             note_type: 1,
             sound: Some(chart.metadata.audio_file.to_string()),
             offset: Some((-chart.metadata.audio_offset_us / 1000) as i64),
-            vol: Some(100.0),
-            beat: None,
+            vol: Some(-1.0),
+            beat: Some([0, 0, 1]),
             column: None,
             endbeat: None,
         });
@@ -70,6 +70,8 @@ impl McEncoder {
         let t = &chart.metadata.title;
         let a = &chart.metadata.artist;
         McOutput {
+            effect: vec![],
+            extra: serde_json::Value::Object(serde_json::Map::new()),
             meta: McMetaOut {
                 mode: 0,
                 song: McSongOut {
@@ -77,6 +79,9 @@ impl McEncoder {
                     titleorg: Some(t.to_string()),
                     artist: a.to_string(),
                     artistorg: Some(a.to_string()),
+                    id: String::new(),
+                    source: chart.metadata.source.as_ref().map(|s| s.to_string()),
+                    org: McSongOrg { title: String::new(), artist: String::new(), source: String::new() },
                 },
                 mode_ext: McModeExtOut { column: key_count },
                 background: chart
@@ -89,10 +94,12 @@ impl McEncoder {
                 version: chart.metadata.difficulty_name.to_string(),
                 preview: (chart.metadata.preview_time_us >= 0)
                     .then(|| chart.metadata.preview_time_us / 1000),
+                id: String::new(),
+                cover: String::new(),
+                time: 0,
             },
             time,
             note: notes,
-            effect,
         }
     }
 }
@@ -165,8 +172,8 @@ struct McOutput {
     meta: McMetaOut,
     time: Vec<McTimingOut>,
     note: Vec<McNoteOut>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     effect: Vec<McEffectOut>,
+    extra: serde_json::Value,
 }
 #[derive(Serialize)]
 struct McMetaOut {
@@ -178,7 +185,17 @@ struct McMetaOut {
     version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     preview: Option<i64>,
+    id: String,
+    cover: String,
+    time: i64,
 }
+#[derive(Serialize)]
+struct McSongOrg {
+    title: String,
+    artist: String,
+    source: String,
+}
+
 #[derive(Serialize)]
 struct McSongOut {
     title: String,
@@ -187,6 +204,10 @@ struct McSongOut {
     artist: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     artistorg: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
+    id: String,
+    org: McSongOrg,
 }
 #[derive(Serialize)]
 struct McModeExtOut {
