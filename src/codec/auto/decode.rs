@@ -7,7 +7,7 @@ use super::super::Decoder;
 #[cfg(feature = "compression")]
 use super::super::formats::RoxCodec;
 use super::super::formats::{
-    FnfDecoder, JroxDecoder, OsuDecoder, QuaDecoder, SmDecoder, TaikoDecoder, YroxDecoder,
+    FnfDecoder, JroxDecoder, McDecoder, OsuDecoder, QuaDecoder, SmDecoder, TaikoDecoder, YroxDecoder,
 };
 use super::types::InputFormat;
 
@@ -48,6 +48,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         InputFormat::Sm => SmDecoder::decode(data),
         InputFormat::Qua => QuaDecoder::decode(data),
         InputFormat::Fnf => FnfDecoder::decode(data),
+        InputFormat::Mc => McDecoder::decode(data),
     }
 }
 
@@ -102,6 +103,7 @@ pub fn decode_with_format(data: &[u8], format: InputFormat) -> RoxResult<RoxChar
         InputFormat::Sm => <SmDecoder as Decoder>::decode(data),
         InputFormat::Qua => <QuaDecoder as Decoder>::decode(data),
         InputFormat::Fnf => <FnfDecoder as Decoder>::decode(data),
+        InputFormat::Mc => <McDecoder as Decoder>::decode(data),
     }
 }
 
@@ -152,6 +154,12 @@ pub fn from_string(data: &str) -> RoxResult<RoxChart> {
     match FnfDecoder::decode(bytes) {
         Ok(chart) => return Ok(chart),
         Err(e) => tracing::debug!("Failed to auto-decode as FNF: {}", e),
+    }
+
+    // Try Malody
+    match McDecoder::decode(bytes) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as Malody: {}", e),
     }
 
     // Try JROX
@@ -224,6 +232,12 @@ pub fn from_bytes(data: &[u8]) -> RoxResult<RoxChart> {
     match FnfDecoder::decode(data) {
         Ok(chart) => return Ok(chart),
         Err(e) => tracing::debug!("Failed to auto-decode as FNF: {}", e),
+    }
+
+    // Try Malody
+    match McDecoder::decode(data) {
+        Ok(chart) => return Ok(chart),
+        Err(e) => tracing::debug!("Failed to auto-decode as Malody: {}", e),
     }
 
     // Try JROX

@@ -7,7 +7,7 @@ use super::super::Encoder;
 #[cfg(feature = "compression")]
 use super::super::formats::RoxCodec;
 use super::super::formats::{
-    FnfEncoder, JroxEncoder, OsuEncoder, QuaEncoder, SmEncoder, YroxEncoder,
+    FnfEncoder, JroxEncoder, McEncoder, OsuEncoder, QuaEncoder, SmEncoder, YroxEncoder,
 };
 use super::decode::auto_decode;
 use super::types::OutputFormat;
@@ -39,6 +39,7 @@ pub fn auto_encode(chart: &RoxChart, path: impl AsRef<Path>) -> RoxResult<()> {
         OutputFormat::Sm => SmEncoder::encode(chart)?,
         OutputFormat::Qua => QuaEncoder::encode(chart)?,
         OutputFormat::Fnf => FnfEncoder::encode(chart)?,
+        OutputFormat::Mc => McEncoder::encode(chart)?,
     };
 
     std::fs::write(path, data)?;
@@ -60,6 +61,7 @@ pub fn encode_with_format(chart: &RoxChart, format: OutputFormat) -> RoxResult<V
         OutputFormat::Sm => SmEncoder::encode(chart),
         OutputFormat::Qua => QuaEncoder::encode(chart),
         OutputFormat::Fnf => FnfEncoder::encode(chart),
+        OutputFormat::Mc => McEncoder::encode(chart),
     }
 }
 

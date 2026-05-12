@@ -21,6 +21,8 @@ pub enum InputFormat {
     Qua,
     /// Friday Night Funkin' format (`.json`)
     Fnf,
+    /// Malody format (`.mc`)
+    Mc,
 }
 
 /// Supported output format extensions for encoding.
@@ -41,6 +43,8 @@ pub enum OutputFormat {
     Qua,
     /// Friday Night Funkin' format (`.json`)
     Fnf,
+    /// Malody format (`.mc`)
+    Mc,
 }
 
 impl InputFormat {
@@ -54,6 +58,7 @@ impl InputFormat {
         ("sm", Self::Sm),
         ("qua", Self::Qua),
         ("json", Self::Fnf),
+        ("mc", Self::Mc),
     ];
 
     /// Detect format from file extension.
@@ -99,6 +104,7 @@ impl OutputFormat {
         ("sm", Self::Sm),
         ("qua", Self::Qua),
         ("json", Self::Fnf),
+        ("mc", Self::Mc),
     ];
 
     /// Detect format from file extension.

@@ -9,6 +9,7 @@
 
 pub mod fnf;
 pub mod jrox;
+pub mod mc;
 pub mod osu;
 pub mod qua;
 #[cfg(feature = "compression")]
@@ -19,6 +20,7 @@ pub mod yrox;
 
 pub use fnf::{FnfDecoder, FnfEncoder, FnfSide};
 pub use jrox::{JroxDecoder, JroxEncoder};
+pub use mc::{McDecoder, McEncoder};
 pub use osu::{OsuDecoder, OsuEncoder};
 pub use qua::{QuaDecoder, QuaEncoder};
 #[cfg(feature = "compression")]
