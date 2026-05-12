@@ -14,6 +14,7 @@ pub enum DetectedFormat {
     Jrox,
     Yrox,
     Rox,
+    Mc,
 }
 
 /// Detect format from the file extension of a path.
@@ -34,6 +35,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "jrox" => Ok(DetectedFormat::Jrox),
         "yrox" => Ok(DetectedFormat::Yrox),
         "rox"  => Ok(DetectedFormat::Rox),
+        "mc"   => Ok(DetectedFormat::Mc),
         other  => Err(RoxError::UnsupportedFormat(other.to_string())),
     }
 }
@@ -51,6 +53,7 @@ mod tests {
     #[case("song.jrox", DetectedFormat::Jrox)]
     #[case("song.yrox", DetectedFormat::Yrox)]
     #[case("song.rox",  DetectedFormat::Rox)]
+    #[case("song.mc",   DetectedFormat::Mc)]
     #[case("SONG.OSU",  DetectedFormat::Osu)]
     fn test_detect_known(#[case] name: &str, #[case] expected: DetectedFormat) {
         assert_eq!(detect(Path::new(name)).unwrap(), expected);

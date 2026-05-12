@@ -6,6 +6,7 @@ extern crate alloc;
 
 pub mod fnf;
 pub mod jrox;
+pub mod mc;
 pub mod osu;
 pub mod rox_native;
 pub mod sm;
@@ -20,6 +21,7 @@ pub mod yrox;
 
 pub use fnf::{FnfDecoder, FnfEncoder, FnfSide};
 pub use jrox::{JroxDecoder, JroxEncoder};
+pub use mc::{McDecoder, McEncoder};
 pub use osu::{OsuDecodeOptions, OsuDecoder, OsuEncoder};
 pub use rox_native::RoxNativeCodec;
 pub use sm::{SmDecoder, SmEncoder};

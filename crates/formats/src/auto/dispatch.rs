@@ -9,7 +9,7 @@ use rox::model::RoxChart;
 use super::detect::{DetectedFormat, detect};
 use crate::{
     FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, QuaDecoder,
-    QuaEncoder, RoxNativeCodec, SmDecoder, SmEncoder, YroxDecoder, YroxEncoder,
+    QuaEncoder, McDecoder, McEncoder, RoxNativeCodec, SmDecoder, SmEncoder, YroxDecoder, YroxEncoder,
 };
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension.
@@ -67,6 +67,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Jrox => JroxDecoder::decode(data),
         DetectedFormat::Yrox => YroxDecoder::decode(data),
         DetectedFormat::Rox  => RoxNativeCodec::decode(data),
+        DetectedFormat::Mc   => McDecoder::decode(data),
     }
 }
 
@@ -79,5 +80,6 @@ fn encode_bytes(fmt: DetectedFormat, chart: &RoxChart) -> RoxResult<Vec<u8>> {
         DetectedFormat::Jrox => JroxEncoder::encode(chart),
         DetectedFormat::Yrox => YroxEncoder::encode(chart),
         DetectedFormat::Rox  => RoxNativeCodec::encode(chart),
+        DetectedFormat::Mc   => McEncoder::encode(chart),
     }
 }
