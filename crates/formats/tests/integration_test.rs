@@ -1,7 +1,7 @@
 use rox::codec::{Decoder, Encoder};
 use rox_formats::{
-    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, SmDecoder,
-    SmEncoder, TaikoDecoder,
+    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, SmDecoder, SmEncoder,
+    TaikoDecoder,
 };
 use rox_test_utils::get_test_asset;
 
@@ -20,8 +20,14 @@ use rstest::rstest;
 fn osu_decode_basic(#[case] asset: &str, #[case] expected_keys: u8) {
     let data = get_test_asset(asset);
     let chart = OsuDecoder::decode(&data).expect("OsuDecoder::decode failed");
-    assert_eq!(chart.key_count, expected_keys, "key_count mismatch for {asset}");
-    assert!(!chart.notes.is_empty(), "notes should not be empty for {asset}");
+    assert_eq!(
+        chart.key_count, expected_keys,
+        "key_count mismatch for {asset}"
+    );
+    assert!(
+        !chart.notes.is_empty(),
+        "notes should not be empty for {asset}"
+    );
     assert!(
         !chart.timing_points.is_empty(),
         "timing_points should not be empty for {asset}"
@@ -93,7 +99,10 @@ fn sm_roundtrip() {
     let chart = SmDecoder::decode(&data).expect("SmDecoder::decode failed");
     let encoded = SmEncoder::encode(&chart).expect("SmEncoder::encode failed");
     let chart2 = SmDecoder::decode(&encoded).expect("SmDecoder::decode (roundtrip) failed");
-    assert_eq!(chart2.key_count, chart.key_count, "roundtrip key_count mismatch");
+    assert_eq!(
+        chart2.key_count, chart.key_count,
+        "roundtrip key_count mismatch"
+    );
     assert_eq!(
         chart2.notes.len(),
         chart.notes.len(),
@@ -112,8 +121,14 @@ fn sm_roundtrip() {
 fn qua_decode_basic(#[case] asset: &str, #[case] expected_keys: u8) {
     let data = get_test_asset(asset);
     let chart = QuaDecoder::decode(&data).expect("QuaDecoder::decode failed");
-    assert_eq!(chart.key_count, expected_keys, "key_count mismatch for {asset}");
-    assert!(!chart.notes.is_empty(), "qua notes should not be empty for {asset}");
+    assert_eq!(
+        chart.key_count, expected_keys,
+        "key_count mismatch for {asset}"
+    );
+    assert!(
+        !chart.notes.is_empty(),
+        "qua notes should not be empty for {asset}"
+    );
     assert!(
         !chart.timing_points.is_empty(),
         "qua timing_points should not be empty for {asset}"
@@ -134,8 +149,15 @@ fn qua_roundtrip_4k() {
     let chart = QuaDecoder::decode(&data).expect("QuaDecoder::decode failed");
     let encoded = QuaEncoder::encode(&chart).expect("QuaEncoder::encode failed");
     let chart2 = QuaDecoder::decode(&encoded).expect("QuaDecoder::decode (roundtrip) failed");
-    assert_eq!(chart2.key_count, chart.key_count, "roundtrip key_count mismatch");
-    assert_eq!(chart2.notes.len(), chart.notes.len(), "roundtrip notes.len mismatch");
+    assert_eq!(
+        chart2.key_count, chart.key_count,
+        "roundtrip key_count mismatch"
+    );
+    assert_eq!(
+        chart2.notes.len(),
+        chart.notes.len(),
+        "roundtrip notes.len mismatch"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +186,10 @@ fn fnf_roundtrip() {
     let chart = FnfDecoder::decode(&data).expect("FnfDecoder::decode failed");
     let encoded = FnfEncoder::encode(&chart).expect("FnfEncoder::encode failed");
     let chart2 = FnfDecoder::decode(&encoded).expect("FnfDecoder::decode (roundtrip) failed");
-    assert_eq!(chart2.key_count, chart.key_count, "roundtrip key_count mismatch");
+    assert_eq!(
+        chart2.key_count, chart.key_count,
+        "roundtrip key_count mismatch"
+    );
     assert_eq!(
         chart2.notes.len(),
         chart.notes.len(),
@@ -182,7 +207,10 @@ fn jrox_roundtrip_via_osu() {
     let chart = OsuDecoder::decode(&data).expect("OsuDecoder::decode failed");
     let encoded = JroxEncoder::encode(&chart).expect("JroxEncoder::encode failed");
     let chart2 = JroxDecoder::decode(&encoded).expect("JroxDecoder::decode failed");
-    assert_eq!(chart2.key_count, chart.key_count, "jrox roundtrip key_count mismatch");
+    assert_eq!(
+        chart2.key_count, chart.key_count,
+        "jrox roundtrip key_count mismatch"
+    );
     assert_eq!(
         chart2.notes.len(),
         chart.notes.len(),

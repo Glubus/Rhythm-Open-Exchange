@@ -8,8 +8,8 @@ use rox::model::RoxChart;
 
 use super::detect::{DetectedFormat, detect};
 use crate::{
-    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, QuaDecoder,
-    QuaEncoder, McDecoder, McEncoder, RoxNativeCodec, SmDecoder, SmEncoder, YroxDecoder, YroxEncoder,
+    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, McDecoder, McEncoder, OsuDecoder, OsuEncoder,
+    QuaDecoder, QuaEncoder, RoxNativeCodec, SmDecoder, SmEncoder, YroxDecoder, YroxEncoder,
 };
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension.
@@ -60,26 +60,26 @@ pub fn auto_convert(input: impl AsRef<Path>, output: impl AsRef<Path>) -> RoxRes
 
 fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
     match fmt {
-        DetectedFormat::Osu  => OsuDecoder::decode(data),
-        DetectedFormat::Sm   => SmDecoder::decode(data),
-        DetectedFormat::Qua  => QuaDecoder::decode(data),
-        DetectedFormat::Fnf  => FnfDecoder::decode(data),
+        DetectedFormat::Osu => OsuDecoder::decode(data),
+        DetectedFormat::Sm => SmDecoder::decode(data),
+        DetectedFormat::Qua => QuaDecoder::decode(data),
+        DetectedFormat::Fnf => FnfDecoder::decode(data),
         DetectedFormat::Jrox => JroxDecoder::decode(data),
         DetectedFormat::Yrox => YroxDecoder::decode(data),
-        DetectedFormat::Rox  => RoxNativeCodec::decode(data),
-        DetectedFormat::Mc   => McDecoder::decode(data),
+        DetectedFormat::Rox => RoxNativeCodec::decode(data),
+        DetectedFormat::Mc => McDecoder::decode(data),
     }
 }
 
 fn encode_bytes(fmt: DetectedFormat, chart: &RoxChart) -> RoxResult<Vec<u8>> {
     match fmt {
-        DetectedFormat::Osu  => OsuEncoder::encode(chart),
-        DetectedFormat::Sm   => SmEncoder::encode(chart),
-        DetectedFormat::Qua  => QuaEncoder::encode(chart),
-        DetectedFormat::Fnf  => FnfEncoder::encode(chart),
+        DetectedFormat::Osu => OsuEncoder::encode(chart),
+        DetectedFormat::Sm => SmEncoder::encode(chart),
+        DetectedFormat::Qua => QuaEncoder::encode(chart),
+        DetectedFormat::Fnf => FnfEncoder::encode(chart),
         DetectedFormat::Jrox => JroxEncoder::encode(chart),
         DetectedFormat::Yrox => YroxEncoder::encode(chart),
-        DetectedFormat::Rox  => RoxNativeCodec::encode(chart),
-        DetectedFormat::Mc   => McEncoder::encode(chart),
+        DetectedFormat::Rox => RoxNativeCodec::encode(chart),
+        DetectedFormat::Mc => McEncoder::encode(chart),
     }
 }

@@ -54,7 +54,11 @@ fn check_timing_points_sorted(chart: &RoxChart) -> RoxResult<()> {
 }
 
 fn check_bpm_before_first_note(chart: &RoxChart) -> RoxResult<()> {
-    if !chart.timing_points.iter().any(crate::model::TimingPoint::is_bpm) {
+    if !chart
+        .timing_points
+        .iter()
+        .any(crate::model::TimingPoint::is_bpm)
+    {
         return Err(RoxError::NoBpmTimingPoint);
     }
     let first_note_time = chart.notes[0].time_us;
@@ -133,11 +137,11 @@ mod tests {
 
     // --- validate_metadata ---
     #[rstest]
-    #[case(0, false, true)]   // key_count=0 → error
-    #[case(4, false, false)]  // valid
-    #[case(3, true, true)]    // coop + odd key_count → error
-    #[case(4, true, false)]   // coop + even key_count → ok
-    #[case(8, true, false)]   // coop + 8 → ok
+    #[case(0, false, true)] // key_count=0 → error
+    #[case(4, false, false)] // valid
+    #[case(3, true, true)] // coop + odd key_count → error
+    #[case(4, true, false)] // coop + even key_count → ok
+    #[case(8, true, false)] // coop + 8 → ok
     fn test_validate_metadata(
         #[case] key_count: u8,
         #[case] is_coop: bool,

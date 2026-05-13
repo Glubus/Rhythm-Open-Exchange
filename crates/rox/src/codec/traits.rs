@@ -10,7 +10,9 @@ pub trait Format {
 
     #[must_use]
     fn supports_extension(ext: &str) -> bool {
-        Self::EXTENSIONS.iter().any(|&e| e.eq_ignore_ascii_case(ext))
+        Self::EXTENSIONS
+            .iter()
+            .any(|&e| e.eq_ignore_ascii_case(ext))
     }
 }
 
@@ -40,9 +42,7 @@ pub trait Encoder {
     /// Returns an error if encoding fails or the output is not valid UTF-8.
     fn encode_to_string(chart: &RoxChart) -> RoxResult<String> {
         let data = Self::encode(chart)?;
-        String::from_utf8(data).map_err(|e| {
-            crate::error::RoxError::InvalidFormat(e.to_string())
-        })
+        String::from_utf8(data).map_err(|e| crate::error::RoxError::InvalidFormat(e.to_string()))
     }
 }
 

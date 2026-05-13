@@ -1,6 +1,6 @@
-use rox::codec::{convert, Decoder, Encoder, Format};
-use rox::model::{Note, RoxChart};
 use rox::RoxResult;
+use rox::codec::{Decoder, Encoder, Format, convert};
+use rox::model::{Note, RoxChart};
 
 // Minimal codec for testing
 struct CountCodec;

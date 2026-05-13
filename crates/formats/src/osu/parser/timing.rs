@@ -11,6 +11,9 @@ pub fn parse_timing_point(line: &str) -> Option<OsuTimingPoint> {
         sample_index: parts.next().and_then(|s| s.parse().ok()).unwrap_or(0),
         volume: parts.next().and_then(|s| s.parse().ok()).unwrap_or(100),
         uninherited: parts.next().is_some_and(|s| s.trim() == "1"),
-        effects: parts.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0),
+        effects: parts
+            .next()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0),
     })
 }

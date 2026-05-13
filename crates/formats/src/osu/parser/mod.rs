@@ -16,7 +16,16 @@ pub use timing::parse_timing_point;
 const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Section { None, General, Editor, Metadata, Difficulty, Events, TimingPoints, HitObjects }
+enum Section {
+    None,
+    General,
+    Editor,
+    Metadata,
+    Difficulty,
+    Events,
+    TimingPoints,
+    HitObjects,
+}
 
 /// Parse a `.osu` file into an [`OsuBeatmap`].
 ///
@@ -24,9 +33,10 @@ enum Section { None, General, Editor, Metadata, Difficulty, Events, TimingPoints
 /// Returns an error if data exceeds 100 MB or is not valid UTF-8.
 pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
     if data.len() > MAX_FILE_SIZE {
-        return Err(RoxError::InvalidFormat(
-            format!("File too large: {} bytes (max 100MB)", data.len())
-        ));
+        return Err(RoxError::InvalidFormat(format!(
+            "File too large: {} bytes (max 100MB)",
+            data.len()
+        )));
     }
     if core::str::from_utf8(data).is_err() {
         return Err(RoxError::InvalidFormat("Invalid UTF-8".to_string()));
@@ -52,12 +62,19 @@ pub fn parse(data: &[u8]) -> RoxResult<OsuBeatmap> {
 }
 
 fn process_line(line: &[u8], idx: usize, section: &mut Section, beatmap: &mut OsuBeatmap) {
-    if is_skippable(line) { return; }
-    if let Some(s) = try_parse_section(line) { *section = s; return; }
+    if is_skippable(line) {
+        return;
+    }
+    if let Some(s) = try_parse_section(line) {
+        *section = s;
+        return;
+    }
     if line.starts_with(b"osu file format v") {
         let s = unsafe { core::str::from_utf8_unchecked(line) };
-        beatmap.format_version = s.strip_prefix("osu file format v")
-            .and_then(|v| v.parse().ok()).unwrap_or(14);
+        beatmap.format_version = s
+            .strip_prefix("osu file format v")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(14);
         return;
     }
     dispatch_section(*section, line, idx, beatmap);
@@ -71,12 +88,18 @@ fn try_parse_section(line: &[u8]) -> Option<Section> {
     if line.first() == Some(&b'[') && line.last() == Some(&b']') {
         let name = unsafe { core::str::from_utf8_unchecked(&line[1..line.len() - 1]) };
         Some(match name {
-            "General" => Section::General, "Editor" => Section::Editor,
-            "Metadata" => Section::Metadata, "Difficulty" => Section::Difficulty,
-            "Events" => Section::Events, "TimingPoints" => Section::TimingPoints,
-            "HitObjects" => Section::HitObjects, _ => Section::None,
+            "General" => Section::General,
+            "Editor" => Section::Editor,
+            "Metadata" => Section::Metadata,
+            "Difficulty" => Section::Difficulty,
+            "Events" => Section::Events,
+            "TimingPoints" => Section::TimingPoints,
+            "HitObjects" => Section::HitObjects,
+            _ => Section::None,
         })
-    } else { None }
+    } else {
+        None
+    }
 }
 
 fn dispatch_section(section: Section, line: &[u8], idx: usize, beatmap: &mut OsuBeatmap) {

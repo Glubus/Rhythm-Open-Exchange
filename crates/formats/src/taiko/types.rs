@@ -2,8 +2,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
 
-use bitflags::bitflags;
 use crate::osu::types::{OsuDifficulty, OsuGeneral, OsuMetadata, OsuTimingPoint};
+use bitflags::bitflags;
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,8 +16,14 @@ bitflags! {
 }
 
 impl TaikoHitsound {
-    #[must_use] pub fn is_kat(self) -> bool { self.contains(Self::WHISTLE) || self.contains(Self::CLAP) }
-    #[must_use] pub fn is_big(self) -> bool { self.contains(Self::FINISH) }
+    #[must_use]
+    pub fn is_kat(self) -> bool {
+        self.contains(Self::WHISTLE) || self.contains(Self::CLAP)
+    }
+    #[must_use]
+    pub fn is_big(self) -> bool {
+        self.contains(Self::FINISH)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +34,10 @@ pub struct TaikoHitObject {
 }
 
 impl TaikoHitObject {
-    #[must_use] pub fn is_spinner(&self) -> bool { (self.object_type & 8) != 0 }
+    #[must_use]
+    pub fn is_spinner(&self) -> bool {
+        (self.object_type & 8) != 0
+    }
 }
 
 #[derive(Debug, Default)]
@@ -43,14 +52,29 @@ pub struct TaikoBeatmap {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ColumnLayout { #[default] Dkkd, Dkdk, Kddk }
+pub enum ColumnLayout {
+    #[default]
+    Dkkd,
+    Dkdk,
+    Kddk,
+}
 
 impl ColumnLayout {
-    #[must_use] pub const fn don_columns(self) -> [u8; 2] {
-        match self { Self::Dkkd => [0, 3], Self::Dkdk => [0, 2], Self::Kddk => [1, 2] }
+    #[must_use]
+    pub const fn don_columns(self) -> [u8; 2] {
+        match self {
+            Self::Dkkd => [0, 3],
+            Self::Dkdk => [0, 2],
+            Self::Kddk => [1, 2],
+        }
     }
-    #[must_use] pub const fn kat_columns(self) -> [u8; 2] {
-        match self { Self::Dkkd => [1, 2], Self::Dkdk => [1, 3], Self::Kddk => [0, 3] }
+    #[must_use]
+    pub const fn kat_columns(self) -> [u8; 2] {
+        match self {
+            Self::Dkkd => [1, 2],
+            Self::Dkdk => [1, 3],
+            Self::Kddk => [0, 3],
+        }
     }
 }
 
@@ -62,23 +86,40 @@ pub struct AlternationState {
 }
 
 impl Default for AlternationState {
-    fn default() -> Self { Self::new(ColumnLayout::default()) }
+    fn default() -> Self {
+        Self::new(ColumnLayout::default())
+    }
 }
 
 impl AlternationState {
-    #[must_use] pub const fn new(layout: ColumnLayout) -> Self {
-        Self { layout, don_index: 0, kat_index: 0 }
+    #[must_use]
+    pub const fn new(layout: ColumnLayout) -> Self {
+        Self {
+            layout,
+            don_index: 0,
+            kat_index: 0,
+        }
     }
 
     pub fn next_don_columns(&mut self, is_big: bool) -> Vec<u8> {
         let cols = self.layout.don_columns();
-        if is_big { vec![cols[0], cols[1]] }
-        else { let c = cols[self.don_index]; self.don_index = (self.don_index + 1) % 2; vec![c] }
+        if is_big {
+            vec![cols[0], cols[1]]
+        } else {
+            let c = cols[self.don_index];
+            self.don_index = (self.don_index + 1) % 2;
+            vec![c]
+        }
     }
 
     pub fn next_kat_columns(&mut self, is_big: bool) -> Vec<u8> {
         let cols = self.layout.kat_columns();
-        if is_big { vec![cols[0], cols[1]] }
-        else { let c = cols[self.kat_index]; self.kat_index = (self.kat_index + 1) % 2; vec![c] }
+        if is_big {
+            vec![cols[0], cols[1]]
+        } else {
+            let c = cols[self.kat_index];
+            self.kat_index = (self.kat_index + 1) % 2;
+            vec![c]
+        }
     }
 }

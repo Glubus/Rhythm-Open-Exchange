@@ -34,8 +34,7 @@ impl Decoder for JroxDecoder {
 
 impl Encoder for JroxEncoder {
     fn encode_inner(chart: &RoxChart) -> RoxResult<Vec<u8>> {
-        serde_json::to_vec_pretty(chart)
-            .map_err(|e| RoxError::Serialize(e.to_string()))
+        serde_json::to_vec_pretty(chart).map_err(|e| RoxError::Serialize(e.to_string()))
     }
 }
 

@@ -40,9 +40,10 @@ impl OsuDecoder {
     pub fn decode_with_options(data: &[u8], opts: &OsuDecodeOptions) -> RoxResult<RoxChart> {
         let beatmap = parser::parse(data)?;
         if beatmap.general.mode != 3 {
-            return Err(RoxError::InvalidFormat(
-                format!("Not a mania beatmap (mode={}, expected 3)", beatmap.general.mode),
-            ));
+            return Err(RoxError::InvalidFormat(format!(
+                "Not a mania beatmap (mode={}, expected 3)",
+                beatmap.general.mode
+            )));
         }
         let mut chart = from_beatmap(&beatmap);
         if opts.re_arrange_bpm {
@@ -57,9 +58,10 @@ impl Decoder for OsuDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
         let beatmap = parser::parse(data)?;
         if beatmap.general.mode != 3 {
-            return Err(RoxError::InvalidFormat(
-                format!("Not a mania beatmap (mode={}, expected 3)", beatmap.general.mode)
-            ));
+            return Err(RoxError::InvalidFormat(format!(
+                "Not a mania beatmap (mode={}, expected 3)",
+                beatmap.general.mode
+            )));
         }
         Ok(from_beatmap(&beatmap))
     }
@@ -75,7 +77,9 @@ fn re_arrange_bpm_if_needed(chart: &mut RoxChart) {
         return;
     };
     if let TimingPoint::Bpm { time_us, .. } = tp {
-        if *time_us <= first_note_time { return; }
+        if *time_us <= first_note_time {
+            return;
+        }
         tracing::warn!(
             bpm_time_us = *time_us,
             note_time_us = first_note_time,
@@ -87,7 +91,8 @@ fn re_arrange_bpm_if_needed(chart: &mut RoxChart) {
 }
 
 pub(crate) fn from_beatmap(beatmap: &super::types::OsuBeatmap) -> RoxChart {
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // value is non-negative in valid input; key count fits in u8
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    // value is non-negative in valid input; key count fits in u8
     let key_count = beatmap.difficulty.circle_size as u8;
     let mut chart = RoxChart::new(key_count);
     chart.metadata = build_metadata(beatmap);
@@ -97,9 +102,15 @@ pub(crate) fn from_beatmap(beatmap: &super::types::OsuBeatmap) -> RoxChart {
 }
 
 fn build_metadata(beatmap: &super::types::OsuBeatmap) -> Metadata {
-    let title = beatmap.metadata.title_unicode.clone()
+    let title = beatmap
+        .metadata
+        .title_unicode
+        .clone()
         .unwrap_or_else(|| beatmap.metadata.title.clone());
-    let artist = beatmap.metadata.artist_unicode.clone()
+    let artist = beatmap
+        .metadata
+        .artist_unicode
+        .clone()
         .unwrap_or_else(|| beatmap.metadata.artist.clone());
     Metadata {
         #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
@@ -123,16 +134,21 @@ fn build_metadata(beatmap: &super::types::OsuBeatmap) -> Metadata {
 
 fn build_timing_points(beatmap: &super::types::OsuBeatmap, chart: &mut RoxChart) {
     for tp in &beatmap.timing_points {
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (tp.time * 1000.0) as i64;
         if tp.uninherited {
             if let Some(bpm) = tp.bpm() {
                 chart.timing_points.push(TimingPoint::Bpm {
-                    time_us, bpm, signature: tp.meter,
+                    time_us,
+                    bpm,
+                    signature: tp.meter,
                 });
             }
         } else {
-            chart.timing_points.push(TimingPoint::sv(time_us, tp.scroll_velocity()));
+            chart
+                .timing_points
+                .push(TimingPoint::sv(time_us, tp.scroll_velocity()));
         }
     }
 }
@@ -159,24 +175,32 @@ fn assign_hitsound(
     chart: &mut RoxChart,
     map: &mut BTreeMap<String, u16>,
 ) {
-    if ho.extras.is_empty() { return; }
+    if ho.extras.is_empty() {
+        return;
+    }
     let parts: Vec<&str> = ho.extras.split(':').collect();
     let filename_idx = if ho.is_hold() { 5 } else { 4 };
-    let Some(&filename) = parts.get(filename_idx) else { return };
+    let Some(&filename) = parts.get(filename_idx) else {
+        return;
+    };
     let filename = filename.trim();
-    if filename.is_empty() { return; }
+    if filename.is_empty() {
+        return;
+    }
     let idx = if let Some(&idx) = map.get(filename) {
         idx
     } else {
         let volume_idx = if ho.is_hold() { 4 } else { 3 };
-        let volume: Option<u8> = parts.get(volume_idx)
+        let volume: Option<u8> = parts
+            .get(volume_idx)
             .and_then(|v| v.parse().ok())
             .filter(|&v: &u8| v > 0);
         let hs = match volume {
             Some(vol) => Hitsound::with_volume(filename, vol),
             None => Hitsound::new(filename),
         };
-        #[allow(clippy::cast_possible_truncation)] // hitsound index fits in u16 for any realistic chart
+        #[allow(clippy::cast_possible_truncation)]
+        // hitsound index fits in u16 for any realistic chart
         let idx = chart.hitsounds.len() as u16;
         chart.hitsounds.push(hs);
         map.insert(filename.to_string(), idx);
@@ -224,14 +248,20 @@ mod tests {
     #[rstest]
     fn test_decode_50k_succeeds_with_re_arrange() {
         let data = rox_test_utils::get_test_asset("osu/mania_4K_50K_notes.osu");
-        let opts = OsuDecodeOptions { re_arrange_bpm: true };
+        let opts = OsuDecodeOptions {
+            re_arrange_bpm: true,
+        };
         let chart = OsuDecoder::decode_with_options(&data, &opts).expect("decode failed");
         assert_eq!(chart.key_count, 4);
         assert!(!chart.notes.is_empty());
         // first BPM must be <= first note
         let first_note = chart.notes.iter().map(|n| n.time_us).min().unwrap();
-        let first_bpm = chart.timing_points.iter().find(|tp| tp.is_bpm())
-            .map(|tp| tp.time_us()).unwrap();
+        let first_bpm = chart
+            .timing_points
+            .iter()
+            .find(|tp| tp.is_bpm())
+            .map(|tp| tp.time_us())
+            .unwrap();
         assert!(first_bpm <= first_note);
     }
 }

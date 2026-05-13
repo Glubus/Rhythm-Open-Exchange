@@ -23,7 +23,8 @@ pub fn hash(chart: &RoxChart) -> String {
 /// Panics if rkyv serialization fails (should never happen for valid `RoxChart` data).
 #[must_use]
 pub fn notes_hash(chart: &RoxChart) -> String {
-    let bytes = rkyv::to_bytes::<RkyvError>(&chart.notes).expect("rkyv serialization must not fail");
+    let bytes =
+        rkyv::to_bytes::<RkyvError>(&chart.notes).expect("rkyv serialization must not fail");
     format!("{:032x}", xxh3_128(&bytes))
 }
 
@@ -34,7 +35,8 @@ pub fn notes_hash(chart: &RoxChart) -> String {
 /// Panics if rkyv serialization fails (should never happen for valid `RoxChart` data).
 #[must_use]
 pub fn timings_hash(chart: &RoxChart) -> String {
-    let bytes = rkyv::to_bytes::<RkyvError>(&chart.timing_points).expect("rkyv serialization must not fail");
+    let bytes = rkyv::to_bytes::<RkyvError>(&chart.timing_points)
+        .expect("rkyv serialization must not fail");
     format!("{:032x}", xxh3_128(&bytes))
 }
 
@@ -112,7 +114,10 @@ mod tests {
     fn test_timings_hash_ignores_notes(chart_with_notes: RoxChart) {
         let mut with_extra_note = chart_with_notes.clone();
         with_extra_note.notes.push(Note::tap(9_000_000, 3));
-        assert_eq!(timings_hash(&chart_with_notes), timings_hash(&with_extra_note));
+        assert_eq!(
+            timings_hash(&chart_with_notes),
+            timings_hash(&with_extra_note)
+        );
     }
 
     #[rstest]

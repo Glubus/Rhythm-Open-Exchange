@@ -6,9 +6,9 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Chart metadata. Does NOT include `key_count` — that lives on `RoxChart`.
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Metadata {
     pub chart_id: Option<u64>,
     pub chartset_id: Option<u64>,

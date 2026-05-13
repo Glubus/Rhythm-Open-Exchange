@@ -82,7 +82,9 @@ fn build_timing_points(fnf: &FnfChart, chart: &mut RoxChart) {
             #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
             let time_us = (first.time_ms() * 1000.0) as i64;
             if time_us > 0 {
-                chart.timing_points.push(TimingPoint::bpm(time_us, section.bpm));
+                chart
+                    .timing_points
+                    .push(TimingPoint::bpm(time_us, section.bpm));
             }
         }
     }

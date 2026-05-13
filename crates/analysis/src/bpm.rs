@@ -82,8 +82,12 @@ mod tests {
     fn multi_bpm_chart() -> RoxChart {
         let mut chart = RoxChart::new(4);
         chart.timing_points.push(TimingPoint::bpm(0, 100.0));
-        chart.timing_points.push(TimingPoint::bpm(10_000_000, 200.0));
-        chart.timing_points.push(TimingPoint::bpm(20_000_000, 100.0));
+        chart
+            .timing_points
+            .push(TimingPoint::bpm(10_000_000, 200.0));
+        chart
+            .timing_points
+            .push(TimingPoint::bpm(20_000_000, 100.0));
         // note at 30s to define duration
         chart.notes.push(Note::tap(30_000_000, 0));
         chart

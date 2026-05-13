@@ -29,14 +29,21 @@ pub fn density(chart: &RoxChart, segments: usize) -> Vec<f64> {
     let bucket_micros = duration_us as f64 / segments as f64;
     let mut counts = vec![0usize; segments];
     for note in &chart.notes {
-        #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation
+        )]
         let idx = ((note.time_us as f64 / bucket_micros).floor() as usize).min(segments - 1);
         counts[idx] += 1;
     }
     // Convert bucket width from microseconds to seconds for NPS calculation
     let bucket_seconds = bucket_micros / 1_000_000.0;
     #[allow(clippy::cast_precision_loss)] // segment counts fit in f64
-    counts.into_iter().map(|c| c as f64 / bucket_seconds).collect()
+    counts
+        .into_iter()
+        .map(|c| c as f64 / bucket_seconds)
+        .collect()
 }
 
 /// Peak NPS in any sliding window of `window_s` seconds.

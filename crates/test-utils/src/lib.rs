@@ -16,8 +16,7 @@ pub fn get_test_asset(name: &str) -> Vec<u8> {
         .expect("must have workspace root")
         .join("assets")
         .join(name);
-    std::fs::read(&path)
-        .unwrap_or_else(|e| panic!("failed to read asset '{name}': {e}"))
+    std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read asset '{name}': {e}"))
 }
 
 #[cfg(test)]

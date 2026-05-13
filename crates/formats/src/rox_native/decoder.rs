@@ -1,9 +1,9 @@
 #![warn(clippy::pedantic)]
 
+use rkyv::rancor::Error as RkyvError;
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
 use rox::model::{ROX_MAGIC, RoxChart};
-use rkyv::rancor::Error as RkyvError;
 use rox_macros::Format;
 
 use super::MAX_FILE_SIZE;
@@ -16,12 +16,15 @@ pub struct RoxNativeCodec;
 impl Decoder for RoxNativeCodec {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
         if data.len() < 4 || data[..4] != ROX_MAGIC {
-            return Err(RoxError::InvalidFormat("Invalid ROX file: missing magic bytes".into()));
+            return Err(RoxError::InvalidFormat(
+                "Invalid ROX file: missing magic bytes".into(),
+            ));
         }
         if data.len() > MAX_FILE_SIZE {
-            return Err(RoxError::InvalidFormat(
-                format!("File too large: {} bytes (max 100MB)", data.len()),
-            ));
+            return Err(RoxError::InvalidFormat(format!(
+                "File too large: {} bytes (max 100MB)",
+                data.len()
+            )));
         }
         let decompressed = decompress(&data[4..])?;
         // SAFETY: data was produced by RoxNativeCodec::encode_inner using rkyv::to_bytes

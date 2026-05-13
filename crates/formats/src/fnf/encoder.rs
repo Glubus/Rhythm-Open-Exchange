@@ -16,8 +16,7 @@ pub struct FnfEncoder;
 impl Encoder for FnfEncoder {
     fn encode_inner(chart: &RoxChart) -> RoxResult<Vec<u8>> {
         let fnf = to_fnf(chart);
-        serde_json::to_vec_pretty(&fnf)
-            .map_err(|e| rox::error::RoxError::Serialize(e.to_string()))
+        serde_json::to_vec_pretty(&fnf).map_err(|e| rox::error::RoxError::Serialize(e.to_string()))
     }
 }
 
@@ -54,11 +53,13 @@ fn build_section_notes(chart: &RoxChart) -> Vec<FnfNote> {
         .notes
         .iter()
         .map(|note| {
-            #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
+            #[allow(clippy::cast_precision_loss)]
+            // i64→f64: precision loss acceptable for timing values
             let time_ms = note.time_us as f64 / 1000.0;
             match &note.note_type {
                 NoteType::Hold { duration_us } | NoteType::Burst { duration_us } => {
-                    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
+                    #[allow(clippy::cast_precision_loss)]
+                    // i64→f64: precision loss acceptable for timing values
                     let dur_ms = *duration_us as f64 / 1000.0;
                     FnfNote::hold(time_ms, note.column, dur_ms)
                 }

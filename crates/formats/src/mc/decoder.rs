@@ -1,17 +1,24 @@
-//! Decoder for converting Malody .mc to `RoxChart`.
+#![warn(clippy::pedantic)]
+#[cfg(not(feature = "std"))]
+use alloc::{string::ToString, vec::Vec};
 
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
 use rox::model::{Metadata, Note, RoxChart, TimingPoint};
+use rox_macros::Format;
 
-use super::types::{beat_to_f64, beats_to_ms, McChart};
+use super::types::{McChart, McTimingPoint, beat_to_f64, beats_to_ms};
 
 /// Decoder for Malody Key mode beatmaps.
+#[derive(Format)]
+#[format(extensions = ["mc"])]
 pub struct McDecoder;
 
 impl McDecoder {
     /// Convert a parsed `McChart` to `RoxChart`.
-    #[must_use]
+    ///
+    /// # Errors
+    /// Returns an error for unsupported Malody modes or malformed timing data.
     pub fn from_mc(mc: &McChart) -> RoxResult<RoxChart> {
         if mc.meta.mode != 0 {
             return Err(RoxError::InvalidFormat(format!(
@@ -19,137 +26,154 @@ impl McDecoder {
                 mc.meta.mode
             )));
         }
-
-        let key_count = mc.meta.mode_ext.column;
-        let mut chart = RoxChart::new(key_count);
-
-        // ── Extract audio metadata from sound-meta notes ──
-        let mut audio_file = String::new();
-        let mut audio_offset_ms: i64 = 0;
-        for n in &mc.note {
-            if n.note_type != 0 {
-                if let Some(ref s) = n.sound {
-                    audio_file.clone_from(s);
-                }
-                audio_offset_ms = n.offset.unwrap_or(0);
-            }
-        }
-
-        // ── Metadata ──
-        chart.metadata = Metadata {
-            title: mc
-                .meta
-                .song
-                .titleorg
-                .clone()
-                .unwrap_or_else(|| mc.meta.song.title.clone())
-                .into(),
-            artist: mc
-                .meta
-                .song
-                .artistorg
-                .clone()
-                .unwrap_or_else(|| mc.meta.song.artist.clone())
-                .into(),
-            creator: mc.meta.creator.clone().into(),
-            difficulty_name: mc.meta.version.clone().into(),
-            audio_file: audio_file.into(),
-            background_file: if mc.meta.background.is_empty() {
-                None
-            } else {
-                Some(mc.meta.background.clone().into())
-            },
-            audio_offset_us: -audio_offset_ms * 1000,
-            preview_time_us: mc.meta.preview.unwrap_or(-1) * 1000,
-            source: Some("Malody".into()),
-            ..Default::default()
-        };
-
-        // ── BPM timeline: parallel arrays (bpm, cumulative_offset_ms) ──
-        let n_bpm = mc.time.len();
-        let mut bpms: Vec<f64> = Vec::with_capacity(n_bpm);
-        let mut offsets_ms: Vec<f64> = Vec::with_capacity(n_bpm);
-        bpms.push(mc.time[0].bpm);
-        offsets_ms.push(-audio_offset_ms as f64);
-        for i in 1..n_bpm {
-            let beat_diff = beat_to_f64(&mc.time[i].beat) - beat_to_f64(&mc.time[i - 1].beat);
-            let offset = offsets_ms[i - 1] + beats_to_ms(beat_diff, bpms[i - 1]);
-            bpms.push(mc.time[i].bpm);
-            offsets_ms.push(offset);
-        }
-
-        // ── BPM timing points ──
-        for i in 0..n_bpm {
-            let tp = &mc.time[i];
-            #[allow(clippy::cast_possible_truncation)]
-            let time_us = (offsets_ms[i] * 1000.0) as i64;
-            let t = TimingPoint::Bpm { time_us, bpm: tp.bpm as f32, signature: tp.sign };
-            chart.timing_points.push(t);
-        }
-
-        // ── SV effects ──
-        for eff in &mc.effect {
-            let bf = beat_to_f64(&eff.beat);
-            let (_, off) = bpm_offset_at_beat(&bpms, &offsets_ms, &mc.time, bf);
-            #[allow(clippy::cast_possible_truncation)]
-            chart.timing_points.push(TimingPoint::sv(
-                (off * 1000.0) as i64,
-                if eff.scroll == 0.0 {
-                    0.0
-                } else {
-                    eff.scroll as f32
-                },
+        if mc.time.is_empty() {
+            return Err(RoxError::InvalidFormat(
+                "Malody chart has no timing points".to_string(),
             ));
         }
-        chart.timing_points.sort_by_key(|tp| tp.time_us());
 
-        // ── Notes ──
-        for n in &mc.note {
-            if n.note_type != 0 {
-                continue;
-            }
-            let Some(beat) = &n.beat else {
-                continue;
-            };
-            let column = n.column.unwrap_or(0);
-            let bf = beat_to_f64(beat);
-            let (_, off) = bpm_offset_at_beat(&bpms, &offsets_ms, &mc.time, bf);
-            #[allow(clippy::cast_possible_truncation)]
-            let time_us = (off * 1000.0).max(0.0) as i64;
-
-            let note = if let Some(ref endbeat) = n.endbeat {
-                let ef = beat_to_f64(endbeat);
-                let (_, eoff) = bpm_offset_at_beat(&bpms, &offsets_ms, &mc.time, ef);
-                #[allow(clippy::cast_possible_truncation)]
-                let end_us = (eoff * 1000.0).max(0.0) as i64;
-                Note::hold(time_us, (end_us - time_us).max(1), column)
-            } else {
-                Note::tap(time_us, column)
-            };
-            chart.notes.push(note);
-        }
+        let audio = audio_metadata(mc);
+        let timeline = BeatTimeline::new(&mc.time, audio.offset_ms);
+        let mut chart = RoxChart::new(mc.meta.mode_ext.column);
+        chart.metadata = build_metadata(mc, &audio);
+        build_timing_points(mc, &timeline, &mut chart);
+        build_notes(mc, &timeline, &mut chart);
         chart.notes.sort_by_key(|n| n.time_us);
         Ok(chart)
     }
 }
 
-/// Find BPM section for a beat position → (index, absolute_ms).
-fn bpm_offset_at_beat(
-    bpms: &[f64],
-    offsets_ms: &[f64],
-    time_points: &[super::types::McTimingPoint],
-    beat: f64,
-) -> (usize, f64) {
-    let mut idx = 0usize;
-    for (i, tp) in time_points.iter().enumerate() {
-        if beat_to_f64(&tp.beat) <= beat {
-            idx = i;
-        } else {
-            break;
+#[derive(Debug, Clone, Default)]
+struct AudioMetadata {
+    file: String,
+    offset_ms: i64,
+}
+
+fn audio_metadata(mc: &McChart) -> AudioMetadata {
+    let mut audio = AudioMetadata::default();
+    for note in mc.note.iter().filter(|note| note.note_type != 0) {
+        if let Some(sound) = &note.sound {
+            audio.file.clone_from(sound);
         }
+        audio.offset_ms = note.offset.unwrap_or_default();
     }
-    let diff = beat - beat_to_f64(&time_points[idx].beat);
-    (idx, offsets_ms[idx] + beats_to_ms(diff, bpms[idx]))
+    audio
+}
+
+fn build_metadata(mc: &McChart, audio: &AudioMetadata) -> Metadata {
+    Metadata {
+        title: mc
+            .meta
+            .song
+            .titleorg
+            .clone()
+            .unwrap_or_else(|| mc.meta.song.title.clone())
+            .into(),
+        artist: mc
+            .meta
+            .song
+            .artistorg
+            .clone()
+            .unwrap_or_else(|| mc.meta.song.artist.clone())
+            .into(),
+        creator: mc.meta.creator.clone().into(),
+        difficulty_name: mc.meta.version.clone().into(),
+        audio_file: audio.file.clone().into(),
+        background_file: (!mc.meta.background.is_empty())
+            .then(|| mc.meta.background.clone().into()),
+        audio_offset_us: -audio.offset_ms * 1000,
+        preview_time_us: mc.meta.preview.unwrap_or(-1) * 1000,
+        source: Some("Malody".into()),
+        ..Metadata::default()
+    }
+}
+
+fn build_timing_points(mc: &McChart, timeline: &BeatTimeline, chart: &mut RoxChart) {
+    for section in &timeline.sections {
+        #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
+        let time_us = (section.offset_ms * 1000.0) as i64;
+        chart.timing_points.push(TimingPoint::Bpm {
+            time_us,
+            #[allow(clippy::cast_possible_truncation)] // f64→f32: precision loss acceptable for BPM values
+            bpm: section.bpm as f32,
+            signature: section.signature,
+        });
+    }
+
+    for effect in &mc.effect {
+        #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
+        let time_us = (timeline.ms_at_beat(beat_to_f64(&effect.beat)) * 1000.0) as i64;
+        #[allow(clippy::cast_possible_truncation)]
+        // f64→f32: precision loss acceptable for SV values
+        chart
+            .timing_points
+            .push(TimingPoint::sv(time_us, effect.scroll as f32));
+    }
+    chart.timing_points.sort_by_key(TimingPoint::time_us);
+}
+
+fn build_notes(mc: &McChart, timeline: &BeatTimeline, chart: &mut RoxChart) {
+    for mc_note in mc.note.iter().filter(|note| note.note_type == 0) {
+        let Some(beat) = &mc_note.beat else { continue };
+        let column = mc_note.column.unwrap_or_default();
+        let time_us = beat_to_time_us(timeline, beat);
+        let note = if let Some(endbeat) = &mc_note.endbeat {
+            let end_us = beat_to_time_us(timeline, endbeat);
+            Note::hold(time_us, (end_us - time_us).max(1), column)
+        } else {
+            Note::tap(time_us, column)
+        };
+        chart.notes.push(note);
+    }
+}
+
+fn beat_to_time_us(timeline: &BeatTimeline, beat: &super::types::Beat) -> i64 {
+    #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
+    let time_us = (timeline.ms_at_beat(beat_to_f64(beat)) * 1000.0).max(0.0) as i64;
+    time_us
+}
+
+#[derive(Debug, Clone)]
+struct BeatSection {
+    beat: f64,
+    bpm: f64,
+    offset_ms: f64,
+    signature: u8,
+}
+
+#[derive(Debug, Clone)]
+struct BeatTimeline {
+    sections: Vec<BeatSection>,
+}
+
+impl BeatTimeline {
+    fn new(points: &[McTimingPoint], audio_offset_ms: i64) -> Self {
+        let mut sections = Vec::with_capacity(points.len());
+        let mut offset_ms = -audio_offset_ms as f64;
+        for (idx, point) in points.iter().enumerate() {
+            if let Some(prev) = idx.checked_sub(1).and_then(|prev_idx| points.get(prev_idx)) {
+                let beat_diff = beat_to_f64(&point.beat) - beat_to_f64(&prev.beat);
+                offset_ms += beats_to_ms(beat_diff, prev.bpm);
+            }
+            sections.push(BeatSection {
+                beat: beat_to_f64(&point.beat),
+                bpm: point.bpm,
+                offset_ms,
+                signature: point.sign,
+            });
+        }
+        Self { sections }
+    }
+
+    fn ms_at_beat(&self, beat: f64) -> f64 {
+        let section = self
+            .sections
+            .iter()
+            .rev()
+            .find(|section| section.beat <= beat)
+            .unwrap_or(&self.sections[0]);
+        section.offset_ms + beats_to_ms(beat - section.beat, section.bpm)
+    }
 }
 
 impl Decoder for McDecoder {
@@ -182,5 +206,27 @@ mod tests {
     fn test_reject_non_key_mode() {
         let json = r#"{"meta":{"mode":1,"song":{"title":"T","artist":"A"},"mode_ext":{"column":4},"background":"","creator":"c","version":"E"},"time":[{"beat":[0,0,1],"bpm":120}],"note":[{"type":1,"sound":"x.ogg","offset":0}]}"#;
         assert!(<McDecoder as Decoder>::decode_inner(json.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn test_reject_missing_timing_points() {
+        let json = r#"{
+            "meta":{"mode":0,"song":{"title":"T","artist":"A"},"mode_ext":{"column":4}},
+            "time":[],
+            "note":[]
+        }"#;
+        assert!(<McDecoder as Decoder>::decode_inner(json.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn test_decode_scroll_effect() {
+        let json = r#"{
+            "meta":{"mode":0,"song":{"title":"T","artist":"A"},"mode_ext":{"column":4}},
+            "time":[{"beat":[0,0,1],"bpm":120}],
+            "effect":[{"beat":[1,0,1],"scroll":1.5}],
+            "note":[]
+        }"#;
+        let chart = <McDecoder as Decoder>::decode_inner(json.as_bytes()).unwrap();
+        assert!(chart.timing_points.iter().any(TimingPoint::is_sv));
     }
 }

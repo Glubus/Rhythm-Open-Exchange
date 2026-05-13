@@ -69,10 +69,7 @@ mod tests {
     #[case(RoxError::NoBpmTimingPoint, "bpm")]
     #[case(RoxError::InvalidColumn { column: 4, key_count: 4 }, "column 4")]
     #[case(RoxError::InvalidCoopKeyCount(3), "3")]
-    fn test_error_display_contains_fragment(
-        #[case] err: RoxError,
-        #[case] fragment: &str,
-    ) {
+    fn test_error_display_contains_fragment(#[case] err: RoxError, #[case] fragment: &str) {
         let msg = err.to_string().to_lowercase();
         assert!(msg.contains(fragment), "expected '{fragment}' in '{msg}'");
     }

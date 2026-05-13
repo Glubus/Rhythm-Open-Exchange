@@ -34,7 +34,15 @@ pub fn parse_hit_object_bytes(line: &[u8]) -> Option<OsuHitObject> {
     let end_time = parse_hold_end_time(object_type, line, start);
     let extras = extract_extras(line, extras_start);
 
-    Some(OsuHitObject { x, y: 192, time, object_type, hit_sound, end_time, extras })
+    Some(OsuHitObject {
+        x,
+        y: 192,
+        time,
+        object_type,
+        hit_sound,
+        end_time,
+        extras,
+    })
 }
 
 fn parse_hold_end_time(object_type: u8, line: &[u8], start: usize) -> Option<i32> {

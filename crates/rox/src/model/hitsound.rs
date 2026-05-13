@@ -3,9 +3,9 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// A hitsound sample definition.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Hitsound {
     /// Relative path to the audio sample.
     pub file: CompactString,
@@ -16,12 +16,18 @@ pub struct Hitsound {
 impl Hitsound {
     #[must_use]
     pub fn new(file: impl Into<CompactString>) -> Self {
-        Self { file: file.into(), volume: None }
+        Self {
+            file: file.into(),
+            volume: None,
+        }
     }
 
     #[must_use]
     pub fn with_volume(file: impl Into<CompactString>, volume: u8) -> Self {
-        Self { file: file.into(), volume: Some(volume.min(100)) }
+        Self {
+            file: file.into(),
+            volume: Some(volume.min(100)),
+        }
     }
 }
 

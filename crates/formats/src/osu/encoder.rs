@@ -39,8 +39,16 @@ pub fn column_to_x(column: u8, key_count: u8) -> i32 {
 fn write_general(out: &mut String, chart: &RoxChart) {
     out.push_str("[General]\n");
     let _ = writeln!(out, "AudioFilename: {}", chart.metadata.audio_file);
-    let _ = writeln!(out, "AudioLeadIn: {}", chart.metadata.audio_offset_us / 1000);
-    let _ = writeln!(out, "PreviewTime: {}", chart.metadata.preview_time_us / 1000);
+    let _ = writeln!(
+        out,
+        "AudioLeadIn: {}",
+        chart.metadata.audio_offset_us / 1000
+    );
+    let _ = writeln!(
+        out,
+        "PreviewTime: {}",
+        chart.metadata.preview_time_us / 1000
+    );
     out.push_str("Countdown: 0\nSampleSet: Normal\nStackLeniency: 0.7\nMode: 3\n");
     out.push_str("LetterboxInBreaks: 0\nSpecialStyle: 0\nWidescreenStoryboard: 0\n\n");
 }
@@ -57,21 +65,36 @@ fn write_metadata(out: &mut String, chart: &RoxChart) {
     let _ = writeln!(out, "ArtistUnicode:{}", chart.metadata.artist);
     let _ = writeln!(out, "Creator:{}", chart.metadata.creator);
     let _ = writeln!(out, "Version:{}", chart.metadata.difficulty_name);
-    if let Some(src) = &chart.metadata.source { let _ = writeln!(out, "Source:{src}"); }
+    if let Some(src) = &chart.metadata.source {
+        let _ = writeln!(out, "Source:{src}");
+    }
     if !chart.metadata.tags.is_empty() {
-        let tags: Vec<&str> = chart.metadata.tags.iter().map(compact_str::CompactString::as_str).collect();
+        let tags: Vec<&str> = chart
+            .metadata
+            .tags
+            .iter()
+            .map(compact_str::CompactString::as_str)
+            .collect();
         let _ = writeln!(out, "Tags:{}", tags.join(" "));
     }
     let _ = writeln!(out, "BeatmapID:{}", chart.metadata.chart_id.unwrap_or(0));
     #[allow(clippy::cast_possible_wrap)] // ms→µs i64: safe for any realistic timestamp or duration
-    let _ = writeln!(out, "BeatmapSetID:{}", chart.metadata.chartset_id.map_or(-1i64, |id| id as i64));
+    let _ = writeln!(
+        out,
+        "BeatmapSetID:{}",
+        chart.metadata.chartset_id.map_or(-1i64, |id| id as i64)
+    );
     out.push('\n');
 }
 
 fn write_difficulty(out: &mut String, chart: &RoxChart) {
     out.push_str("[Difficulty]\nHPDrainRate:8\n");
     let _ = writeln!(out, "CircleSize:{}", chart.key_count);
-    let _ = writeln!(out, "OverallDifficulty:{}", chart.metadata.difficulty_value.unwrap_or(8.0));
+    let _ = writeln!(
+        out,
+        "OverallDifficulty:{}",
+        chart.metadata.difficulty_value.unwrap_or(8.0)
+    );
     out.push_str("ApproachRate:5\nSliderMultiplier:1.4\nSliderTickRate:1\n\n");
 }
 
@@ -86,7 +109,8 @@ fn write_events(out: &mut String, chart: &RoxChart) {
 fn write_timing_points(out: &mut String, chart: &RoxChart) {
     out.push_str("[TimingPoints]\n");
     for tp in &chart.timing_points {
-        #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
+        #[allow(clippy::cast_precision_loss)]
+        // i64→f64: precision loss acceptable for timing values
         let time_ms = tp.time_us() as f64 / 1000.0;
         match tp {
             TimingPoint::Sv { scroll_speed, .. } => {
@@ -105,7 +129,8 @@ fn write_timing_points(out: &mut String, chart: &RoxChart) {
 fn write_hit_objects(out: &mut String, chart: &RoxChart) {
     out.push_str("[HitObjects]\n");
     for note in &chart.notes {
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_ms = (note.time_us / 1000) as i32;
         let x = column_to_x(note.column, chart.key_count);
         match &note.note_type {
@@ -113,7 +138,8 @@ fn write_hit_objects(out: &mut String, chart: &RoxChart) {
                 let _ = writeln!(out, "{x},192,{time_ms},1,0,0:0:0:0:");
             }
             NoteType::Hold { duration_us } | NoteType::Burst { duration_us } => {
-                #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+                #[allow(clippy::cast_possible_truncation)]
+                // ms→µs i64: safe for any realistic timestamp or duration
                 let end_time = time_ms + (*duration_us / 1000) as i32;
                 let _ = writeln!(out, "{x},192,{time_ms},128,0,{end_time}:0:0:0:0:");
             }
@@ -124,7 +150,10 @@ fn write_hit_objects(out: &mut String, chart: &RoxChart) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rox::{codec::Encoder, model::{Note, TimingPoint}};
+    use rox::{
+        codec::Encoder,
+        model::{Note, TimingPoint},
+    };
     use rstest::rstest;
 
     #[rstest]

@@ -1,8 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use crate::error::RoxResult;
 use super::traits::{Decoder, Encoder};
+use crate::error::RoxResult;
 
 /// Convert bytes from format D to format E, using ROX as the pivot.
 ///

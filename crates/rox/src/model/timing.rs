@@ -2,26 +2,40 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// A timing point — either a BPM change or a scroll velocity change.
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 #[serde(tag = "type", content = "data")]
 pub enum TimingPoint {
-    Bpm { time_us: i64, bpm: f32, signature: u8 },
-    Sv  { time_us: i64, scroll_speed: f32 },
+    Bpm {
+        time_us: i64,
+        bpm: f32,
+        signature: u8,
+    },
+    Sv {
+        time_us: i64,
+        scroll_speed: f32,
+    },
 }
 
 impl TimingPoint {
     /// Create a BPM timing point with 4/4 time signature.
     #[must_use]
     pub fn bpm(time_us: i64, bpm: f32) -> Self {
-        Self::Bpm { time_us, bpm, signature: 4 }
+        Self::Bpm {
+            time_us,
+            bpm,
+            signature: 4,
+        }
     }
 
     /// Create a scroll velocity change point.
     #[must_use]
     pub fn sv(time_us: i64, scroll_speed: f32) -> Self {
-        Self::Sv { time_us, scroll_speed }
+        Self::Sv {
+            time_us,
+            scroll_speed,
+        }
     }
 
     #[must_use]
@@ -32,19 +46,29 @@ impl TimingPoint {
     }
 
     #[must_use]
-    pub fn is_bpm(&self) -> bool { matches!(self, Self::Bpm { .. }) }
+    pub fn is_bpm(&self) -> bool {
+        matches!(self, Self::Bpm { .. })
+    }
 
     #[must_use]
-    pub fn is_sv(&self) -> bool { matches!(self, Self::Sv { .. }) }
+    pub fn is_sv(&self) -> bool {
+        matches!(self, Self::Sv { .. })
+    }
 
     #[must_use]
     pub fn bpm_value(&self) -> Option<f32> {
-        match self { Self::Bpm { bpm, .. } => Some(*bpm), Self::Sv { .. } => None }
+        match self {
+            Self::Bpm { bpm, .. } => Some(*bpm),
+            Self::Sv { .. } => None,
+        }
     }
 
     #[must_use]
     pub fn scroll_speed(&self) -> Option<f32> {
-        match self { Self::Sv { scroll_speed, .. } => Some(*scroll_speed), Self::Bpm { .. } => None }
+        match self {
+            Self::Sv { scroll_speed, .. } => Some(*scroll_speed),
+            Self::Bpm { .. } => None,
+        }
     }
 }
 

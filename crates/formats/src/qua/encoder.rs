@@ -27,7 +27,11 @@ fn build_qua_timing_points(chart: &RoxChart) -> Vec<QuaTimingPoint> {
         .map(|tp| {
             #[allow(clippy::cast_precision_loss)] // µs→ms: precision loss negligible at audio scale
             let start_time = tp.time_us() as f64 / 1000.0;
-            QuaTimingPoint { start_time, bpm: tp.bpm_value().unwrap_or(120.0), signature: None }
+            QuaTimingPoint {
+                start_time,
+                bpm: tp.bpm_value().unwrap_or(120.0),
+                signature: None,
+            }
         })
         .collect()
 }
@@ -57,12 +61,17 @@ fn build_qua_hit_objects(chart: &RoxChart) -> Vec<QuaHitObject> {
             let start_time = note.time_us as f64 / 1000.0;
             let lane = note.column + 1; // Quaver lanes are 1-indexed
             let end_time = if note.end_time_us() > note.time_us {
-                #[allow(clippy::cast_precision_loss)] // µs→ms: precision loss negligible at audio scale
+                #[allow(clippy::cast_precision_loss)]
+                // µs→ms: precision loss negligible at audio scale
                 Some(note.end_time_us() as f64 / 1000.0)
             } else {
                 None
             };
-            QuaHitObject { start_time, lane, end_time }
+            QuaHitObject {
+                start_time,
+                lane,
+                end_time,
+            }
         })
         .collect()
 }

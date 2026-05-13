@@ -1,8 +1,9 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rox::codec::{Decoder, Encoder};
 use rox_formats::{
-    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecodeOptions, OsuDecoder, OsuEncoder,
-    QuaDecoder, QuaEncoder, RoxNativeCodec, SmDecoder, SmEncoder, TaikoDecoder,
+    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, McDecoder, McEncoder, OsuDecodeOptions,
+    OsuDecoder, OsuEncoder, QuaDecoder, QuaEncoder, RoxNativeCodec, SmDecoder, SmEncoder,
+    TaikoDecoder,
 };
 use rox_test_utils::get_test_asset;
 
@@ -14,37 +15,55 @@ fn bench_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("decode");
 
     let osu_4k = get_test_asset("osu/mania_4k.osu");
-    group.bench_function("osu/4K", |b| b.iter(|| OsuDecoder::decode(&osu_4k).unwrap()));
+    group.bench_function("osu/4K", |b| {
+        b.iter(|| OsuDecoder::decode(&osu_4k).unwrap())
+    });
 
     let osu_7k = get_test_asset("osu/mania_7k.osu");
-    group.bench_function("osu/7K", |b| b.iter(|| OsuDecoder::decode(&osu_7k).unwrap()));
+    group.bench_function("osu/7K", |b| {
+        b.iter(|| OsuDecoder::decode(&osu_7k).unwrap())
+    });
 
     // Heavy asset: requires re_arrange_bpm to bypass BpmAfterFirstNote validation
     let osu_50k = get_test_asset("osu/mania_4K_50K_notes.osu");
-    let opts = OsuDecodeOptions { re_arrange_bpm: true };
+    let opts = OsuDecodeOptions {
+        re_arrange_bpm: true,
+    };
     group.bench_function("osu/4K_50K_notes", |b| {
         b.iter(|| OsuDecoder::decode_with_options(&osu_50k, &opts).unwrap())
     });
 
     let taiko = get_test_asset("osu/taiko.osu");
-    group.bench_function("taiko", |b| b.iter(|| TaikoDecoder::decode(&taiko).unwrap()));
+    group.bench_function("taiko", |b| {
+        b.iter(|| TaikoDecoder::decode(&taiko).unwrap())
+    });
 
     let sm = get_test_asset("stepmania/4k.sm");
     group.bench_function("sm/4K", |b| b.iter(|| SmDecoder::decode(&sm).unwrap()));
 
     let qua_4k = get_test_asset("quaver/4K.qua");
-    group.bench_function("qua/4K", |b| b.iter(|| QuaDecoder::decode(&qua_4k).unwrap()));
+    group.bench_function("qua/4K", |b| {
+        b.iter(|| QuaDecoder::decode(&qua_4k).unwrap())
+    });
 
     let qua_7k = get_test_asset("quaver/7K.qua");
-    group.bench_function("qua/7K", |b| b.iter(|| QuaDecoder::decode(&qua_7k).unwrap()));
+    group.bench_function("qua/7K", |b| {
+        b.iter(|| QuaDecoder::decode(&qua_7k).unwrap())
+    });
 
     let fnf = get_test_asset("fnf/test-song.json");
     group.bench_function("fnf", |b| b.iter(|| FnfDecoder::decode(&fnf).unwrap()));
 
+    let mc_source = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
+    let mc_data = McEncoder::encode(&mc_source).unwrap();
+    group.bench_function("mc/4K", |b| b.iter(|| McDecoder::decode(&mc_data).unwrap()));
+
     // JROX: binary format — benchmark via a pre-encoded chart
     let jrox_source = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
     let jrox_data = JroxEncoder::encode(&jrox_source).unwrap();
-    group.bench_function("jrox", |b| b.iter(|| JroxDecoder::decode(&jrox_data).unwrap()));
+    group.bench_function("jrox", |b| {
+        b.iter(|| JroxDecoder::decode(&jrox_data).unwrap())
+    });
 
     group.finish();
 }
@@ -57,19 +76,34 @@ fn bench_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("encode");
 
     let osu_chart = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
-    group.bench_function("osu/4K", |b| b.iter(|| OsuEncoder::encode(&osu_chart).unwrap()));
+    group.bench_function("osu/4K", |b| {
+        b.iter(|| OsuEncoder::encode(&osu_chart).unwrap())
+    });
 
     let sm_chart = SmDecoder::decode(&get_test_asset("stepmania/4k.sm")).unwrap();
-    group.bench_function("sm/4K", |b| b.iter(|| SmEncoder::encode(&sm_chart).unwrap()));
+    group.bench_function("sm/4K", |b| {
+        b.iter(|| SmEncoder::encode(&sm_chart).unwrap())
+    });
 
     let qua_chart = QuaDecoder::decode(&get_test_asset("quaver/4K.qua")).unwrap();
-    group.bench_function("qua/4K", |b| b.iter(|| QuaEncoder::encode(&qua_chart).unwrap()));
+    group.bench_function("qua/4K", |b| {
+        b.iter(|| QuaEncoder::encode(&qua_chart).unwrap())
+    });
 
     let fnf_chart = FnfDecoder::decode(&get_test_asset("fnf/test-song.json")).unwrap();
-    group.bench_function("fnf", |b| b.iter(|| FnfEncoder::encode(&fnf_chart).unwrap()));
+    group.bench_function("fnf", |b| {
+        b.iter(|| FnfEncoder::encode(&fnf_chart).unwrap())
+    });
+
+    let mc_chart = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
+    group.bench_function("mc/4K", |b| {
+        b.iter(|| McEncoder::encode(&mc_chart).unwrap())
+    });
 
     let jrox_chart = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
-    group.bench_function("jrox", |b| b.iter(|| JroxEncoder::encode(&jrox_chart).unwrap()));
+    group.bench_function("jrox", |b| {
+        b.iter(|| JroxEncoder::encode(&jrox_chart).unwrap())
+    });
 
     group.finish();
 }
@@ -108,6 +142,16 @@ fn bench_roundtrip(c: &mut Criterion) {
         })
     });
 
+    let mc_source = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
+    let mc_data = McEncoder::encode(&mc_source).unwrap();
+    group.bench_function("mc/4K", |b| {
+        b.iter(|| {
+            let chart = McDecoder::decode(&mc_data).unwrap();
+            let encoded = McEncoder::encode(&chart).unwrap();
+            McDecoder::decode(&encoded).unwrap()
+        })
+    });
+
     let jrox_source = OsuDecoder::decode(&get_test_asset("osu/mania_4k.osu")).unwrap();
     let jrox_data = JroxEncoder::encode(&jrox_source).unwrap();
     group.bench_function("jrox", |b| {
@@ -134,6 +178,10 @@ fn bench_format_comparison(c: &mut Criterion) {
     let qua_data = get_test_asset("quaver/4K.qua");
     let fnf_data = get_test_asset("fnf/test-song.json");
 
+    // Generated formats built from the osu chart
+    let mc_source = OsuDecoder::decode(&osu_data).unwrap();
+    let mc_data = McEncoder::encode(&mc_source).unwrap();
+
     // Binary format: jrox built from the osu chart
     let jrox_source = OsuDecoder::decode(&osu_data).unwrap();
     let jrox_data = JroxEncoder::encode(&jrox_source).unwrap();
@@ -150,6 +198,9 @@ fn bench_format_comparison(c: &mut Criterion) {
     group.bench_with_input(BenchmarkId::new("fnf", "4K"), &fnf_data, |b, d| {
         b.iter(|| FnfDecoder::decode(d).unwrap())
     });
+    group.bench_with_input(BenchmarkId::new("mc", "4K"), &mc_data, |b, d| {
+        b.iter(|| McDecoder::decode(d).unwrap())
+    });
     group.bench_with_input(BenchmarkId::new("jrox", "4K"), &jrox_data, |b, d| {
         b.iter(|| JroxDecoder::decode(d).unwrap())
     });
@@ -163,9 +214,11 @@ fn bench_format_comparison(c: &mut Criterion) {
 
 fn bench_heavy(c: &mut Criterion) {
     let osu_50k_data = get_test_asset("osu/mania_4K_50K_notes.osu");
-    let opts = OsuDecodeOptions { re_arrange_bpm: true };
-    let chart_50k = OsuDecoder::decode_with_options(&osu_50k_data, &opts)
-        .expect("50K decode failed");
+    let opts = OsuDecodeOptions {
+        re_arrange_bpm: true,
+    };
+    let chart_50k =
+        OsuDecoder::decode_with_options(&osu_50k_data, &opts).expect("50K decode failed");
 
     let jrox_50k = JroxEncoder::encode(&chart_50k).expect("jrox encode failed");
     let rox_50k = RoxNativeCodec::encode(&chart_50k).expect("rox encode failed");

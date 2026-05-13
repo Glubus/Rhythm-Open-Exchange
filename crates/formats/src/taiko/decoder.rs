@@ -35,19 +35,24 @@ impl Decoder for TaikoDecoder {
 fn parse_taiko(data: &[u8]) -> RoxResult<TaikoBeatmap> {
     let osu_bm = parser::parse(data)?;
     if osu_bm.general.mode != 1 {
-        return Err(rox::error::RoxError::InvalidFormat(
-            format!("Not a taiko beatmap (mode={}, expected 1)", osu_bm.general.mode)
-        ));
+        return Err(rox::error::RoxError::InvalidFormat(format!(
+            "Not a taiko beatmap (mode={}, expected 1)",
+            osu_bm.general.mode
+        )));
     }
-    let hit_objects = osu_bm.hit_objects.iter().map(|ho| {
-        use super::types::{TaikoHitObject, TaikoHitsound};
-        TaikoHitObject {
+    let hit_objects = osu_bm
+        .hit_objects
+        .iter()
+        .map(|ho| {
+            use super::types::{TaikoHitObject, TaikoHitsound};
+            TaikoHitObject {
             #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
             time_ms: f64::from(ho.time),
             hitsound: TaikoHitsound::from_bits_truncate(u32::from(ho.hit_sound)),
             object_type: u32::from(ho.object_type),
         }
-    }).collect();
+        })
+        .collect();
     Ok(TaikoBeatmap {
         format_version: osu_bm.format_version,
         general: osu_bm.general,
@@ -68,9 +73,15 @@ fn build_chart(beatmap: &TaikoBeatmap, state: &mut AlternationState) -> RoxChart
 }
 
 fn build_metadata(beatmap: &TaikoBeatmap) -> Metadata {
-    let title = beatmap.metadata.title_unicode.clone()
+    let title = beatmap
+        .metadata
+        .title_unicode
+        .clone()
         .unwrap_or_else(|| beatmap.metadata.title.clone());
-    let artist = beatmap.metadata.artist_unicode.clone()
+    let artist = beatmap
+        .metadata
+        .artist_unicode
+        .clone()
         .unwrap_or_else(|| beatmap.metadata.artist.clone());
     Metadata {
         #[allow(clippy::cast_sign_loss)] // value is non-negative in valid input
@@ -91,10 +102,17 @@ fn build_metadata(beatmap: &TaikoBeatmap) -> Metadata {
 
 fn build_timing_points(beatmap: &TaikoBeatmap, chart: &mut RoxChart) {
     for tp in &beatmap.timing_points {
-        if tp.uninherited && let Some(bpm) = tp.bpm() {
-            #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        if tp.uninherited
+            && let Some(bpm) = tp.bpm()
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            // ms→µs i64: safe for any realistic timestamp or duration
             let time_us = (tp.time * 1000.0) as i64;
-            chart.timing_points.push(TimingPoint::Bpm { time_us, bpm, signature: tp.meter });
+            chart.timing_points.push(TimingPoint::Bpm {
+                time_us,
+                bpm,
+                signature: tp.meter,
+            });
         }
     }
     if chart.timing_points.is_empty() {
@@ -104,8 +122,11 @@ fn build_timing_points(beatmap: &TaikoBeatmap, chart: &mut RoxChart) {
 
 fn build_notes(beatmap: &TaikoBeatmap, state: &mut AlternationState, chart: &mut RoxChart) {
     for ho in &beatmap.hit_objects {
-        if (ho.object_type & 8) != 0 { continue; } // skip spinners
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        if (ho.object_type & 8) != 0 {
+            continue;
+        } // skip spinners
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (ho.time_ms * 1000.0) as i64;
         let is_big = ho.hitsound.is_big();
         let columns = if ho.hitsound.is_kat() {

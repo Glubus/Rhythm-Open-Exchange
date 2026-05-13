@@ -17,7 +17,8 @@ pub struct SmDecoder;
 impl Decoder for SmDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
         let sm = parser::parse(data)?;
-        sm.charts.first()
+        sm.charts
+            .first()
             .map(|chart| from_chart(&sm, chart))
             .ok_or_else(|| rox::error::RoxError::InvalidFormat("No charts found".to_string()))
     }
@@ -62,18 +63,33 @@ fn convert_notes(chart: &SmChart, rox: &mut RoxChart) {
     let mut pending_rolls: Vec<(i64, u8)> = Vec::new();
     for note in &sorted {
         match note.note_type {
-            #[allow(clippy::match_same_arms)] // Tap and Lift both map to tap in the ROX model; kept separate for forward-compatibility
-            SmNoteType::Tap | SmNoteType::Lift => rox.notes.push(Note::tap(note.time_us, note.column)),
+            #[allow(clippy::match_same_arms)]
+            // Tap and Lift both map to tap in the ROX model; kept separate for forward-compatibility
+            SmNoteType::Tap | SmNoteType::Lift => {
+                rox.notes.push(Note::tap(note.time_us, note.column))
+            }
             SmNoteType::HoldHead => pending_holds.push((note.time_us, note.column)),
             SmNoteType::RollHead => pending_rolls.push((note.time_us, note.column)),
-            SmNoteType::Tail => resolve_tail(note.time_us, note.column, &mut pending_holds, &mut pending_rolls, rox),
+            SmNoteType::Tail => resolve_tail(
+                note.time_us,
+                note.column,
+                &mut pending_holds,
+                &mut pending_rolls,
+                rox,
+            ),
             SmNoteType::Mine => rox.notes.push(Note::mine(note.time_us, note.column)),
             SmNoteType::Empty | SmNoteType::Fake => {}
         }
     }
 }
 
-fn resolve_tail(time_us: i64, col: u8, holds: &mut Vec<(i64, u8)>, rolls: &mut Vec<(i64, u8)>, rox: &mut RoxChart) {
+fn resolve_tail(
+    time_us: i64,
+    col: u8,
+    holds: &mut Vec<(i64, u8)>,
+    rolls: &mut Vec<(i64, u8)>,
+    rox: &mut RoxChart,
+) {
     if let Some(idx) = holds.iter().position(|(_, c)| *c == col) {
         let (start, column) = holds.remove(idx);
         rox.notes.push(Note::hold(start, time_us - start, column));

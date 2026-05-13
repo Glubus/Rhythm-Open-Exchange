@@ -2,9 +2,18 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Type of a note in the chart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Archive,
+    Serialize,
+    Deserialize,
+    SerdeSerialize,
+    SerdeDeserialize,
+)]
 #[serde(tag = "type", content = "data")]
 pub enum NoteType {
     Tap,
@@ -14,9 +23,9 @@ pub enum NoteType {
 }
 
 /// A single note in a chart.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct Note {
     /// Start time in microseconds.
     pub time_us: i64,
@@ -31,22 +40,42 @@ pub struct Note {
 impl Note {
     #[must_use]
     pub fn tap(time_us: i64, column: u8) -> Self {
-        Self { time_us, column, note_type: NoteType::Tap, hitsound_index: None }
+        Self {
+            time_us,
+            column,
+            note_type: NoteType::Tap,
+            hitsound_index: None,
+        }
     }
 
     #[must_use]
     pub fn hold(time_us: i64, duration_us: i64, column: u8) -> Self {
-        Self { time_us, column, note_type: NoteType::Hold { duration_us }, hitsound_index: None }
+        Self {
+            time_us,
+            column,
+            note_type: NoteType::Hold { duration_us },
+            hitsound_index: None,
+        }
     }
 
     #[must_use]
     pub fn burst(time_us: i64, duration_us: i64, column: u8) -> Self {
-        Self { time_us, column, note_type: NoteType::Burst { duration_us }, hitsound_index: None }
+        Self {
+            time_us,
+            column,
+            note_type: NoteType::Burst { duration_us },
+            hitsound_index: None,
+        }
     }
 
     #[must_use]
     pub fn mine(time_us: i64, column: u8) -> Self {
-        Self { time_us, column, note_type: NoteType::Mine, hitsound_index: None }
+        Self {
+            time_us,
+            column,
+            note_type: NoteType::Mine,
+            hitsound_index: None,
+        }
     }
 
     #[must_use]

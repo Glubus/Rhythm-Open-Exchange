@@ -31,8 +31,7 @@ impl Decoder for YroxDecoder {
 
 impl Encoder for YroxEncoder {
     fn encode_inner(chart: &RoxChart) -> RoxResult<Vec<u8>> {
-        let s = serde_yaml::to_string(chart)
-            .map_err(|e| RoxError::Serialize(e.to_string()))?;
+        let s = serde_yaml::to_string(chart).map_err(|e| RoxError::Serialize(e.to_string()))?;
         Ok(s.into_bytes())
     }
 }

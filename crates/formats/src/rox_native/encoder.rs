@@ -1,9 +1,9 @@
 #![warn(clippy::pedantic)]
 
+use rkyv::rancor::Error as RkyvError;
 use rox::codec::Encoder;
 use rox::error::{RoxError, RoxResult};
 use rox::model::{ROX_MAGIC, RoxChart};
-use rkyv::rancor::Error as RkyvError;
 
 use super::RoxNativeCodec;
 
@@ -14,8 +14,8 @@ const COMPRESSION_LEVEL: i32 = 3;
 impl Encoder for RoxNativeCodec {
     fn encode_inner(chart: &RoxChart) -> RoxResult<Vec<u8>> {
         let delta = delta_encode_notes(chart);
-        let serialized = rkyv::to_bytes::<RkyvError>(&delta)
-            .map_err(|e| RoxError::Serialize(e.to_string()))?;
+        let serialized =
+            rkyv::to_bytes::<RkyvError>(&delta).map_err(|e| RoxError::Serialize(e.to_string()))?;
         let compressed = compress(&serialized)?;
         let mut out = ROX_MAGIC.to_vec();
         out.extend(compressed);

@@ -66,7 +66,8 @@ impl OsuTimingPoint {
     #[must_use]
     pub fn bpm(&self) -> Option<f32> {
         if self.uninherited && self.beat_length > 0.0 {
-            #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic BPM value
+            #[allow(clippy::cast_possible_truncation)]
+            // ms/beats→f32: safe for any realistic BPM value
             Some((60_000.0 / self.beat_length) as f32)
         } else {
             None
@@ -79,7 +80,8 @@ impl OsuTimingPoint {
         if self.uninherited {
             1.0
         } else {
-            #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic SV value
+            #[allow(clippy::cast_possible_truncation)]
+            // ms/beats→f32: safe for any realistic SV value
             let sv = (-100.0 / self.beat_length) as f32;
             sv
         }
@@ -101,11 +103,14 @@ pub struct OsuHitObject {
 
 impl OsuHitObject {
     #[must_use]
-    pub fn is_hold(&self) -> bool { (self.object_type & 128) != 0 }
+    pub fn is_hold(&self) -> bool {
+        (self.object_type & 128) != 0
+    }
 
     #[must_use]
     pub fn column(&self, key_count: u8) -> u8 {
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // value is non-negative in valid input; column fits in u8
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // value is non-negative in valid input; column fits in u8
         {
             let col = (self.x * i32::from(key_count)) / 512;
             col as u8
@@ -131,22 +136,45 @@ mod tests {
     #[case(64, 4, 0)]
     #[case(192, 4, 1)]
     fn test_column_from_x(#[case] x: i32, #[case] key_count: u8, #[case] expected_col: u8) {
-        let ho = OsuHitObject { x, y: 192, time: 0, object_type: 1, hit_sound: 0,
-            end_time: None, extras: compact_str::CompactString::new("") };
+        let ho = OsuHitObject {
+            x,
+            y: 192,
+            time: 0,
+            object_type: 1,
+            hit_sound: 0,
+            end_time: None,
+            extras: compact_str::CompactString::new(""),
+        };
         assert_eq!(ho.column(key_count), expected_col);
     }
 
     #[rstest]
     fn test_timing_point_bpm() {
-        let tp = OsuTimingPoint { time: 0.0, beat_length: 322.58, meter: 4, sample_set: 0,
-            sample_index: 0, volume: 100, uninherited: true, effects: 0 };
+        let tp = OsuTimingPoint {
+            time: 0.0,
+            beat_length: 322.58,
+            meter: 4,
+            sample_set: 0,
+            sample_index: 0,
+            volume: 100,
+            uninherited: true,
+            effects: 0,
+        };
         assert!((tp.bpm().unwrap() - 186.0).abs() < 1.0);
     }
 
     #[rstest]
     fn test_timing_point_sv() {
-        let tp = OsuTimingPoint { time: 0.0, beat_length: -133.33, meter: 4, sample_set: 0,
-            sample_index: 0, volume: 100, uninherited: false, effects: 0 };
+        let tp = OsuTimingPoint {
+            time: 0.0,
+            beat_length: -133.33,
+            meter: 4,
+            sample_set: 0,
+            sample_index: 0,
+            volume: 100,
+            uninherited: false,
+            effects: 0,
+        };
         assert!((tp.scroll_velocity() - 0.75).abs() < 0.01);
     }
 }

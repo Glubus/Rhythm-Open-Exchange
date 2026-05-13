@@ -24,7 +24,9 @@ pub fn from_qua(qua: &QuaChart) -> RoxChart {
     chart.metadata = build_metadata(qua);
     build_timing_points(qua, &mut chart);
     build_notes(qua, &mut chart);
-    chart.timing_points.sort_by_key(rox::model::TimingPoint::time_us);
+    chart
+        .timing_points
+        .sort_by_key(rox::model::TimingPoint::time_us);
     chart
 }
 
@@ -63,20 +65,25 @@ fn build_metadata(qua: &QuaChart) -> Metadata {
 
 fn build_timing_points(qua: &QuaChart, chart: &mut RoxChart) {
     for tp in &qua.timing_points {
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (tp.start_time * 1000.0) as i64;
         let sig = tp
             .signature
             .as_ref()
             .map_or(4, super::types::TimeSignature::beats);
-        chart
-            .timing_points
-            .push(TimingPoint::Bpm { time_us, bpm: tp.bpm, signature: sig });
+        chart.timing_points.push(TimingPoint::Bpm {
+            time_us,
+            bpm: tp.bpm,
+            signature: sig,
+        });
     }
     for sv in &qua.slider_velocities {
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (sv.start_time * 1000.0) as i64;
-        #[allow(clippy::cast_possible_truncation)] // multiplier→f32: precision loss acceptable for SV values
+        #[allow(clippy::cast_possible_truncation)]
+        // multiplier→f32: precision loss acceptable for SV values
         chart
             .timing_points
             .push(TimingPoint::sv(time_us, sv.multiplier as f32));
@@ -85,11 +92,13 @@ fn build_timing_points(qua: &QuaChart, chart: &mut RoxChart) {
 
 fn build_notes(qua: &QuaChart, chart: &mut RoxChart) {
     for ho in &qua.hit_objects {
-        #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (ho.start_time * 1000.0) as i64;
         let column = ho.lane.saturating_sub(1); // Quaver lanes are 1-indexed
         let note = if let Some(end) = ho.end_time {
-            #[allow(clippy::cast_possible_truncation)] // ms→µs i64: safe for any realistic timestamp or duration
+            #[allow(clippy::cast_possible_truncation)]
+            // ms→µs i64: safe for any realistic timestamp or duration
             let end_us = (end * 1000.0) as i64;
             Note::hold(time_us, end_us - time_us, column)
         } else {
@@ -120,8 +129,7 @@ mod tests {
     fn test_roundtrip() {
         let data = rox_test_utils::get_test_asset("quaver/4K.qua");
         let chart1 = QuaDecoder::decode(&data).expect("decode failed");
-        let encoded =
-            super::super::encoder::QuaEncoder::encode(&chart1).expect("encode failed");
+        let encoded = super::super::encoder::QuaEncoder::encode(&chart1).expect("encode failed");
         let chart2 = QuaDecoder::decode(&encoded).expect("decode 2 failed");
         assert_eq!(chart1.key_count, chart2.key_count);
         assert_eq!(chart1.notes.len(), chart2.notes.len());

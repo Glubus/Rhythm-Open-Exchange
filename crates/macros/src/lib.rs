@@ -3,7 +3,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Expr, ExprArray, ExprLit, Lit, Meta};
+use syn::{DeriveInput, Expr, ExprArray, ExprLit, Lit, Meta, parse_macro_input};
 
 /// Derives `Format` for a type, reading extensions from `#[format(extensions = [...])]`.
 ///
@@ -55,12 +55,18 @@ fn parse_extensions(input: &DeriveInput) -> syn::Result<Vec<String>> {
 
 fn extract_string_array(expr: &Expr) -> syn::Result<Vec<String>> {
     let Expr::Array(ExprArray { elems, .. }) = expr else {
-        return Err(syn::Error::new_spanned(expr, "expected array literal like [\"ext\"]"));
+        return Err(syn::Error::new_spanned(
+            expr,
+            "expected array literal like [\"ext\"]",
+        ));
     };
     elems
         .iter()
         .map(|e| {
-            let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = e else {
+            let Expr::Lit(ExprLit {
+                lit: Lit::Str(s), ..
+            }) = e
+            else {
                 return Err(syn::Error::new_spanned(e, "expected string literal"));
             };
             Ok(s.value())

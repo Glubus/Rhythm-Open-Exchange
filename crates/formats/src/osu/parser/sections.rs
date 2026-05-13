@@ -6,7 +6,9 @@ use alloc::vec::Vec;
 use super::super::types::{OsuDifficulty, OsuGeneral, OsuMetadata};
 
 pub fn parse_general(line: &str, general: &mut OsuGeneral) {
-    let Some((key, value)) = line.split_once(':') else { return };
+    let Some((key, value)) = line.split_once(':') else {
+        return;
+    };
     let value = value.trim();
     match key.trim() {
         "AudioFilename" => general.audio_filename = value.to_string(),
@@ -18,7 +20,9 @@ pub fn parse_general(line: &str, general: &mut OsuGeneral) {
 }
 
 pub fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
-    let Some((key, value)) = line.split_once(':') else { return };
+    let Some((key, value)) = line.split_once(':') else {
+        return;
+    };
     let value = value.trim();
     match key.trim() {
         "Title" => metadata.title = value.to_string(),
@@ -36,7 +40,9 @@ pub fn parse_metadata(line: &str, metadata: &mut OsuMetadata) {
 }
 
 pub fn parse_difficulty(line: &str, difficulty: &mut OsuDifficulty) {
-    let Some((key, value)) = line.split_once(':') else { return };
+    let Some((key, value)) = line.split_once(':') else {
+        return;
+    };
     let value = value.trim();
     match key.trim() {
         "CircleSize" => difficulty.circle_size = value.parse().unwrap_or(4.0),

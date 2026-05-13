@@ -13,9 +13,9 @@ pub const ROX_VERSION: u8 = 3;
 pub const ROX_MAGIC: [u8; 4] = [0x52, 0x4F, 0x58, 0x00];
 
 /// A complete VSRG chart in ROX format.
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Archive, Serialize, Deserialize)]
-#[derive(SerdeSerialize, SerdeDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Archive, Serialize, Deserialize, SerdeSerialize, SerdeDeserialize,
+)]
 pub struct RoxChart {
     pub version: u8,
     pub key_count: u8,
