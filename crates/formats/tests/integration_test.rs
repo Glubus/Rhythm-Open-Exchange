@@ -1,7 +1,7 @@
 use rox::codec::{Decoder, Encoder};
 use rox_formats::{
-    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, OsuDecoder, OsuEncoder, SmDecoder,
-    SmEncoder, TaikoDecoder,
+    FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, McDecoder, McEncoder, OsuDecoder,
+    OsuEncoder, SmDecoder, SmEncoder, TaikoDecoder,
 };
 use rox_test_utils::get_test_asset;
 
@@ -202,4 +202,30 @@ fn jrox_decode_basic_from_sm() {
         !chart2.timing_points.is_empty(),
         "jrox timing_points should not be empty"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Malody .mc — decode + roundtrip
+// ---------------------------------------------------------------------------
+
+#[test]
+fn malody_decode_basic() {
+    let data = get_test_asset("malody/ZUN (Arr.sun3) - STAR OF ANDROMEDA (Seiryuu)[key].mc");
+    let chart = McDecoder::decode(&data).expect("McDecoder::decode failed");
+    assert_eq!(chart.key_count, 4, "malody chart should be 4K");
+    assert!(!chart.notes.is_empty(), "malody notes should not be empty");
+    assert!(
+        !chart.timing_points.is_empty(),
+        "malody timing_points should not be empty"
+    );
+}
+
+#[test]
+fn malody_roundtrip() {
+    let data = get_test_asset("malody/ZUN (Arr.sun3) - STAR OF ANDROMEDA (Seiryuu)[key].mc");
+    let chart = McDecoder::decode(&data).expect("McDecoder::decode failed");
+    let encoded = McEncoder::encode(&chart).expect("McEncoder::encode failed");
+    let chart2 = McDecoder::decode(&encoded).expect("McDecoder::decode (roundtrip) failed");
+    assert_eq!(chart2.key_count, chart.key_count, "roundtrip key_count mismatch");
+    assert_eq!(chart2.notes.len(), chart.notes.len(), "roundtrip notes.len mismatch");
 }
