@@ -113,11 +113,8 @@ See [Format Converters](Format-Converters) for the full guide.
 use rox::codec::{Decoder, Encoder};
 use rox::error::{RoxError, RoxResult};
 use rox::model::RoxChart;
-use rox_macros::Format;
-
-#[derive(Format)]
-#[format(extensions = ["xyz"])]
 pub struct XyzDecoder;
+rox::impl_format!(XyzDecoder, ["xyz"]);
 
 impl Decoder for XyzDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {

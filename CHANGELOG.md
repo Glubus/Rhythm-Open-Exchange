@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- **Workspace split**: Library is now a multi-crate workspace under `crates/`. Crates: `rox`, `rox-formats`, `rox-analysis`, `rox-cli`, `rox-macros`, `rox-test-utils`
+- **Single-crate layout**: The public library, codecs, and analysis modules are shipped as one `rox` crate with feature flags.
 - **`TimingPoint` is now an enum**: Use `TimingPoint::Bpm { time_us, bpm, signature }` and `TimingPoint::Sv { time_us, scroll_speed }`. Constructors: `TimingPoint::bpm(time_us, bpm)` and `TimingPoint::sv(time_us, scroll_speed)`
 - **`key_count` moved**: From `Metadata` to `RoxChart` directly
 - **`.rox` binary format v3**: Files encoded with version 2 are rejected with `RoxError::UnsupportedVersion(2)`. The `TimingPoint` enum has a different rkyv binary layout than the old struct

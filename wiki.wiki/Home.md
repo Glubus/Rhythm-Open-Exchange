@@ -16,7 +16,7 @@
 
 ```rust
 use rox::prelude::*;
-use rox_formats::{OsuDecoder, RoxNativeCodec};
+use rox::formats::{OsuDecoder, RoxNativeCodec};
 
 // Decode an osu!mania beatmap
 let data = std::fs::read("song.osu")?;
@@ -31,7 +31,7 @@ std::fs::write("song.rox", encoded)?;
 
 ```rust
 use rox::codec::convert;
-use rox_formats::{OsuDecoder, SmEncoder};
+use rox::formats::{OsuDecoder, SmEncoder};
 
 let osu_data = std::fs::read("song.osu")?;
 let sm_data = convert::<OsuDecoder, SmEncoder>(&osu_data)?;
@@ -40,7 +40,7 @@ let sm_data = convert::<OsuDecoder, SmEncoder>(&osu_data)?;
 Auto-detect by file extension (requires `std`):
 
 ```rust
-use rox_formats::auto_convert;
+use rox::formats::auto_convert;
 
 auto_convert("song.osu", "song.sm")?;
 ```

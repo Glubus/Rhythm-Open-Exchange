@@ -25,7 +25,7 @@ All format codecs live in the `rox-formats` crate. Each implements `Encoder`, `D
 - **Timestamps**: delta-encoded for better compression ratio
 
 ```rust
-use rox_formats::RoxNativeCodec;
+use rox::formats::RoxNativeCodec;
 use rox::codec::{Encoder, Decoder};
 
 let encoded = RoxNativeCodec::encode(&chart)?;
@@ -35,7 +35,7 @@ let decoded = RoxNativeCodec::decode(&encoded)?;
 ## Auto-Detect (std only)
 
 ```rust
-use rox_formats::{auto_decode, auto_encode, auto_convert};
+use rox::formats::{auto_decode, auto_encode, auto_convert};
 
 // Decode by file extension
 let chart = auto_decode("song.osu")?;
@@ -52,7 +52,7 @@ auto_convert("song.osu", "song.sm")?;
 The osu! decoder exposes `OsuDecodeOptions` for lenient decoding:
 
 ```rust
-use rox_formats::{OsuDecoder, OsuDecodeOptions};
+use rox::formats::{OsuDecoder, OsuDecodeOptions};
 
 let opts = OsuDecodeOptions {
     re_arrange_bpm: true,  // shift first BPM to just before first note
@@ -68,7 +68,7 @@ appears after the first note. A `tracing::warn!` is emitted when applied.
 FNF charts contain notes for both player and opponent. Use `FnfSide` to filter:
 
 ```rust
-use rox_formats::{FnfDecoder, FnfSide};
+use rox::formats::{FnfDecoder, FnfSide};
 
 // Default: FnfSide::Both (8K, all notes)
 let chart = FnfDecoder::decode(&data)?;
@@ -79,9 +79,9 @@ let chart = FnfDecoder::decode(&data)?;
 
 ## Adding a New Format
 
-1. Create `crates/formats/src/<name>/` with `decoder.rs`, `encoder.rs`, `mod.rs`
+1. Create `src/formats/<name>/` with `decoder.rs`, `encoder.rs`, `mod.rs`
 2. Derive `Format` on your struct: `#[derive(Format)] #[format(extensions = ["ext"])]`
 3. Implement `Decoder::decode_inner` and/or `Encoder::encode_inner`
-4. Export from `crates/formats/src/lib.rs`
-5. Register in `crates/formats/src/auto/detect.rs`
+4. Export from `src/formats/mod.rs`
+5. Register in `src/formats/auto/detect.rs`
 6. Add unit tests (both levels: unit + integration in `tests/integration_test.rs`)

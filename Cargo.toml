@@ -49,8 +49,3 @@ zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 rstest = "0.26.1"
-
-[[bench]]
-name = "formats"
-harness = false
-required-features = ["formats-std"]
