@@ -1,25 +1,56 @@
-[workspace]
-members = [
-    "crates/rox",
-    "crates/macros",
-    "crates/formats",
-    "crates/analysis",
-    "crates/uniffi",
-    "crates/test-utils",
-    "apps/rox-cli",
-]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "rox"
 version = "0.7.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
+description = "Universal VSRG chart model, codecs, format support, and analysis"
+keywords = ["rhythm-game", "beatmap", "vsrg", "chart"]
+categories = ["encoding", "game-development"]
 
-[workspace.dependencies]
+[features]
+default = ["formats", "analysis"]
+alloc = []
+std = [
+    "thiserror/std",
+    "serde/std",
+    "compact_str/std",
+    "alloc",
+]
+formats = [
+    "std",
+    "dep:atoi",
+    "dep:bitflags",
+    "dep:memchr",
+    "dep:memmap2",
+    "dep:serde_json",
+    "dep:serde_yaml",
+    "dep:tracing",
+    "dep:zstd",
+]
+# Backward-compatible alias; format codecs require `std`.
+formats-std = ["formats"]
+analysis = ["std", "dep:xxhash-rust"]
+
+[dependencies]
+atoi = { version = "2.0", default-features = false, optional = true }
+bitflags = { version = "2.9", default-features = false, optional = true }
+compact_str = { version = "0.9.0", default-features = false, features = ["serde", "rkyv"] }
+memchr = { version = "2.7", default-features = false, optional = true }
+memmap2 = { version = "0.9", optional = true }
+rkyv = { version = "0.8", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+serde_yaml = { version = "0.9", optional = true }
+thiserror = { version = "2.0", default-features = false }
+tracing = { version = "0.1", default-features = false, optional = true }
+xxhash-rust = { version = "0.8", features = ["xxh3"], optional = true }
+zstd = { version = "0.13", optional = true }
+
+[dev-dependencies]
 rstest = "0.26.1"
-rox = { path = "crates/rox" }
-rox-macros = { path = "crates/macros" }
-rox-formats = { path = "crates/formats" }
-rox-analysis = { path = "crates/analysis" }
-rox-test-utils = { path = "crates/test-utils" }
+
+[[bench]]
+name = "formats"
+harness = false
+required-features = ["formats-std"]
