@@ -1,5 +1,3 @@
-//! Hitsound definitions for keysounded charts.
-
 use compact_str::CompactString;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -11,12 +9,11 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 pub struct Hitsound {
     /// Relative path to the audio sample.
     pub file: CompactString,
-    /// Volume (0-100, optional override).
+    /// Volume override (0–100). `None` means use default.
     pub volume: Option<u8>,
 }
 
 impl Hitsound {
-    /// Create a new hitsound with default volume.
     #[must_use]
     pub fn new(file: impl Into<CompactString>) -> Self {
         Self {
@@ -25,7 +22,6 @@ impl Hitsound {
         }
     }
 
-    /// Create a hitsound with custom volume.
     #[must_use]
     pub fn with_volume(file: impl Into<CompactString>, volume: u8) -> Self {
         Self {
@@ -38,27 +34,19 @@ impl Hitsound {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn test_hitsound_new() {
-        let hs = Hitsound::new("kick.wav");
-
-        assert_eq!(hs.file, "kick.wav");
-        assert!(hs.volume.is_none());
+    #[rstest]
+    #[case(150, 100)]
+    #[case(100, 100)]
+    #[case(50, 50)]
+    #[case(0, 0)]
+    fn test_volume_clamped_to_100(#[case] input: u8, #[case] expected: u8) {
+        assert_eq!(Hitsound::with_volume("f.wav", input).volume, Some(expected));
     }
 
     #[test]
-    fn test_hitsound_with_volume() {
-        let hs = Hitsound::with_volume("snare.ogg", 75);
-
-        assert_eq!(hs.file, "snare.ogg");
-        assert_eq!(hs.volume, Some(75));
-    }
-
-    #[test]
-    fn test_hitsound_volume_clamped_to_100() {
-        let hs = Hitsound::with_volume("loud.wav", 150);
-
-        assert_eq!(hs.volume, Some(100));
+    fn test_new_has_no_volume() {
+        assert!(Hitsound::new("kick.wav").volume.is_none());
     }
 }

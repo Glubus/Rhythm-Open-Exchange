@@ -31,8 +31,20 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhythm-open-exchange = "0.5"
+rox = "0.7"
 ```
+
+The default build includes every codec and chart analysis. For a smaller model-only
+build, disable defaults; enable modules individually as needed:
+
+```toml
+[dependencies]
+rox = { version = "0.7", default-features = false, features = ["formats"] }
+```
+
+Available features: `std`, `formats` (all codecs and auto-detection), and
+`analysis` (BPM, NPS, and content hashing). `formats-std` is retained as an
+alias for `formats`.
 
 ### C# / .NET
 
@@ -53,7 +65,7 @@ cargo build --release
 ### Creating a Chart
 
 ```rust
-use rhythm_open_exchange::{RoxChart, Note, TimingPoint, Metadata};
+use rox::{Metadata, Note, RoxChart, TimingPoint};
 
 // Create a 4K chart
 let mut chart = RoxChart::new(4);
@@ -80,7 +92,7 @@ chart.notes.push(Note::hold(2_000_000, 500_000, 2)); // Hold at 2s, 0.5s duratio
 ### Auto-Converting Formats
 
 ```rust
-use rhythm_open_exchange::{auto_decode, auto_encode, auto_convert};
+use rox::formats::{auto_convert, auto_decode, auto_encode};
 
 // Load any supported format (auto-detected from extension)
 let chart = auto_decode("chart.osu")?;
@@ -120,27 +132,9 @@ File.WriteAllText("chart.sm", sm);
 
 ### Planned
 
-- Malody (`.mc`)
 - BMS (`.bms/.bme/.bml`)
 - O2Jam (`.ojn/.ojm`)
 - Clone Hero (`.chart/.mid`)
-
-## Multi-Language Support
-
-- **C# / .NET** - Full feature parity, located in `bindings/ffi/csharp`.
-- **Python** - High-performance bindings in `bindings/ffi/python`.
-- **WebAssembly** - Optimized for browser-based tools, located in `bindings/wasm`.
-- **C/C++** - Stable C-API via UniFFI in `bindings/ffi`.
-
-## CLI Tool
-
-```bash
-# Convert a file
-cargo run --bin rox -- convert input.osu output.sm
-
-# Validate a file
-cargo run --bin rox -- validate chart.sm
-```
 
 ## Performance
 
@@ -184,12 +178,8 @@ cargo test --all-features
 ```text
 rhythm-open-exchange/
 ├── src/                    # Core library (Rust)
-├── bindings/
-│   ├── api/                # Stable C-API / FFI (Native)
-│   ├── csharp/             # C# Bindings
-│   ├── python/             # Python Bindings
-│   └── wasm/               # WebAssembly Bindings
-├── tests/                  # Integration tests
+├── benches/                # Criterion benchmarks
+├── examples/               # Usage examples
 ├── assets/                 # Test assets
 └── justfile                # QA automation
 ```
@@ -210,7 +200,6 @@ This project is licensed under the MIT License.
 
 ## See Also
 
-- [C# Bindings Documentation](bindings/ffi/csharp/README.md)
 - [Wiki Documentation](wiki.wiki/Home.md)
 - [osu!mania](https://osu.ppy.sh/wiki/en/Game_mode/osu%21mania)
 - [Quaver](https://quavergame.com/)

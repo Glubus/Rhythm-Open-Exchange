@@ -1,57 +1,60 @@
 # Performance Optimizations
 
-This document details the optimization techniques applied to the Rhythm Open Exchange (ROX) project to achieve high-performance parsing and serialization.
+## Benchmarks (v0.7.0)
 
-## 1. `.osu` Parser Optimization
+Measured with Criterion on a 50K-note osu!mania chart (approx. real-world stress test):
 
-Targeting the loading speed of large `.osu` maps (50k+ notes).
+| Operation | Format | Time | File Size |
+|-----------|--------|------|-----------|
+| Decode | osu!mania text | ~170ms | ~3MB |
+| Decode | ROX native (rkyv+zstd) | ~21ms | ~133KB |
+| Encode | osu!mania text | — | — |
+| Encode | ROX native | ~9ms | — |
 
-### Techniques
+ROX native is **~8× faster** to decode and **~23× smaller** than osu! text for a 50K-note chart.
 
-1.  **Zero-Copy I/O (`memmap2`)**:
-    -   Mapped file content directly into memory instead of reading into a heap-allocated buffer.
-    -   Reduced initial load latency and memory pressure.
+## Key Techniques
 
-2.  **SIMD Line Iteration (`memchr`)**:
-    -   Used AVX2/SSE2 instructions to find newline bytes.
-    -   Replaced standard `str::lines()` iterator.
+### rkyv Zero-Copy Serialization
 
-3.  **SIMD Integer Parsing (`atoi`)**:
-    -   Parsed integers directly from byte slices without UTF-8 validation redundancy.
-    -   Massive speedup for `[HitObjects]` section.
+`RoxChart` and all model types derive `rkyv::Archive`. Deserialization is zero-copy — no allocations for fields when reading. This is why ROX native decode is so fast.
 
-4.  **Vector Pre-allocation**:
-    -   Estimated vector capacity based on file size (~40 bytes per object).
-    -   Eliminated costly reallocations during parsing.
+```rust
+// SAFETY: data was produced by RoxNativeCodec::encode_inner
+let chart = unsafe { rkyv::from_bytes_unchecked::<RoxChart, RkyvError>(&decompressed) }?;
+```
 
-### Results (50k Notes)
+### zstd Compression (Level 3)
 
--   **Load Time**: Reduced from **14.6ms** to **6.2ms** (~58% faster).
--   **Allocation Count**: Drastically reduced.
+Level 3 balances speed and ratio. The ROX file is `ROX\0` magic + zstd-compressed rkyv bytes.
 
-## 2. ROX Format Optimization
+### Delta Timestamp Encoding
 
-Targeting the binary serialization and deserialization speed.
+Notes are stored as delta timestamps instead of absolute values before compression. This creates long runs of small integers that zstd compresses very efficiently.
 
-### Techniques
+```
+absolute:  [1000, 2000, 3000, 3100, 3200]
+delta:     [1000,  999, 1000,  100,  100]  ← better for compression
+```
 
-1.  **Compact String (`compact_str`)**:
-    -   Replaced `String` with `CompactString` for Metadata and Hitsounds.
-    -   Small strings (<24 bytes) are stored inline, avoiding heap allocations.
+### CompactString
 
-2.  **Data Layout Optimization**:
-    -   Reordered `Note` struct fields to minimize padding.
-    -   Reduced `Note` size from **40 bytes** to **32 bytes** (20% reduction).
-    -   Improved cache locality.
+All string fields in `Metadata` use `compact_str::CompactString` — strings ≤ 24 bytes are stored inline with no heap allocation. Most metadata fields (title, artist, etc.) benefit from this.
 
-### Results (50k Notes)
+## Running Benchmarks
 
--   **File Size**: **66.7 KB** (vs 1.55 MB for .osu)
--   **Decode Speed**: **~0.82 ms**
--   **Encode Speed**: **~1.69 ms**
--   **Throughput**: **~61 Million Notes/sec**
+```bash
+cargo bench -p rox-formats
+```
 
-## 3. General Best Practices
+Results are written to `target/criterion/` as HTML reports.
 
--   **Strict Limits**: Enforced `MAX_FILE_SIZE` (100MB) across all parsers to prevent DoS.
--   **Observability**: Added `tracing` for detailed performance breakdown and error logging.
+## Benchmark Groups
+
+| Group | Description |
+|-------|-------------|
+| `decode` | All formats, standard assets |
+| `encode` | All formats, standard assets |
+| `roundtrip` | decode → encode → decode |
+| `format_comparison/decode` | Side-by-side on equivalent 4K charts |
+| `heavy/50K_notes` | Decode + encode on 50K-note chart |

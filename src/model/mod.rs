@@ -1,5 +1,3 @@
-//! Data model for ROX format.
-
 mod chart;
 mod hitsound;
 mod metadata;

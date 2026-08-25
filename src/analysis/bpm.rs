@@ -1,75 +1,130 @@
-use crate::model::RoxChart;
+#![warn(clippy::pedantic)]
+
 use std::collections::HashMap;
 
-/// Calculate the minimum BPM in the chart.
+use rox::model::{RoxChart, TimingPoint};
+
+#[must_use]
 pub fn bpm_min(chart: &RoxChart) -> f64 {
     chart
         .timing_points
         .iter()
-        .filter(|tp| !tp.is_inherited)
-        .map(|tp| tp.bpm as f64)
-        .fold(f64::INFINITY, f64::min)
+        .filter_map(TimingPoint::bpm_value)
+        .map(f64::from)
+        .reduce(f64::min)
+        .unwrap_or(0.0)
 }
 
-/// Calculate the maximum BPM in the chart.
+#[must_use]
 pub fn bpm_max(chart: &RoxChart) -> f64 {
     chart
         .timing_points
         .iter()
-        .filter(|tp| !tp.is_inherited)
-        .map(|tp| tp.bpm as f64)
-        .fold(f64::NEG_INFINITY, f64::max)
+        .filter_map(TimingPoint::bpm_value)
+        .map(f64::from)
+        .reduce(f64::max)
+        .unwrap_or(0.0)
 }
 
-/// Calculate the mode BPM (weighted by duration).
-///
-/// Returns the BPM that is active for the longest total duration in the chart.
+/// BPM active for the longest cumulative duration.
+#[must_use]
 pub fn bpm_mode(chart: &RoxChart) -> f64 {
     let duration_us = chart.duration_us();
     if duration_us == 0 {
         return 0.0;
     }
 
-    let mut bpm_durations: HashMap<String, f64> = HashMap::new(); // Use String for key to avoid float NaNs issues, or just i64 bits
-
-    // Sort timing points by time just in case (though they should be sorted)
-    let mut timing_points = chart.timing_points.clone();
-    timing_points.sort_by_key(|tp| tp.time_us);
-
-    // Filter only BPM points
-    let bpm_points: Vec<_> = timing_points
-        .into_iter()
-        .filter(|tp| !tp.is_inherited)
+    let mut bpm_points: Vec<(i64, f32)> = chart
+        .timing_points
+        .iter()
+        .filter_map(|tp| match tp {
+            TimingPoint::Bpm { time_us, bpm, .. } => Some((*time_us, *bpm)),
+            TimingPoint::Sv { .. } => None,
+        })
         .collect();
 
     if bpm_points.is_empty() {
         return 0.0;
     }
 
-    for i in 0..bpm_points.len() {
-        let current_tp = &bpm_points[i];
-        let next_time = if i + 1 < bpm_points.len() {
-            bpm_points[i + 1].time_us
-        } else {
-            duration_us
-        };
+    bpm_points.sort_by_key(|&(time_us, _)| time_us);
 
-        // If the BPM point is after the song end (rare but possible), clamp it
-        let start_time = current_tp.time_us.max(0).min(duration_us);
-        let end_time = next_time.max(0).min(duration_us);
+    let mut durations: HashMap<u32, f64> = HashMap::new();
 
-        if end_time > start_time {
-            let dur = (end_time - start_time) as f64;
-            // Round BPM to 2 decimal places to group similar BPMs
-            let bpm_key = format!("{:.2}", current_tp.bpm);
-            *bpm_durations.entry(bpm_key).or_insert(0.0) += dur;
+    for (i, &(time_us, bpm)) in bpm_points.iter().enumerate() {
+        let start = time_us.max(0).min(duration_us);
+        let end = bpm_points
+            .get(i + 1)
+            .map_or(duration_us, |&(t, _)| t)
+            .max(0)
+            .min(duration_us);
+
+        if end > start {
+            #[allow(clippy::cast_precision_loss)]
+            let dur = (end - start) as f64;
+            *durations.entry(bpm.to_bits()).or_insert(0.0) += dur;
         }
     }
 
-    // Find max duration
-    bpm_durations
+    durations
         .into_iter()
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(k, _)| k.parse::<f64>().unwrap_or(0.0))
-        .unwrap_or(0.0)
+        .map_or(0.0, |(bits, _)| f64::from(f32::from_bits(bits)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rox::model::{Note, TimingPoint};
+    use rstest::{fixture, rstest};
+
+    #[fixture]
+    fn multi_bpm_chart() -> RoxChart {
+        let mut chart = RoxChart::new(4);
+        chart.timing_points.push(TimingPoint::bpm(0, 100.0));
+        chart
+            .timing_points
+            .push(TimingPoint::bpm(10_000_000, 200.0));
+        chart
+            .timing_points
+            .push(TimingPoint::bpm(20_000_000, 100.0));
+        // note at 30s to define duration
+        chart.notes.push(Note::tap(30_000_000, 0));
+        chart
+    }
+
+    #[rstest]
+    fn test_bpm_min(multi_bpm_chart: RoxChart) {
+        assert_eq!(bpm_min(&multi_bpm_chart), 100.0);
+    }
+
+    #[rstest]
+    fn test_bpm_max(multi_bpm_chart: RoxChart) {
+        assert_eq!(bpm_max(&multi_bpm_chart), 200.0);
+    }
+
+    #[rstest]
+    fn test_bpm_mode_returns_longest(multi_bpm_chart: RoxChart) {
+        // 0-10s: 100bpm (10s), 10-20s: 200bpm (10s), 20-30s: 100bpm (10s)
+        // 100bpm total: 20s, 200bpm total: 10s → mode = 100
+        assert_eq!(bpm_mode(&multi_bpm_chart), 100.0);
+    }
+
+    #[test]
+    fn test_bpm_empty_chart_returns_zero() {
+        let chart = RoxChart::new(4);
+        assert_eq!(bpm_mode(&chart), 0.0);
+        assert_eq!(bpm_min(&chart), 0.0);
+        assert_eq!(bpm_max(&chart), 0.0);
+    }
+
+    #[test]
+    fn test_sv_points_ignored() {
+        let mut chart = RoxChart::new(4);
+        chart.timing_points.push(TimingPoint::bpm(0, 180.0));
+        chart.timing_points.push(TimingPoint::sv(5_000_000, 1.5)); // must be ignored
+        chart.notes.push(Note::tap(10_000_000, 0));
+        assert_eq!(bpm_min(&chart), 180.0);
+        assert_eq!(bpm_max(&chart), 180.0);
+    }
 }

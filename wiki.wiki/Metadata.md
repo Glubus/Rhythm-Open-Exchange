@@ -1,120 +1,58 @@
 # Metadata
 
-The `Metadata` struct contains all descriptive information about a chart and its associated media files.
+`Metadata` holds all chart information that is not gameplay data.
 
-## Fields
-
-### Song Information
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | `String` | Song title |
-| `artist` | `String` | Song artist or composer |
-| `creator` | `String` | Chart creator/mapper name |
-
-### Difficulty
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `difficulty_name` | `String` | Named difficulty (e.g., "Easy", "Hard", "GRAVITY") |
-| `difficulty_value` | `Option<f32>` | Numeric difficulty rating (format-dependent) |
-
-### Media Files
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `audio_file` | `String` | Relative path to the audio file |
-| `background_file` | `Option<String>` | Relative path to background image |
-
-### Audio Timing
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `audio_offset_us` | `i64` | Global audio offset in microseconds |
-| `preview_time_us` | `i64` | Song preview start time in microseconds |
-| `preview_duration_us` | `i64` | Preview duration (default: 15 seconds) |
-
-### Categorization
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `source` | `Option<String>` | Source (anime, game, original, etc.) |
-| `genre` | `Option<String>` | Music genre (electronic, rock, etc.) |
-| `language` | `Option<String>` | Language code (JP, EN, KR, etc.) |
-| `tags` | `Vec<String>` | Search/categorization tags |
-
-## Default Values
+## Structure
 
 ```rust
-Metadata {
-    title: "",
-    artist: "",
-    creator: "",
-    difficulty_name: "Normal",
-    difficulty_value: None,
-    audio_file: "",
-    background_file: None,
-    audio_offset_us: 0,
-    preview_time_us: 0,
-    preview_duration_us: 15_000_000, // 15 seconds
-    source: None,
-    genre: None,
-    language: None,
-    tags: [],
+pub struct Metadata {
+    pub chart_id: Option<u64>,
+    pub chartset_id: Option<u64>,
+    pub title: CompactString,
+    pub artist: CompactString,
+    pub creator: CompactString,
+    pub difficulty_name: CompactString,
+    pub difficulty_value: Option<f32>,      // OD, overall difficulty rating, etc.
+    pub audio_file: CompactString,          // relative path
+    pub background_file: Option<CompactString>,
+    pub audio_offset_us: i64,              // global audio offset in µs
+    pub preview_time_us: i64,              // preview start in µs
+    pub preview_duration_us: i64,          // preview length (default: 15s)
+    pub source: Option<CompactString>,     // game or album of origin
+    pub genre: Option<CompactString>,
+    pub language: Option<CompactString>,
+    pub tags: Vec<CompactString>,
+    pub is_coop: bool,                     // requires even key_count
 }
 ```
+
+## Defaults
+
+| Field | Default |
+|-------|---------|
+| `difficulty_name` | `"Normal"` |
+| `preview_duration_us` | `15_000_000` (15s) |
+| `audio_offset_us` | `0` |
+| `is_coop` | `false` |
+| All optional fields | `None` / empty |
+
+## Notes
+
+- Strings use `CompactString` — inline storage for strings ≤ 24 bytes, heap otherwise. Implements `Into<CompactString>` from `&str` and `String`.
+- `key_count` is on `RoxChart`, not `Metadata`, because it is a gameplay property.
+- `is_coop` splits the key columns between two players (e.g. 8K → 4K each). The validator enforces even `key_count` when `is_coop` is true.
 
 ## Example
 
 ```rust
-use rhythm_open_exchange::Metadata;
+use rox::model::Metadata;
 
-let metadata = Metadata {
-    title: "Galaxy Collapse".into(),
-    artist: "Kurokotei".into(),
-    creator: "Shoegazer".into(),
-    difficulty_name: "Cataclysmic Hypernova".into(),
-    difficulty_value: Some(9.99),
-    audio_file: "audio.ogg".into(),
-    background_file: Some("bg.jpg".into()),
-    audio_offset_us: -5000, // -5ms offset
-    preview_time_us: 60_000_000, // 60 seconds
-    preview_duration_us: 20_000_000, // 20 seconds
-    source: Some("BMS".into()),
-    genre: Some("Speedcore".into()),
-    language: Some("JP".into()),
-    tags: vec!["marathon".into(), "stream".into()],
-};
+let mut meta = Metadata::default();
+meta.title = "Night of Knights".into();
+meta.artist = "xi".into();
+meta.creator = "Kawawa".into();
+meta.difficulty_name = "INFINITE".into();
+meta.difficulty_value = Some(9.8);
+meta.audio_file = "nightofknights.mp3".into();
+meta.preview_time_us = 90_000_000; // 90 seconds
 ```
-
-## Format Mapping
-
-### From osu!mania (.osu)
-
-| osu! | ROX |
-|------|-----|
-| Title | `title` |
-| Artist | `artist` |
-| Creator | `creator` |
-| Version | `difficulty_name` |
-| OverallDifficulty | `difficulty_value` |
-| AudioFilename | `audio_file` |
-| Background event | `background_file` |
-| PreviewTime | `preview_time_us * 1000` |
-| Source | `source` |
-| Tags | `tags` (split by space) |
-
-### From Quaver (.qua)
-
-| Quaver | ROX |
-|--------|-----|
-| Title | `title` |
-| Artist | `artist` |
-| Creator | `creator` |
-| DifficultyName | `difficulty_name` |
-| AudioFile | `audio_file` |
-| BackgroundFile | `background_file` |
-| SongPreviewTime | `preview_time_us * 1000` |
-| Source | `source` |
-| Tags | `tags` |
-| Genre | `genre` |
