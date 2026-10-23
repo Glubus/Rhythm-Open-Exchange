@@ -346,7 +346,7 @@ checksum = "cadadef317c2f20755a64d7fdc48f9e7178ee6b0e1f7fce33fa60f1d68a276e6"
 
 [[package]]
 name = "rhythm-open-exchange"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "atoi",
  "bitflags",

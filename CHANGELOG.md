@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-23
+
+### Added
+
+- `.ssc` (StepMania 5 / Etterna): `SscDecoder`, `SscEncoder`, `sm::ssc_parser` and `DetectedFormat::Ssc`. Each `#NOTEDATA` chart keeps its own step type (`dance-single/solo/double`, `pump-single/halfdouble`, `kb7-single`), meta, BPMs, stops, delays, warps, fakes and offset; unsupported step types and malformed charts are skipped with a message in `SmFile::skipped`.
+- `sm::parse_file`, `sm::is_stepmania` and `auto_decode_variant` (chart `n` of a `.sm`/`.ssc` file, the only chart of any other format).
+- `sm::msd` (the `#TAG:value;` tokenizer) and `sm::timing_data` (beat to time with stops, delays and warps).
+- `formats::names`: `romanised_names` / `romanised_names_from_bytes` (`RomanisedNames`) read a chart's original and romanised title and artist from its header only (osu! `TitleUnicode`/`Title`, StepMania `#TITLE`/`#TITLETRANSLIT`).
+- `OsuDecoder::peek_mode`: the game mode of a `.osu` from its first lines, so a file of another mode is refused before its hit objects are parsed (`decode_with_options` does it first).
+- `RoxChart::remove_unsupported_notes` (mines and rolls, head and tail together) returning `RemovedNotes { mines, rolls }`.
+
+### Changed
+
+- `.sm`/`.ssc` `#OFFSET` is baked into the decoded times (beat 0 is at `-offset` s of the audio, as in StepMania and Etterna); `metadata.audio_offset_us` stays 0. Before, the offset was ignored and every chart with a non-zero offset was out of sync by that amount. `.sm` now shares the `.ssc` timing pipeline (one `TimingData`: BPMs, stops, delays, warps, fakes); rows are rounded to 1/48 beat like the games.
+- `.sm`/`.ssc` refuse a chart they cannot time faithfully: a zero or negative BPM, a negative stop, delay or warp (the old `.sm` warp encoding).
+- `.sm`/`.ssc` without a usable `#MUSIC` play the folder's first audio file.
+- `.qua`: `InitialScrollVelocity` becomes a scroll velocity point at the start of the map.
+
 ## [0.7.0] - 2026-03-27
 
 ### Breaking Changes

@@ -1,17 +1,29 @@
 #![warn(clippy::pedantic)]
+//! `.sm` (StepMania 3/4/5) parser. A `.sm` file is an `.ssc` file whose charts are `#NOTES:` tags
+//! of six `:`-separated parameters (step type, description, difficulty, meter, radar values,
+//! measures) and whose timing is the song's alone, so it goes through the same pipeline as
+//! [`super::ssc_parser`]: the same tokenizer, the same [`super::timing_data::TimingData`]
+//! (BPM changes, stops, delays, warps, fakes) and the same refusals (see there). Without that,
+//! every note after the first `#STOPS` of a file would be early.
 #[cfg(not(feature = "std"))]
 use alloc::{
     format,
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 
-use super::types::{SmChart, SmFile, SmMetadata, SmNote, SmNoteType, timing};
 use rox::error::{RoxError, RoxResult};
+
+use super::msd::{Tag, tokenize};
+use super::ssc_parser::{SongTiming, chart, metadata, offset_us};
+use super::types::SmFile;
 
 const MAX_FILE_SIZE: usize = 100 * 1024 * 1024;
 
-/// Parse an SM file from raw bytes.
+/// Parse an SM file from raw bytes. Charts that can not be played (step type this crate does not
+/// read, rows of the wrong width, timing it can not honour) are left out and described in
+/// [`SmFile::skipped`].
 ///
 /// # Errors
 /// Returns an error if data exceeds 100MB or is invalid UTF-8.
@@ -24,287 +36,51 @@ pub fn parse(data: &[u8]) -> RoxResult<SmFile> {
     }
     let content = core::str::from_utf8(data)
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
-    let mut sm = SmFile::default();
-    parse_metadata(content, &mut sm.metadata);
-    if let Some(offset) = parse_float_field(content, "#OFFSET:") {
-        #[allow(clippy::cast_possible_truncation)]
-        // ms→µs i64: safe for any realistic timestamp or duration
+    let tags = tokenize(content);
+    let mut sm = SmFile {
+        metadata: metadata(&tags),
+        ..SmFile::default()
+    };
+    sm.offset_us = offset_us(&tags).unwrap_or(0);
+    let song_timing = SongTiming::of(&tags);
+    sm.bpms = song_timing.bpm_points();
+    for (index, notes) in tags.iter().filter(|tag| tag.name == "NOTES").enumerate() {
+        match chart_tags(notes)
+            .ok_or_else(|| "malformed #NOTES (expected 6 parameters)".to_string())
+            .and_then(|tags| chart(&tags, &song_timing))
         {
-            sm.offset_us = (offset * 1_000_000.0) as i64;
+            Ok(chart) => sm.charts.push(chart),
+            Err(reason) => sm.skipped.push(format!("chart {}: {reason}", index + 1)),
         }
     }
-    sm.bpms = parse_bpms(content);
-    parse_charts(content, &mut sm.charts, &sm.bpms);
     Ok(sm)
 }
 
-fn parse_metadata(content: &str, metadata: &mut SmMetadata) {
-    if let Some(v) = parse_string_field(content, "#TITLE:") {
-        metadata.title = v;
-    }
-    if let Some(v) = parse_string_field(content, "#ARTIST:") {
-        metadata.artist = v;
-    }
-    if let Some(v) = parse_string_field(content, "#CREDIT:") {
-        metadata.credit = v;
-    }
-    if let Some(v) = parse_string_field(content, "#MUSIC:") {
-        metadata.music = v;
-    }
-    if let Some(v) = parse_string_field(content, "#BANNER:") {
-        metadata.banner = v;
-    }
-    if let Some(v) = parse_string_field(content, "#BACKGROUND:") {
-        metadata.background = v;
-    }
-    if let Some(v) = parse_float_field(content, "#SAMPLESTART:") {
-        metadata.sample_start = v;
-    }
-    if let Some(v) = parse_float_field(content, "#SAMPLELENGTH:") {
-        metadata.sample_length = v;
-    }
-}
-
-fn parse_string_field(content: &str, tag: &str) -> Option<String> {
-    let start = content.find(tag)?;
-    let after_tag = &content[start + tag.len()..];
-    let end = after_tag.find(';')?;
-    Some(after_tag[..end].trim().to_string())
-}
-
-fn parse_float_field(content: &str, tag: &str) -> Option<f64> {
-    let value_str = parse_string_field(content, tag)?;
-    value_str.parse().ok()
-}
-
-fn parse_bpms(content: &str) -> Vec<(i64, f32)> {
-    let pairs = parse_pairs(content, "#BPMS:");
-    let mut result = Vec::new();
-    let mut current_time_us: i64 = 0;
-    let mut current_beat: f64 = 0.0;
-    let mut current_bpm: f32 = 120.0;
-    for (beat, bpm) in pairs {
-        if beat > current_beat {
-            let beats_elapsed = beat - current_beat;
-            let rows_elapsed = beats_elapsed * timing::ROWS_PER_BEAT;
-            current_time_us += timing::rows_to_us(rows_elapsed, current_bpm);
-            current_beat = beat;
-        }
-        #[allow(clippy::cast_possible_truncation)] // ms/beats→f32: safe for any realistic BPM value
-        let bpm_f32 = bpm as f32;
-        result.push((current_time_us, bpm_f32));
-        current_bpm = bpm_f32;
-    }
-    if result.is_empty() || result[0].0 > 0 {
-        result.insert(0, (0, 120.0));
-    }
-    result
-}
-
-fn parse_pairs(content: &str, tag: &str) -> Vec<(f64, f64)> {
-    let Some(value_str) = parse_string_field(content, tag) else {
-        return Vec::new();
-    };
-    let mut result = Vec::new();
-    for pair in value_str.split(',') {
-        let pair = pair.trim();
-        if pair.is_empty() {
-            continue;
-        }
-        let parts: Vec<&str> = pair.split('=').collect();
-        if parts.len() == 2
-            && let (Ok(beat), Ok(value)) = (
-                parts[0].trim().parse::<f64>(),
-                parts[1].trim().parse::<f64>(),
-            )
-        {
-            result.push((beat, value));
-        }
-    }
-    result.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
-    result
-}
-
-#[allow(dead_code)] // retained: will be used when BPM-interpolated timing is wired into the public API
-fn beat_to_us(target_beat: f64, bpms: &[(i64, f32)]) -> i64 {
-    if bpms.is_empty() {
-        return timing::rows_to_us(target_beat * timing::ROWS_PER_BEAT, 120.0);
-    }
-    let mut current_time_us: i64 = 0;
-    let mut current_beat: f64 = 0.0;
-    let mut current_bpm = bpms[0].1;
-    let mut bpm_idx = 0;
-    while bpm_idx < bpms.len() && bpms[bpm_idx].0 == 0 {
-        current_bpm = bpms[bpm_idx].1;
-        bpm_idx += 1;
-    }
-    for &(bpm_time_us, new_bpm) in &bpms[1..] {
-        let rows_elapsed = timing::us_to_rows(bpm_time_us - current_time_us, current_bpm);
-        let bpm_beat = current_beat + rows_elapsed / timing::ROWS_PER_BEAT;
-        if bpm_beat >= target_beat {
-            break;
-        }
-        current_time_us = bpm_time_us;
-        current_beat = bpm_beat;
-        current_bpm = new_bpm;
-    }
-    if target_beat > current_beat {
-        let remaining_rows = (target_beat - current_beat) * timing::ROWS_PER_BEAT;
-        current_time_us += timing::rows_to_us(remaining_rows, current_bpm);
-    }
-    current_time_us
-}
-
-fn parse_charts(content: &str, charts: &mut Vec<SmChart>, bpms: &[(i64, f32)]) {
-    let sections: Vec<&str> = content.split("#NOTES:").skip(1).collect();
-    for section in sections {
-        let end = section.find('#').unwrap_or(section.len());
-        if let Some(chart) = parse_chart(&section[..end], bpms) {
-            charts.push(chart);
-        }
-    }
-}
-
-fn parse_chart(content: &str, bpms: &[(i64, f32)]) -> Option<SmChart> {
-    let lines: Vec<&str> = content.lines().map(str::trim).collect();
-    let mut chart = SmChart::default();
-    let mut idx = 0;
-    while idx < lines.len() && lines[idx].is_empty() {
-        idx += 1;
-    }
-    // Parse 5 header fields
-    let mut header_fields: Vec<String> = Vec::new();
-    while idx < lines.len() && header_fields.len() < 5 {
-        let line = lines[idx];
-        if line.is_empty() {
-            idx += 1;
-            continue;
-        }
-        header_fields.push(line.trim_end_matches(':').to_string());
-        idx += 1;
-    }
-    if header_fields.len() < 5 {
+/// The `#STEPSTYPE`, `#DESCRIPTION`, `#DIFFICULTY`, `#METER` and `#NOTES` tags a `.ssc` chart
+/// would have, from the parameters of a `.sm` `#NOTES:` tag.
+fn chart_tags(notes: &Tag) -> Option<Vec<Tag>> {
+    let [
+        stepstype,
+        description,
+        difficulty,
+        meter,
+        _radar,
+        measures @ ..,
+    ] = notes.params.as_slice()
+    else {
         return None;
-    }
-    chart.stepstype.clone_from(&header_fields[0]);
-    // header_fields[1] is description (ignored in new types)
-    chart.difficulty.clone_from(&header_fields[2]);
-    chart.meter = header_fields[3].parse().unwrap_or(1);
-    // header_fields[4] is radar values (ignored)
-    chart.column_count = SmChart::column_count_from_stepstype(&chart.stepstype);
-    // Parse measures
-    parse_measures(&lines, idx, bpms, &mut chart);
-    Some(chart)
-}
-
-fn parse_measures(lines: &[&str], start_idx: usize, bpms: &[(i64, f32)], chart: &mut SmChart) {
-    let mut idx = start_idx;
-    let mut measure_num = 0usize;
-    let mut current_measure_lines: Vec<&str> = Vec::new();
-    while idx < lines.len() {
-        let raw = lines[idx];
-        let line = raw.find("//").map_or(raw, |p| &raw[..p]).trim();
-        if line.is_empty() {
-            idx += 1;
-            continue;
-        }
-        if line == ";" {
-            if !current_measure_lines.is_empty() {
-                parse_measure_notes(
-                    &current_measure_lines,
-                    measure_num,
-                    bpms,
-                    chart.column_count,
-                    &mut chart.notes,
-                );
-            }
-            break;
-        }
-        if line == "," {
-            parse_measure_notes(
-                &current_measure_lines,
-                measure_num,
-                bpms,
-                chart.column_count,
-                &mut chart.notes,
-            );
-            current_measure_lines.clear();
-            measure_num += 1;
-            idx += 1;
-            continue;
-        }
-        if is_note_line(line) {
-            #[allow(clippy::cast_possible_truncation)]
-            // column count fits in u8 for any realistic chart width
-            if line.len() as u8 > chart.column_count {
-                chart.column_count = line.len() as u8;
-            }
-            current_measure_lines.push(lines[idx]); // push original (not stripped) for column count
-        }
-        idx += 1;
-    }
-}
-
-fn is_note_line(line: &str) -> bool {
-    !line.is_empty()
-        && line.chars().all(|c| {
-            matches!(
-                c,
-                '0' | '1' | '2' | '3' | '4' | 'M' | 'm' | 'L' | 'l' | 'F' | 'f'
-            )
-        })
-}
-
-fn parse_measure_notes(
-    lines: &[&str],
-    measure_num: usize,
-    bpms: &[(i64, f32)],
-    _column_count: u8,
-    notes: &mut Vec<SmNote>,
-) {
-    if lines.is_empty() {
-        return;
-    }
-    let num_lines = lines.len();
-    #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
-    let rows_per_line = timing::ROWS_PER_MEASURE / num_lines as f64;
-    for (line_idx, line) in lines.iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)]
-        // i64→f64: precision loss acceptable for timing values
-        let row = measure_num as f64 * timing::ROWS_PER_MEASURE + line_idx as f64 * rows_per_line;
-        let time_us = row_to_us(row, bpms);
-        for (col, ch) in line.chars().enumerate() {
-            let note_type = SmNoteType::from_char(ch);
-            if note_type.is_note() {
-                #[allow(clippy::cast_possible_truncation)]
-                // column fits in u8 for any realistic chart width
-                notes.push(SmNote {
-                    time_us,
-                    column: col as u8,
-                    note_type,
-                });
-            }
-        }
-    }
-}
-
-fn row_to_us(row: f64, bpms: &[(i64, f32)]) -> i64 {
-    if bpms.is_empty() {
-        return timing::rows_to_us(row, 120.0);
-    }
-    let mut current_time_us: i64 = 0;
-    let mut current_row: f64 = 0.0;
-    let mut current_bpm = bpms[0].1;
-    for &(bpm_time_us, new_bpm) in &bpms[1..] {
-        let bpm_row = current_row + timing::us_to_rows(bpm_time_us - current_time_us, current_bpm);
-        if bpm_row >= row {
-            break;
-        }
-        current_time_us = bpm_time_us;
-        current_row = bpm_row;
-        current_bpm = new_bpm;
-    }
-    current_time_us + timing::rows_to_us(row - current_row, current_bpm)
+    };
+    let tag = |name: &str, params: Vec<String>| Tag {
+        name: name.to_string(),
+        params,
+    };
+    Some(vec![
+        tag("STEPSTYPE", vec![stepstype.clone()]),
+        tag("DESCRIPTION", vec![description.clone()]),
+        tag("DIFFICULTY", vec![difficulty.clone()]),
+        tag("METER", vec![meter.clone()]),
+        tag("NOTES", measures.to_vec()),
+    ])
 }
 
 #[cfg(test)]

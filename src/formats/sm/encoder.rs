@@ -25,7 +25,7 @@ impl Encoder for SmEncoder {
     }
 }
 
-fn write_metadata_section(out: &mut String, chart: &RoxChart) {
+pub(super) fn write_metadata_section(out: &mut String, chart: &RoxChart) {
     let _ = writeln!(out, "#TITLE:{};", chart.metadata.title);
     let _ = writeln!(out, "#SUBTITLE:;");
     let _ = writeln!(out, "#ARTIST:{};", chart.metadata.artist);
@@ -44,8 +44,9 @@ fn write_metadata_section(out: &mut String, chart: &RoxChart) {
         .iter()
         .find(|tp| tp.is_bpm())
         .map_or(0, rox::model::TimingPoint::time_us);
+    // Beat 0 is the first BPM point: `#OFFSET` is minus its time in the audio (`-1.5` = 1.5 s in).
     #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
-    let offset = first_bpm_time as f64 / 1_000_000.0;
+    let offset = (0 - first_bpm_time) as f64 / 1_000_000.0;
     let _ = writeln!(out, "#OFFSET:{offset:.6};");
     #[allow(clippy::cast_precision_loss)] // i64→f64: precision loss acceptable for timing values
     let sample_start = chart.metadata.preview_time_us as f64 / 1_000_000.0;
@@ -56,7 +57,7 @@ fn write_metadata_section(out: &mut String, chart: &RoxChart) {
     let _ = writeln!(out, "#SELECTABLE:YES;");
 }
 
-fn write_bpms_section(out: &mut String, chart: &RoxChart) {
+pub(super) fn write_bpms_section(out: &mut String, chart: &RoxChart) {
     out.push_str("#BPMS:");
     let bpm_pts: Vec<_> = chart
         .timing_points
@@ -94,21 +95,37 @@ fn write_notes_section(out: &mut String, chart: &RoxChart) {
         8 => "dance-double",
         _ => "dance-single",
     };
-    let difficulty = match chart.metadata.difficulty_name.as_str() {
-        "Beginner" | "Easy" | "Medium" | "Hard" | "Challenge" | "Edit" => {
-            chart.metadata.difficulty_name.as_str()
-        }
-        _ => "Hard",
-    };
+    let difficulty = difficulty_class(chart);
     let _ = writeln!(out, "#NOTES:");
     let _ = writeln!(out, "     {stepstype}:");
     let _ = writeln!(out, "     :");
     let _ = writeln!(out, "     {difficulty}:");
+    let meter = meter(chart);
+    let _ = writeln!(out, "     {meter}:");
+    let _ = writeln!(out, "     0,0,0,0,0:");
+    write_measures_section(out, chart);
+}
+
+/// The `Beginner`…`Edit` class of the chart's difficulty name (`Hard` when it is not one).
+pub(super) fn difficulty_class(chart: &RoxChart) -> &str {
+    match chart.metadata.difficulty_name.as_str() {
+        "Beginner" | "Easy" | "Medium" | "Hard" | "Challenge" | "Edit" => {
+            chart.metadata.difficulty_name.as_str()
+        }
+        _ => "Hard",
+    }
+}
+
+/// The chart's meter: its difficulty value, truncated.
+pub(super) fn meter(chart: &RoxChart) -> u32 {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     // value is non-negative in valid input; meter fits in u32
     let meter = chart.metadata.difficulty_value.unwrap_or(1.0) as u32;
-    let _ = writeln!(out, "     {meter}:");
-    let _ = writeln!(out, "     0,0,0,0,0:");
+    meter
+}
+
+/// The measures of the chart, `;` not included.
+pub(super) fn write_measures_section(out: &mut String, chart: &RoxChart) {
     let first_time = chart
         .timing_points
         .iter()

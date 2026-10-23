@@ -29,19 +29,60 @@ pub struct OsuDecoder;
 crate::impl_format!(OsuDecoder, ["osu"]);
 
 impl OsuDecoder {
+    /// The game mode a `.osu` file declares in its `[General]` section, read from its first lines only, so a file of
+    /// another mode can be refused without decoding its timing points and hit objects (the bulk of the file).
+    ///
+    /// `data` is the start of the file when `complete` is false, the whole file when it is true. The answer is the one
+    /// [`parser::parse`] would give: the last `Mode:` of `[General]` (`0`, osu!standard, when there is none or it is
+    /// not a number), decided when the first section after `[General]` begins. `None` when `data` ends before that (more
+    /// of the file is needed) or holds text that is not UTF-8 (the full parse reports that).
+    #[must_use]
+    pub fn peek_mode(data: &[u8], complete: bool) -> Option<u8> {
+        let mut in_general = false;
+        let mut mode = 0_u8;
+        let mut rest = data;
+        loop {
+            let (line, next) = match memchr::memchr(b'\n', rest) {
+                Some(end) => (&rest[..end], Some(&rest[end + 1..])),
+                // The last line of a cut head may be a part of a line: only a whole file ends on one.
+                None if complete => (rest, None),
+                None => return None,
+            };
+            let line = line.strip_suffix(b"\r").unwrap_or(line);
+            let skippable = line.is_empty() || line.starts_with(b"//");
+            if !skippable {
+                if line.first() == Some(&b'[') && line.last() == Some(&b']') {
+                    if in_general {
+                        return Some(mode);
+                    }
+                    in_general = &line[1..line.len() - 1] == b"General";
+                } else if in_general {
+                    let text = core::str::from_utf8(line).ok()?.trim();
+                    if let Some((key, value)) = text.split_once(':') {
+                        if key.trim() == "Mode" {
+                            mode = value.trim().parse().unwrap_or(0);
+                        }
+                    }
+                }
+            }
+            match next {
+                Some(next) => rest = next,
+                None => return Some(mode),
+            }
+        }
+    }
+
     /// Decode with explicit options.
     ///
     /// # Errors
     /// Returns an error if parsing or validation fails. With
     /// [`OsuDecodeOptions::re_arrange_bpm`] enabled, `BpmAfterFirstNote` is
-    /// repaired instead of surfaced.
+    /// repaired instead of surfaced. A file of another game mode is refused from its header, before the rest is parsed.
     pub fn decode_with_options(data: &[u8], opts: &OsuDecodeOptions) -> RoxResult<RoxChart> {
+        Self::refuse_other_mode(data)?;
         let beatmap = parser::parse(data)?;
         if beatmap.general.mode != 3 {
-            return Err(RoxError::InvalidFormat(format!(
-                "Not a mania beatmap (mode={}, expected 3)",
-                beatmap.general.mode
-            )));
+            return Err(not_mania(beatmap.general.mode));
         }
         let mut chart = from_beatmap(&beatmap);
         if opts.re_arrange_bpm {
@@ -50,16 +91,25 @@ impl OsuDecoder {
         chart.validate()?;
         Ok(chart)
     }
+
+    fn refuse_other_mode(data: &[u8]) -> RoxResult<()> {
+        match Self::peek_mode(data, true) {
+            Some(mode) if mode != 3 => Err(not_mania(mode)),
+            _ => Ok(()),
+        }
+    }
+}
+
+fn not_mania(mode: u8) -> RoxError {
+    RoxError::InvalidFormat(format!("Not a mania beatmap (mode={mode}, expected 3)"))
 }
 
 impl Decoder for OsuDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
+        Self::refuse_other_mode(data)?;
         let beatmap = parser::parse(data)?;
         if beatmap.general.mode != 3 {
-            return Err(RoxError::InvalidFormat(format!(
-                "Not a mania beatmap (mode={}, expected 3)",
-                beatmap.general.mode
-            )));
+            return Err(not_mania(beatmap.general.mode));
         }
         Ok(from_beatmap(&beatmap))
     }
@@ -227,6 +277,63 @@ mod tests {
     fn test_decode_rejects_non_mania() {
         let data = b"osu file format v14\n\n[General]\nMode: 1\n\n[Difficulty]\nCircleSize:4\n";
         assert!(OsuDecoder::decode(data).is_err());
+    }
+
+    /// The header answer is the full parser's: the last `Mode:` of `[General]`, `0` without one, decided at the next section.
+    #[rstest]
+    #[case(b"osu file format v14\n\n[General]\nAudioFilename: a.mp3\nMode: 3\n\n[Editor]\n".as_slice(), Some(3))]
+    #[case(b"\xEF\xBB\xBFosu file format v14\r\n\r\n[General]\r\nMode:0\r\n[Metadata]\r\n".as_slice(), Some(0))]
+    #[case(b"[General]\nMode: 1\nMode: 3\n[Difficulty]\n".as_slice(), Some(3))]
+    #[case(b"[General]\nAudioFilename: a.mp3\n[Metadata]\n".as_slice(), Some(0))]
+    #[case(b"[Metadata]\nTitle:Mode: 3\n[General]\nMode: 2\n[Events]\n".as_slice(), Some(2))]
+    #[case(b"[General]\n// Mode: 2\nMode: x\n[Events]\n".as_slice(), Some(0))]
+    #[case(b"[General]\nMode: 3\n".as_slice(), None)]
+    #[case(b"[General]\nMode: 3".as_slice(), None)]
+    fn peek_mode_reads_the_general_section_only(#[case] head: &[u8], #[case] expected: Option<u8>) {
+        // A cut head decides only once the section after `[General]` began; a whole file always decides.
+        assert_eq!(OsuDecoder::peek_mode(head, false), expected);
+        assert!(
+            OsuDecoder::peek_mode(head, true).is_some(),
+            "a whole file decides"
+        );
+        if let Some(mode) = expected {
+            assert_eq!(
+                parser::parse(head).unwrap().general.mode,
+                mode,
+                "the parser reads the same mode"
+            );
+        }
+    }
+
+    #[rstest]
+    fn peek_mode_never_decides_inside_a_cut_line_or_on_bad_text() {
+        assert_eq!(
+            OsuDecoder::peek_mode(b"[General]\nMode: 3\n[Metadata]\n[Meta", false),
+            Some(3)
+        );
+        assert_eq!(
+            OsuDecoder::peek_mode(b"[General]\nMode: 3\n[Meta", false),
+            None
+        );
+        assert_eq!(OsuDecoder::peek_mode(b"[General]\nMod", false), None);
+        assert_eq!(
+            OsuDecoder::peek_mode(b"[General]\nMode: \xFF\n[Events]\n", true),
+            None
+        );
+    }
+
+    /// A file of another mode is refused whatever follows its header: even garbage that the full parse would report.
+    #[rstest]
+    fn another_mode_is_refused_before_the_rest_is_read() {
+        let mut data = b"osu file format v14\n\n[General]\nMode: 0\n\n[Events]\n".to_vec();
+        data.extend_from_slice(&[0xFF; 64]);
+        let error = OsuDecoder::decode_with_options(&data, &OsuDecodeOptions::default())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("Not a mania beatmap (mode=0, expected 3)"),
+            "{error}"
+        );
     }
 
     #[rstest]

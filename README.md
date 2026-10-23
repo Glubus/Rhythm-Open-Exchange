@@ -31,7 +31,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rox = { package = "rhythm-open-exchange", version = "0.7" }
+rox = { package = "rhythm-open-exchange", version = "0.8" }
 ```
 
 The default build includes every codec and chart analysis. For a smaller model-only
@@ -39,7 +39,7 @@ build, disable defaults; enable modules individually as needed:
 
 ```toml
 [dependencies]
-rox = { package = "rhythm-open-exchange", version = "0.7", default-features = false, features = ["formats"] }
+rox = { package = "rhythm-open-exchange", version = "0.8", default-features = false, features = ["formats"] }
 ```
 
 Available features: `std`, `formats` (all codecs and auto-detection), and
