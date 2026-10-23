@@ -77,7 +77,7 @@ fn convert_notes(chart: &SmChart, shift_us: i64, rox: &mut RoxChart) {
             #[allow(clippy::match_same_arms)]
             // Tap and Lift both map to tap in the ROX model; kept separate for forward-compatibility
             SmNoteType::Tap | SmNoteType::Lift => {
-                rox.notes.push(Note::tap(note.time_us, note.column))
+                rox.notes.push(Note::tap(note.time_us, note.column));
             }
             SmNoteType::HoldHead => pending_holds.push((note.time_us, note.column)),
             SmNoteType::RollHead => pending_rolls.push((note.time_us, note.column)),

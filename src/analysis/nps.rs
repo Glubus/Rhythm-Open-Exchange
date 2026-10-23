@@ -159,6 +159,7 @@ pub fn highest_drain_time(chart: &RoxChart) -> f64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // exact densities of hand-placed notes
 mod tests {
     use super::*;
     use rox::model::Note;
@@ -188,8 +189,8 @@ mod tests {
     fn test_density_two_segments() {
         let mut chart = RoxChart::new(4);
         // 10 notes in first 5s
-        for i in 0..10u64 {
-            chart.notes.push(Note::tap((i * 500_000) as i64, 0));
+        for i in 0..10i64 {
+            chart.notes.push(Note::tap(i * 500_000, 0));
         }
         // 1 note at 9.999s to define ~10s duration
         chart.notes.push(Note::tap(9_999_999, 0));
@@ -242,6 +243,6 @@ mod tests {
             chart.notes.push(Note::tap(10_000_000 + i * 100_000, 0));
         }
         let drain = highest_drain_time(&chart);
-        assert!(drain >= 9.0 && drain <= 10.5, "drain was {}", drain);
+        assert!((9.0..=10.5).contains(&drain), "drain was {drain}");
     }
 }

@@ -13,7 +13,7 @@ pub(crate) type Beat = [i32; 3];
 
 /// Convert a beat triple to a floating-point beat count.
 pub(crate) fn beat_to_f64(b: &Beat) -> f64 {
-    b[0] as f64 + b[1] as f64 / b[2] as f64
+    f64::from(b[0]) + f64::from(b[1]) / f64::from(b[2])
 }
 
 /// Convert beats at a given BPM to milliseconds.

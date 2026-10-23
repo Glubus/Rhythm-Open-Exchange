@@ -58,10 +58,10 @@ impl OsuDecoder {
                     in_general = &line[1..line.len() - 1] == b"General";
                 } else if in_general {
                     let text = core::str::from_utf8(line).ok()?.trim();
-                    if let Some((key, value)) = text.split_once(':') {
-                        if key.trim() == "Mode" {
-                            mode = value.trim().parse().unwrap_or(0);
-                        }
+                    if let Some((key, value)) = text.split_once(':')
+                        && key.trim() == "Mode"
+                    {
+                        mode = value.trim().parse().unwrap_or(0);
                     }
                 }
             }
@@ -365,7 +365,7 @@ mod tests {
             .timing_points
             .iter()
             .find(|tp| tp.is_bpm())
-            .map(|tp| tp.time_us())
+            .map(TimingPoint::time_us)
             .unwrap();
         assert!(first_bpm <= first_note);
     }

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 /// # Panics
 ///
 /// Panics if the file cannot be read.
+#[must_use]
 pub fn get_test_asset(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("assets")
