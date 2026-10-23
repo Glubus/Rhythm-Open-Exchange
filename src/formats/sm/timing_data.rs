@@ -165,6 +165,8 @@ impl TimingData {
     }
 }
 
+// Events are grouped by the exact beat they were parsed at (equal values, not computed ones): a margin would merge distinct beats.
+#[allow(clippy::float_cmp)]
 fn sweep(first_bpm: f64, events: &[(f64, Event)]) -> Vec<Anchor> {
     let mut anchors = vec![Anchor {
         beat: 0.0,

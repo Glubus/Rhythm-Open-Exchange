@@ -49,6 +49,8 @@ pub fn short_hash(chart: &RoxChart) -> String {
 /// Hash notes after scaling timings so dominant BPM = `target_bpm`.
 /// Stable across rate variants of the same chart for the same `target_bpm`.
 #[must_use]
+// Truncation toward zero of the scaled time IS the hash's definition: changing the rounding would change every hash.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 pub fn normalized_notes_hash(chart: &RoxChart, target_bpm: f64) -> String {
     let mode = bpm_mode(chart);
     if mode <= 0.0 || target_bpm <= 0.0 {

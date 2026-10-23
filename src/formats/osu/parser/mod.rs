@@ -129,6 +129,7 @@ fn dispatch_section(section: Section, line: &[u8], idx: usize, beatmap: &mut Osu
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // exact values parsed from text
 mod tests {
     use super::*;
 

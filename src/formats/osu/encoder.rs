@@ -159,7 +159,7 @@ mod tests {
     #[case(7, &[36, 109, 182, 256, 329, 402, 475])]
     fn test_column_to_x(#[case] key_count: u8, #[case] expected: &[i32]) {
         for (col, &x) in expected.iter().enumerate() {
-            assert_eq!(column_to_x(col as u8, key_count), x);
+            assert_eq!(column_to_x(u8::try_from(col).unwrap(), key_count), x);
         }
     }
 

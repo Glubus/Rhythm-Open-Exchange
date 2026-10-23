@@ -30,8 +30,8 @@ fn ms_to_beat(time_us: i64, chart: &RoxChart) -> [i32; 3] {
     rational_to_beat_triple_i128(total_num, BEAT_DENOM)
 }
 
-/// Compute cumulative beats numerator up to time_us.
-/// Each BPM section contributes (delta_us * bpm * 1000) to the numerator.
+/// Compute cumulative beats numerator up to `time_us`.
+/// Each BPM section contributes (`delta_us * bpm * 1000`) to the numerator.
 fn cumulative_beats_num(time_us: i64, chart: &RoxChart) -> i128 {
     let mut num: i128 = 0;
     let mut prev_us: i64 = 0;
@@ -48,7 +48,7 @@ fn cumulative_beats_num(time_us: i64, chart: &RoxChart) -> i128 {
             time_us
         };
         if end_us > prev_us {
-            let delta = (end_us - prev_us) as i128;
+            let delta = i128::from(end_us - prev_us);
             #[allow(clippy::cast_possible_truncation)]
             // scaled BPM remains small for realistic charts
             let bpm_scaled = (prev_bpm * 1000.0) as i128;
@@ -59,10 +59,10 @@ fn cumulative_beats_num(time_us: i64, chart: &RoxChart) -> i128 {
             break;
         }
         prev_us = tp.time_us();
-        prev_bpm = tp.bpm_value().unwrap_or(120.0) as f64;
+        prev_bpm = f64::from(tp.bpm_value().unwrap_or(120.0));
     }
     if !reached_target && time_us > prev_us {
-        let delta = (time_us - prev_us) as i128;
+        let delta = i128::from(time_us - prev_us);
         #[allow(clippy::cast_possible_truncation)] // scaled BPM remains small for realistic charts
         let bpm_scaled = (prev_bpm * 1000.0) as i128;
         num += delta * bpm_scaled;
@@ -127,7 +127,7 @@ fn build_meta(chart: &RoxChart) -> McMetaOut {
         creator: chart.metadata.creator.to_string(),
         version: chart.metadata.difficulty_name.to_string(),
         preview: (chart.metadata.preview_time_us >= 0)
-            .then(|| chart.metadata.preview_time_us / 1000),
+            .then_some(chart.metadata.preview_time_us / 1000),
         id: String::new(),
         cover: String::new(),
         time: 0,
@@ -262,6 +262,7 @@ struct McTimingOut {
     #[serde(skip_serializing_if = "is_default_sign")]
     sign: u8,
 }
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's `skip_serializing_if` passes a reference
 fn is_default_sign(s: &u8) -> bool {
     *s == 4
 }

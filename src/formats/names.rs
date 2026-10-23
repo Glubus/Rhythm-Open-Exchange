@@ -127,7 +127,7 @@ pub fn stepmania_names(content: &str) -> RomanisedNames {
         tags.iter()
             .rev()
             .find(|tag| tag.name == name)
-            .map(|tag| tag.text())
+            .map(super::sm::msd::Tag::text)
             .unwrap_or_default()
     };
     RomanisedNames {

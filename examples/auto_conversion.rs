@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Encode to ROX bytes
     println!("\nEncoding to ROX format...");
-    let _ = auto_encode(&chart, "output.rox")?;
+    auto_encode(&chart, "output.rox")?;
     println!("Encoded to output.rox");
 
     // Convert directly (simulated)

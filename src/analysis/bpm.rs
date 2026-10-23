@@ -73,6 +73,7 @@ pub fn bpm_mode(chart: &RoxChart) -> f64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // exact BPM values of hand-placed timing points
 mod tests {
     use super::*;
     use rox::model::{Note, TimingPoint};

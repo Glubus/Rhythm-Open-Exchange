@@ -145,6 +145,8 @@ struct BeatTimeline {
 }
 
 impl BeatTimeline {
+    // Audio offsets are milliseconds, far below 2^52.
+    #[allow(clippy::cast_precision_loss)]
     fn new(points: &[McTimingPoint], audio_offset_ms: i64) -> Self {
         let mut sections = Vec::with_capacity(points.len());
         let mut offset_ms = -audio_offset_ms as f64;

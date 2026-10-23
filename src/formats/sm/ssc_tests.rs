@@ -337,7 +337,7 @@ fn a_bom_crlf_and_undecodable_text_do_not_disturb_the_notes() {
         .replace("Tester", "T\u{e9}ster")
         .into_bytes()
         .into_iter()
-        .flat_map(|b| if b == 0xc3 { None } else { Some(b) })
+        .filter(|&b| b != 0xc3)
         .collect::<Vec<u8>>();
     let chart = SscDecoder::decode(&latin1).expect("bad bytes in a title are not fatal");
     assert_eq!(chart.notes, plain.notes);
