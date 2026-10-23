@@ -9,6 +9,7 @@ use rox::error::{RoxError, RoxResult};
 pub enum DetectedFormat {
     Osu,
     Sm,
+    Ssc,
     Qua,
     Fnf,
     Jrox,
@@ -27,6 +28,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
     match ext.to_ascii_lowercase().as_str() {
         "osu" => Ok(DetectedFormat::Osu),
         "sm" => Ok(DetectedFormat::Sm),
+        "ssc" => Ok(DetectedFormat::Ssc),
         "qua" => Ok(DetectedFormat::Qua),
         "json" => Ok(DetectedFormat::Fnf),
         "jrox" => Ok(DetectedFormat::Jrox),
@@ -45,6 +47,8 @@ mod tests {
     #[rstest]
     #[case("song.osu", DetectedFormat::Osu)]
     #[case("song.sm", DetectedFormat::Sm)]
+    #[case("song.ssc", DetectedFormat::Ssc)]
+    #[case("SONG.SSC", DetectedFormat::Ssc)]
     #[case("song.qua", DetectedFormat::Qua)]
     #[case("song.json", DetectedFormat::Fnf)]
     #[case("song.jrox", DetectedFormat::Jrox)]

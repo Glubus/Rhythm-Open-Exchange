@@ -76,6 +76,25 @@ fn build_timing_points(qua: &QuaChart, chart: &mut RoxChart) {
             signature: sig,
         });
     }
+    // `InitialScrollVelocity` is the multiplier before the first slider velocity: one point from the start of the
+    // map (or of the first slider velocity, when earlier) that the first entry replaces. Pushed first, so a sort that
+    // keeps the order of equal times leaves an entry at that very time the winner.
+    if qua.initial_scroll_velocity.is_finite()
+        && (qua.initial_scroll_velocity - 1.0).abs() > f32::EPSILON
+    {
+        #[allow(clippy::cast_possible_truncation)]
+        // ms→µs i64: safe for any realistic timestamp
+        let first_us = qua
+            .slider_velocities
+            .iter()
+            .map(|sv| (sv.start_time * 1000.0) as i64)
+            .min()
+            .unwrap_or(0)
+            .min(0);
+        chart
+            .timing_points
+            .push(TimingPoint::sv(first_us, qua.initial_scroll_velocity));
+    }
     for sv in &qua.slider_velocities {
         #[allow(clippy::cast_possible_truncation)]
         // ms→µs i64: safe for any realistic timestamp or duration

@@ -43,6 +43,9 @@ pub struct SmFile {
     /// BPM changes: (`time_us`, bpm).
     pub bpms: Vec<(i64, f32)>,
     pub charts: Vec<SmChart>,
+    /// Why charts of the file were left out (`.ssc` only: unsupported step type, bad rows…);
+    /// `charts` keeps the playable ones, so indices into it are the file's variants.
+    pub skipped: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -64,6 +67,14 @@ pub struct SmChart {
     pub meter: u32,
     pub column_count: u8,
     pub notes: Vec<SmNote>,
+    /// Free-form chart name (`#DESCRIPTION`, `.ssc` only; empty in `.sm` files).
+    pub description: String,
+    /// Chart author (`#CREDIT` of the chart, `.ssc` only); the file's credit when `None`.
+    pub credit: Option<String>,
+    /// Chart's own BPM changes in µs (`.ssc` only: its timing, stops included); the file's when `None`.
+    pub bpms: Option<Vec<(i64, f32)>>,
+    /// Chart's own `#OFFSET` in µs (`.ssc` only); the file's when `None`.
+    pub offset_us: Option<i64>,
 }
 
 impl Default for SmChart {
@@ -74,6 +85,10 @@ impl Default for SmChart {
             meter: 0,
             column_count: 4,
             notes: Vec::new(),
+            description: String::new(),
+            credit: None,
+            bpms: None,
+            offset_us: None,
         }
     }
 }
@@ -85,6 +100,17 @@ impl SmChart {
             "dance-double" | "pump-double" | "dance-couple" => 8,
             "dance-solo" | "pump-halfdouble" => 6,
             _ => 4,
+        }
+    }
+
+    /// The name the chart is listed under: its difficulty, or for an `Edit` its description
+    /// (Edit charts are told apart by it).
+    #[must_use]
+    pub fn label(&self) -> &str {
+        if self.difficulty.eq_ignore_ascii_case("edit") && !self.description.is_empty() {
+            &self.description
+        } else {
+            &self.difficulty
         }
     }
 }

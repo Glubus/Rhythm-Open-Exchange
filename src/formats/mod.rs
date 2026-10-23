@@ -15,6 +15,8 @@ pub mod taiko;
 #[cfg(feature = "std")]
 pub mod auto;
 #[cfg(feature = "std")]
+pub mod names;
+#[cfg(feature = "std")]
 pub mod qua;
 #[cfg(feature = "std")]
 pub mod yrox;
@@ -24,11 +26,13 @@ pub use jrox::{JroxDecoder, JroxEncoder};
 pub use mc::{McDecoder, McEncoder};
 pub use osu::{OsuDecodeOptions, OsuDecoder, OsuEncoder};
 pub use rox_native::RoxNativeCodec;
-pub use sm::{SmDecoder, SmEncoder};
+pub use sm::{SmDecoder, SmEncoder, SscDecoder, SscEncoder};
 pub use taiko::TaikoDecoder;
 
 #[cfg(feature = "std")]
-pub use auto::{auto_convert, auto_decode, auto_decode_bytes, auto_encode};
+pub use auto::{auto_convert, auto_decode, auto_decode_bytes, auto_decode_variant, auto_encode};
+#[cfg(feature = "std")]
+pub use names::{RomanisedNames, romanised_names, romanised_names_from_bytes};
 #[cfg(feature = "std")]
 pub use qua::{QuaDecoder, QuaEncoder};
 #[cfg(feature = "std")]
