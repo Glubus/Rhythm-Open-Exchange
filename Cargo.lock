@@ -345,6 +345,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cadadef317c2f20755a64d7fdc48f9e7178ee6b0e1f7fce33fa60f1d68a276e6"
 
 [[package]]
+name = "rhythm-open-exchange"
+version = "0.7.0"
+dependencies = [
+ "atoi",
+ "bitflags",
+ "compact_str",
+ "memchr",
+ "memmap2",
+ "rkyv",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+ "tracing",
+ "xxhash-rust",
+ "zstd",
+]
+
+[[package]]
 name = "rkyv"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -368,26 +388,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "rox"
-version = "0.7.0"
-dependencies = [
- "atoi",
- "bitflags",
- "compact_str",
- "memchr",
- "memmap2",
- "rkyv",
- "rstest",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
- "tracing",
- "xxhash-rust",
- "zstd",
 ]
 
 [[package]]

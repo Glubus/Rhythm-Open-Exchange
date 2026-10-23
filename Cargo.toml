@@ -1,5 +1,5 @@
 [package]
-name = "rox"
+name = "rhythm-open-exchange"
 version = "0.7.0"
 edition = "2024"
 license = "MIT"
@@ -7,6 +7,11 @@ repository = "https://github.com/Glubus/rhythm-open-exchange"
 description = "Universal VSRG chart model, codecs, format support, and analysis"
 keywords = ["rhythm-game", "beatmap", "vsrg", "chart"]
 categories = ["encoding", "game-development"]
+readme = "README.md"
+
+# The package is `rhythm-open-exchange` (the name `rox` is taken on crates.io); the library stays `rox`.
+[lib]
+name = "rox"
 
 [features]
 default = ["formats", "analysis"]
