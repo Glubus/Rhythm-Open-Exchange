@@ -1,58 +1,17 @@
 # Pattern Recognition
 
-## Overview
+Pattern recognition is part of the `rox-analysis` crate (planned for v0.8.0).
 
-ROX implements advanced pattern recognition logic directly ported from the [Quattern](https://github.com/Leinadix/Quattern) library (originally C#). This allows for VSRG-centric analysis of charts, identifying patterns such as streams, jacks, jumps, and technical hybrids.
+## Planned Features
 
-## Technical Decisions
+- **Jack detection** — repeated notes on the same column
+- **Trill detection** — alternating notes between two columns
+- **Chord detection** — simultaneous notes across multiple columns
+- **Stream detection** — sustained single-note bursts
+- **Density heatmap** — NPS over time by column
 
-### 1. Porting Quattern
+## Current Status
 
-**Decision**: We chose to port Quattern logic to Rust rather than using FFI or creating a new algorithm from scratch.
+The `rox-analysis` crate exists as a scaffold. No analysis logic is implemented yet.
 
-**Why**:
-- **Proven Accuracy**: Quattern is battle-tested in the osu!mania community and provides results that players trust.
-- **Performance**: A native Rust port avoids the overhead of managing a .NET runtime side-by-side with Rust, especially for WASM targets.
-- **Ownership**: Having the logic in Rust allows us to expose it cleanly to all our bindings (Python, C#, WASM) via UniFFI.
-
-### 2. QuadTree Architecture
-
-**Decision**: The core analysis uses a QuadTree structure to represent note distribution over time and columns.
-
-**Why**:
-- **Spatial Efficiency**: Rhythm game charts are "sparse matrices". A QuadTree allows us to skip empty regions efficiently.
-- **Recursive Merging**: Patterns are self-similar. A "stream" is composed of smaller trills. A QuadTree allows us to define merge rules that propagate classifications from the leaves (2x2 atomics) up to the root.
-
-### 3. Classification Taxonomy
-
-**Decision**: adhering to standard VSRG terminology (Jumpstream, Handstream, Chordjack).
-
-**Why**: To ensure the output is meaningful to the end-users (players and mappers) without requiring translation.
-
-
-### 4. JSON Output Standardization
-
-**Decision**: The analysis output is flattened into a linear timeline of pattern entries, discarding the hierarchical tree structure in the final output.
-
-**Why**: 
-- **Consumer Simplicity**: Frontends and API consumers expect a list of events ("Stream from X to Y") rather than a complex QuadTree.
-- **Interoperability**: Matches the expected format for pattern density graphs and UI visualization.
-- **Fields**: Each entry includes `start_time`, `end_time`, `duration`, `pattern_type`, `avg/min/max_bpm`, and `note_count`.
-
-## Usage
-
-### CLI
-You can run the analysis via the CLI using the `-aa` flag:
-```bash
-rox info chart.osu -aa
-```
-
-### Rust API
-```rust
-use rhythm_open_exchange::analysis::RoxAnalysis;
-
-let result = chart.pattern_analysis();
-for entry in result.timeline.entries {
-    println!("{}: {}", entry.time_start_us, entry.pattern);
-}
-```
+See `docs/superpowers/plans/2026-03-28-rox-analysis.md` for the implementation plan.

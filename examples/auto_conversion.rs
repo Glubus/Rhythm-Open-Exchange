@@ -1,4 +1,4 @@
-use rhythm_open_exchange::codec::{auto_decode, auto_encode};
+use rox::formats::{auto_decode, auto_encode};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Chart loaded:");
     println!("  Title: {}", chart.metadata.title);
     println!("  Artist: {}", chart.metadata.artist);
-    println!("  Key Count: {}", chart.key_count());
+    println!("  Key Count: {}", chart.key_count);
     println!("  Notes: {}", chart.note_count());
 
     // Encode to ROX bytes

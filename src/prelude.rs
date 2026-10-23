@@ -1,15 +1,12 @@
-//! Prelude module for convenient imports.
+//! Convenient re-exports for common types.
 //!
-//! Import everything you need with a single use statement:
 //! ```
-//! use rhythm_open_exchange::prelude::*;
+//! use rox::prelude::*;
 //! ```
 
-#[cfg(feature = "compression")]
-pub use crate::codec::RoxCodec;
-pub use crate::codec::{
-    Decoder, Encoder, Format, InputFormat, OutputFormat, auto_convert, auto_decode, auto_encode,
-    from_bytes, from_string,
-};
+pub use crate::codec::convert;
+#[cfg(feature = "std")]
+pub use crate::codec::convert_file;
+pub use crate::codec::{Decoder, Encoder, Format};
 pub use crate::error::{RoxError, RoxResult};
 pub use crate::model::{Hitsound, Metadata, Note, NoteType, RoxChart, TimingPoint};
