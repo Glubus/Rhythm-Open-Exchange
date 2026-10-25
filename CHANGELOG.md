@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-25
+
+### Security
+
+- Native `.rox` decoding is now checked. It used `rkyv::from_bytes_unchecked` on an unbounded zstd inflation, so a malformed or hostile file (a download, for instance) was undefined behaviour and a zstd bomb could exhaust memory. Now the zstd frame is inflated into a bounded, aligned buffer (`MAX_DECOMPRESSED`, 64 MiB; past it `RoxError::InvalidFormat`), the rkyv archive is validated with `bytecheck` (`rkyv` feature `bytecheck`) before anything is read (damaged files give `RoxError::Deserialize`), and the declared counts are capped (`MAX_NOTES` 4 000 000, `MAX_TIMING_POINTS` and `MAX_HITSOUNDS` 1 000 000). There is no unchecked path; measured on a 200 000-note chart the validation costs about 35 µs of a 4.4 ms decode (zstd is 2.4 ms). Delta-decoded note times wrap instead of overflowing. No API change.
+
 ## [0.8.0] - 2026-10-23
 
 ### Added
