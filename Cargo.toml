@@ -1,6 +1,6 @@
 [package]
 name = "rhythm-open-exchange"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Glubus/rhythm-open-exchange"
@@ -43,7 +43,7 @@ bitflags = { version = "2.9", default-features = false, optional = true }
 compact_str = { version = "0.9.0", default-features = false, features = ["serde", "rkyv"] }
 memchr = { version = "2.7", default-features = false, optional = true }
 memmap2 = { version = "0.9", optional = true }
-rkyv = { version = "0.8", default-features = false, features = ["alloc"] }
+rkyv = { version = "0.8", default-features = false, features = ["alloc", "bytecheck"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
 serde_yaml = { version = "0.9", optional = true }
