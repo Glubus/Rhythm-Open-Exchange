@@ -174,13 +174,17 @@ impl<'a> SngPackage<'a> {
         listing
     }
 
+    /// The chart of the package: `notes.mid` when there is one, else `notes.chart` (the order of the reader of
+    /// `YARG.Core`, which takes the first of `notes.mid`, `notes.midi`, `notes.chart`; `notes.midi` is not read here).
     fn converted(&self) -> RoxResult<Converted> {
+        if let Some(at) = self.find("notes.mid") {
+            if self.entries[at].len > super::smf::MAX_FILE_BYTES as u64 {
+                return Err(err("notes.mid is too large"));
+            }
+            return super::mid::convert(&self.read(at)?, Some(&self.ini()));
+        }
         let Some(at) = self.find("notes.chart") else {
-            return Err(if self.find("notes.mid").is_some() {
-                err("the chart is a notes.mid (not read by this decoder)")
-            } else {
-                err("no notes.chart")
-            });
+            return Err(err("no notes.chart or notes.mid"));
         };
         if self.entries[at].len > MAX_TEXT_BYTES as u64 {
             return Err(err("notes.chart is too large"));

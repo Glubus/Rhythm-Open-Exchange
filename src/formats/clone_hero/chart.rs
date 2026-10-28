@@ -253,7 +253,7 @@ pub fn parse_sync(lines: &[&str]) -> SyncEvents {
 }
 
 /// Sorts by tick (stable) and keeps the last event of each tick; returns how many were dropped.
-fn last_of_tick<T: Copy>(events: &mut Vec<(u64, T)>) -> usize {
+pub(super) fn last_of_tick<T: Copy>(events: &mut Vec<(u64, T)>) -> usize {
     events.sort_by_key(|e| e.0);
     let before = events.len();
     let mut kept: Vec<(u64, T)> = Vec::with_capacity(before);
@@ -268,7 +268,7 @@ fn last_of_tick<T: Copy>(events: &mut Vec<(u64, T)>) -> usize {
 }
 
 /// Beats per measure counted in quarter notes: `numerator x 4 / 2^exponent`, rounded, at least 1, at most 255.
-fn quarter_beats(numerator: u32, exponent: u32) -> u8 {
+pub(super) fn quarter_beats(numerator: u32, exponent: u32) -> u8 {
     let beats = (u64::from(numerator) * 4 + (1u64 << exponent) / 2) >> exponent;
     u8::try_from(beats.clamp(1, 255)).unwrap_or(u8::MAX)
 }

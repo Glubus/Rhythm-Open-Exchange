@@ -49,6 +49,15 @@ Prism's, not upstream's, and must be kept when ROX is updated from crates.io (ow
   (`SongData.hx`, `SongRegistry.hx`, `Conductor.hx`, `Song.hx`, `VoicesGroup.hx`, `PlayState.hx`, `Paths.hx`; Apache-2.0, read not copied) and ShadowMario/FNF-PsychEngine
   (`Song.hx`, `PlayState.hx`; Apache-2.0, read not copied). No real file is in the repository: the game's songs (Funkin.assets) are proprietary, so tests use charts and zips
   built in memory; the 61 chart files of Funkin.assets (168 difficulties) were decoded locally only.
+- **Clone Hero `.mid` decoder** (2026-10-28): `src/formats/clone_hero/smf.rs` (Standard MIDI File reader), `mid.rs` (`MidDecoder`, tracks, notes, tempo map; shares `settle_notes`, `audio_shift` and `metadata` with
+  `decoder.rs`, which was split for it), `mid_tests.rs` (every file built byte by byte), `DetectedFormat::CloneHeroMid` (matched by the file NAME `notes.mid`, `src/formats/auto/detect.rs`) and its arms in
+  `src/formats/auto/dispatch.rs`, `SngPackage` reading `notes.mid` (`sng.rs`), the exports in `src/formats/mod.rs`. Decode only. Written from `vendor/vsrg-format-docs/vsrg/clone-hero/mid` and checked against
+  TheNathannator/GuitarGame_ChartFormats (CC0; commit 3d36405, `docs/Chart-File-Formats/mid-format/`) and the `.mid` reader of Moonscraper kept in YARC-Official/YARG.Core (commit 9dafd34,
+  `MoonscraperChartParser/IO/Midi/MidReader*.cs`, `PhaseShiftSysEx.cs`, `MidIOHelper.cs`, `SongEntry.IniBase.cs`, `CacheHandler.cs`: the tempo map from the first chunk, the track names, the key map, the
+  pairing of notes, the `resolution / 3` sustain cutoff and the `sustain_cutoff_threshold` override, `[ENHANCED_OPENS]`, the Phase Shift SysEx, the order `notes.mid` / `notes.midi` / `notes.chart`).
+  Licences read: YARG.Core is LGPL-3.0 (its `README.md` and `LICENSE`; the Moonscraper parser inside it is BSD-3-Clause, `MoonscraperChartParser/LICENSE`), read not copied, no code was ported. NOTE: the
+  older Clone Hero entry below says YARG.Core is MIT; its `LICENSE` is the LGPL-3.0. No real `.mid` is in the repository (community charts have no licence): every test file is built in memory, and no
+  real chart was decoded.
 - **Clone Hero decoders** (2026-10-28): `src/formats/clone_hero/` (`mod.rs` decisions, `chart.rs` text sections, `[Song]`, `[SyncTrack]` and the tempo map, `ini.rs` `song.ini`,
 - **`.sng` dispatch and `auto_decode_all`** (2026-10-28): `DetectedFormat::Sng` (`src/formats/auto/detect.rs`), the `.sng` arms and `auto_decode_all` / `FileVariant` in `src/formats/auto/dispatch.rs` (a scan decodes every difficulty of a multi-chart file from one read), exported by `src/formats/mod.rs`; test `auto_decode_routes_a_sng_by_its_path_and_lists_every_variant` in `clone_hero/tests.rs`. `cargo test` of the crate: 386 + 1 doc test pass.
   `decoder.rs` tracks, variants, report and metadata, `plan.rs` audio plan, `sng.rs` `.sng` package, `tests.rs` with every file built in memory), `DetectedFormat::CloneHero` and its
@@ -65,6 +74,9 @@ Prism's, not upstream's, and must be kept when ROX is updated from crates.io (ow
   825467bcd81c812b33ad684dc04dd151b2d5dec3, whose `Docs/Licenses.txt` was read), read not copied: the only value taken from it is the 60 KiB size limit of an edit. No code was ported, so there is no
   "Adapted from StepMania" comment. No real `.ssq` or `.edit` is in the repository (Konami's data and community edits have no licence): every test file is built in memory, and the tempo chunk of the
   format notes' example (skogaby's `ssq_format.md` section 3.5) is a byte-for-byte test vector.
+- **`sm::first_audio_file` and `sm::audio_files` made `pub`** (2026-10-28): the `.sm` rule "a song that names no audio file, or one that is missing, plays the first audio file of its folder" is
+  what Prism applies to `.dwi`, `.ksf` and `.ssq` (`game_core::dance_audio`), and `audio_files` lists the folder's audio files sorted by lower-cased name so a `.ssq` can prefer the file of its own stem.
+  No behaviour changed (`first_audio_file` is `audio_files(..).first()`).
 - **`.dwi` and `.ksf` decoders** (2026-10-28): `src/formats/dwi/` (`mod.rs` decisions, `parser.rs`, `decoder.rs`, `tests.rs`), `src/formats/ksf/` (same files), `src/formats/sm/legacy.rs` (number parsing, row rounding and text decoding of the StepMania loaders),
   `tokenize_raw` in `src/formats/sm/msd.rs`, `SongTiming::new` and the `pub(crate)` visibility of `SongTiming`, `timing_for` and `bpm_points` in `src/formats/sm/ssc_parser.rs`, `DetectedFormat::Dwi`/`Ksf` and their arms in `src/formats/auto/`, the exports in `src/formats/mod.rs`.
   Decode only. Written from `vendor/vsrg-format-docs/vsrg/{dwi/dwi,kick-it-up/ksf}` and PORTED from StepMania (MIT; commit 825467bcd81c812b33ad684dc04dd151b2d5dec3, whose `Docs/Licenses.txt` was read):

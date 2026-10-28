@@ -55,7 +55,7 @@ pub use bms::{BmsDecoder, BmsonDecoder, PmsDecoder};
 #[cfg(feature = "std")]
 pub use dwi::DwiDecoder;
 #[cfg(feature = "std")]
-pub use clone_hero::{ChartDecoder, SngPackage, SongIni};
+pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
 #[cfg(feature = "std")]
 pub use ksf::{KsfContext, KsfDecoder};
 #[cfg(feature = "std")]

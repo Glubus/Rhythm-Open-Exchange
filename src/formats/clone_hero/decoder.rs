@@ -184,6 +184,14 @@ pub struct ChartReport {
     pub unsupported_tracks: Vec<String>,
     /// Stream tags or listed names that are absolute or climb out of the folder: refused.
     pub unsafe_names: usize,
+    /// `.mid` only: note on events of a key already sounding and note off events with no note on, plus the notes
+    /// and phrase markers still open at the end of the track: ignored.
+    pub unpaired_midi_events: usize,
+    /// `.mid` only: tempo and time signature events met in an instrument track (the tempo map is the first track's
+    /// alone, as in the format notes): ignored.
+    pub sync_events_off_first_track: usize,
+    /// `.mid` only: a second track of an instrument that is already read: ignored.
+    pub duplicate_tracks_ignored: usize,
 }
 
 /// What a caller knows beside the chart bytes.
@@ -439,7 +447,7 @@ fn is_supported_name(name: &str) -> bool {
 ///
 /// `delay` of the `song.ini` (ms) when present and not 0; else `Offset` of `[Song]` (seconds). Both have the same
 /// sign: positive = the audio starts before the chart, so the notes sound later in the audio.
-fn audio_shift(
+pub(super) fn audio_shift(
     song: &SongSection,
     ini: Option<&SongIni>,
     report: &mut ChartReport,
@@ -523,6 +531,19 @@ fn track_notes(
             _ => report.unknown_note_types += 1,
         }
     }
+    settle_notes(events, cutoff, |tick| tempo.us(tick), shift_us, report)
+}
+
+/// Notes from `(tick, fret, length in ticks)` events: sorted, one per tick and fret (the first stays), a sustain shorter
+/// than `cutoff` a tap, a sustain never past the next note of its fret, ticks to times with `us` (µs, unrounded) plus
+/// `shift_us`. Shared by the `.chart` and the `.mid` decoders.
+pub(super) fn settle_notes(
+    mut events: Vec<(u64, u8, u64)>,
+    cutoff: u64,
+    us: impl Fn(u64) -> f64,
+    shift_us: i64,
+    report: &mut ChartReport,
+) -> Vec<Note> {
     events.sort_by_key(|e| (e.0, e.1)); // stable: the first of a tick and fret stays first
     let before = events.len();
     events.dedup_by(|later, first| later.0 == first.0 && later.1 == first.1);
@@ -547,7 +568,7 @@ fn track_notes(
 
     let mut notes = Vec::with_capacity(events.len());
     for (tick, column, length) in events {
-        let start = tempo.us(tick);
+        let start = us(tick);
         if start > MAX_US {
             report.events_out_of_range += 1;
             continue;
@@ -558,7 +579,7 @@ fn track_notes(
             notes.push(Note::tap(time_us, column));
             continue;
         }
-        let end = tempo.us(tick + length);
+        let end = us(tick + length);
         #[allow(clippy::cast_possible_truncation)] // checked against MAX_US first
         let duration = if end > MAX_US {
             0
@@ -575,7 +596,7 @@ fn track_notes(
     notes
 }
 
-fn metadata(
+pub(super) fn metadata(
     song: &SongSection,
     ini: Option<&SongIni>,
     instrument: Instrument,

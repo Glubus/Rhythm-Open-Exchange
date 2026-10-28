@@ -29,7 +29,10 @@ pub enum DetectedFormat {
     Fnfc,
     /// `.chart` (Clone Hero / Moonscraper): several tracks in one file, read with the `song.ini` beside it. Decode only.
     CloneHero,
-    /// `.sng` (Clone Hero package, holds a `notes.chart`): read with its own metadata. Decode only.
+    /// `notes.mid` (Clone Hero / Rock Band MIDI chart, matched by the file NAME, case-insensitively: any other `.mid` is an
+    /// ordinary MIDI file and stays unsupported): several tracks in one file, read with the `song.ini` beside it. Decode only.
+    CloneHeroMid,
+    /// `.sng` (Clone Hero package, holds a `notes.mid` or a `notes.chart`): read with its own metadata. Decode only.
     Sng,
     /// `.edit` (StepMania edit chart): a fragment that names its song with `#SONG` and has no timing or metadata of its own, so a
     /// path alone can not be decoded: `auto_decode` fails with `InvalidFormat("edit needs its song")`; read it with
@@ -43,12 +46,19 @@ pub enum DetectedFormat {
     Ksf,
 }
 
-/// Detect format from the file extension of a path.
+/// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
 ///
 /// # Errors
 ///
 /// Returns `UnsupportedFormat` if the extension is missing or unknown.
 pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
+    if path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(crate::formats::clone_hero::is_mid_chart_name)
+    {
+        return Ok(DetectedFormat::CloneHeroMid);
+    }
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     match ext.to_ascii_lowercase().as_str() {
         "osu" => Ok(DetectedFormat::Osu),
@@ -99,6 +109,8 @@ mod tests {
     #[case("song.ojn", DetectedFormat::Ojn)]
     #[case("song.chart", DetectedFormat::CloneHero)]
     #[case("NOTES.CHART", DetectedFormat::CloneHero)]
+    #[case("notes.mid", DetectedFormat::CloneHeroMid)]
+    #[case("songs/Some Song/NOTES.MID", DetectedFormat::CloneHeroMid)]
     #[case("song.sng", DetectedFormat::Sng)]
     #[case("SONG.SNG", DetectedFormat::Sng)]
     #[case("song.fnfc", DetectedFormat::Fnfc)]
@@ -117,6 +129,9 @@ mod tests {
 
     #[rstest]
     #[case("song.mp3")]
+    #[case("song.mid")]
+    #[case("my notes.mid")]
+    #[case("notes.mid.bak")]
     #[case("no_ext")]
     fn test_detect_unknown(#[case] name: &str) {
         assert!(detect(Path::new(name)).is_err());

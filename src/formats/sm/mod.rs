@@ -72,11 +72,22 @@ pub fn parse_bytes(path: &std::path::Path, data: &[u8]) -> rox::error::RoxResult
     Ok(file)
 }
 
-/// The first audio file of `folder` by name, ignoring case.
+/// The first audio file of `folder` by name, ignoring case (what StepMania plays when a song names none, or one that is missing).
 #[cfg(feature = "std")]
-fn first_audio_file(folder: &std::path::Path) -> Option<String> {
-    let mut names: Vec<String> = std::fs::read_dir(folder)
-        .ok()?
+#[must_use]
+pub fn first_audio_file(folder: &std::path::Path) -> Option<String> {
+    audio_files(folder).into_iter().next()
+}
+
+/// The names of the audio files (`.ogg`, `.oga`, `.mp3`, `.wav`, `.flac`, any case) directly in `folder`, sorted by lower-cased
+/// name; empty when the folder can not be read.
+#[cfg(feature = "std")]
+#[must_use]
+pub fn audio_files(folder: &std::path::Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
         .filter(|entry| {
@@ -93,5 +104,5 @@ fn first_audio_file(folder: &std::path::Path) -> Option<String> {
         .filter_map(|entry| entry.file_name().into_string().ok())
         .collect();
     names.sort_by_key(|name| name.to_lowercase());
-    names.into_iter().next()
+    names
 }

@@ -131,16 +131,12 @@ File.WriteAllText("chart.sm", sm);
 | BMS family (Prism's addition) | `.bms/.bme/.bml/.pms/.bmson` | ✅ | ❌ |
 | O2Jam (Prism's addition) | `.ojn` (charts), `.ojm` (sample container, `OjmContainer`) | ✅ | ❌ |
 | Friday Night Funkin' (legacy `{"song": ...}`, Psych) | `.json` | ✅ | ✅ | (Experimental) |
-| Clone Hero (Prism's addition) | `.chart` (5-lane tracks: guitar, co-op guitar, bass, rhythm, keys), `song.ini` (`SongIni`), `.sng` package (`SngPackage`) | ✅ | ❌ |
+| Clone Hero (Prism's addition) | `.chart` and `notes.mid` (5-lane tracks: guitar, co-op guitar, bass, rhythm, keys; a `.mid` is a chart only when it is NAMED `notes.mid`: `MidDecoder`), `song.ini` (`SongIni`), `.sng` package (`SngPackage`, `notes.mid` or `notes.chart`) | ✅ | ❌ |
 | Friday Night Funkin' V-Slice (Prism's addition) | `<song>-chart.json` + `<song>-metadata.json`, `.fnfc` package | ✅ | ❌ |
 | DDR (Prism's addition) | `.ssq` (Single and Double charts, no title or audio in the file) | ✅ | ❌ |
 | StepMania edits (Prism's addition) | `.edit` (read with the song's `.sm`/`.ssc`: `EditDecoder`; `auto_decode` of a lone `.edit` fails with `edit needs its song`) | ✅ | ❌ |
 | Dance With Intensity (Prism's addition) | `.dwi` (every Single, Solo and Double chart of the file; `DwiDecoder`) | ✅ | ❌ |
 | Kick It Up / Direct Move (Prism's addition) | `.ksf` (one `pump-single` or `pump-halfdouble` chart per file, read with its file name: `KsfDecoder`) | ✅ | ❌ |
-
-### Planned
-
-- Clone Hero `.mid` (the `.chart`, `song.ini` and `.sng` are read, see `src/formats/clone_hero/mod.rs`)
 
 ## Performance
 

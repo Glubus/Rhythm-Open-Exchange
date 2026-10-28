@@ -1,0 +1,33 @@
+*---------------------- HEADER FIELD
+* Hand-written for Prism's tests (public domain). 7 keys + scratch: 8 columns, the scratch (channel 16) first, then keys 1 to 7
+* (channels 11 to 15, 18, 19). One background sound, a tap in every column, one long note on the scratch.
+
+#PLAYER 1
+#GENRE Test
+#TITLE ROX BME 7 keys and scratch
+#ARTIST Prism
+#BPM 120
+#PLAYLEVEL 7
+#LNTYPE 1
+
+#WAV01 song.ogg
+#WAV02 hit.wav
+
+*---------------------- MAIN DATA FIELD
+
+* measure 0 (120 BPM, 2 s): the background sound; then one tap per column, one per quarter note of the measure
+#00001:01
+#00016:02000000
+#00011:00020000
+#00012:00000200
+#00013:00000002
+
+* measure 1: the other four columns
+#00114:02000000
+#00115:00020000
+#00118:00000200
+#00119:00000002
+
+* measures 2 and 3: a long note on the scratch (channel 56), its head at the start of measure 2, its end at the start of measure 3
+#00256:02
+#00356:02

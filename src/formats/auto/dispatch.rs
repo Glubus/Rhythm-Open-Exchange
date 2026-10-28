@@ -13,7 +13,7 @@ use crate::formats::{
     RoxNativeCodec, SmDecoder, SmEncoder, SscDecoder, SscEncoder, YroxDecoder, YroxEncoder,
 };
 use crate::formats::VSliceDecoder;
-use crate::formats::{ChartDecoder, SngPackage};
+use crate::formats::{ChartDecoder, MidDecoder, SngPackage};
 use crate::formats::SsqDecoder;
 use crate::formats::{DwiDecoder, KsfContext, KsfDecoder};
 
@@ -33,6 +33,9 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
         return ChartDecoder::decode_file(path, 0);
     }
+    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHeroMid) {
+        return MidDecoder::decode_file(path, 0);
+    }
     if let Some(chart) = decode_vslice_file(path, 0)? {
         return Ok(chart);
     }
@@ -43,7 +46,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
 
 /// Decode chart `index` of a file: the `index`-th playable chart of a `.sm`/`.ssc` file (the
 /// numbering `sm::parse_file` gives), the `index`-th playable difficulty of an `.ojn` file (the numbering
-/// of `OjnDecoder::variants`), of a V-Slice chart, a `.fnfc` (default variation), a Clone Hero `.chart` or `.sng` (the numbering of
+/// of `OjnDecoder::variants`), of a V-Slice chart, a `.fnfc` (default variation), a Clone Hero `.chart`, `notes.mid` or `.sng` (the numbering of
 /// their `variants`), a `.ssq` (the numbering of `SsqDecoder::variants`; the file stem is the title), a `.dwi` (the numbering of
 /// `DwiDecoder::variants`), a `.ksf` (one chart: its file name gives the step type and the difficulty, its folder the title and artist
 /// `#TITLE` lacks), the only chart of any other format.
@@ -69,6 +72,9 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
     }
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
         return ChartDecoder::decode_file(path, index);
+    }
+    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHeroMid) {
+        return MidDecoder::decode_file(path, index);
     }
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Fnfc) {
         return VSliceDecoder::decode_fnfc_variant(&std::fs::read(path)?, "default", index);
@@ -145,14 +151,14 @@ fn decode_vslice_file(path: &Path, index: usize) -> RoxResult<Option<RoxChart>> 
 #[derive(Debug)]
 pub struct FileVariant {
     /// What identifies the difficulty in a message: the `.ojn` code (`EX`), the V-Slice difficulty id (`hard`), the Clone Hero
-    /// section (`ExpertSingle`).
+    /// section (`ExpertSingle`, or `PART GUITAR Expert` for a `notes.mid`).
     pub name: String,
     pub chart: RoxResult<RoxChart>,
 }
 
 /// Every playable difficulty of a file of the formats that hold several, each decoded (a difficulty that fails is its own `Err`,
 /// the others are still returned), from one read of the file: an `.ojn`, a V-Slice `<song>-chart[-<variation>].json` (with its
-/// metadata file), a `.fnfc` (default variation), a Clone Hero `.chart` (with the `song.ini` beside it), a `.sng`, a `.ssq` or a `.dwi`. The order and
+/// metadata file), a `.fnfc` (default variation), a Clone Hero `.chart` or `notes.mid` (with the `song.ini` beside it), a `.sng`, a `.ssq` or a `.dwi`. The order and
 /// the numbers are those of `auto_decode_variant`. `Ok(None)` for any other file (a `.json` that is not a V-Slice chart included),
 /// whose charts are read with `auto_decode_variant`.
 ///
@@ -205,6 +211,17 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
                 .map(|v| FileVariant {
                     name: v.section.clone(),
                     chart: ChartDecoder::decode_with_ini(&data, ini.as_deref(), v.index),
+                })
+                .collect()
+        }
+        DetectedFormat::CloneHeroMid => {
+            let data = std::fs::read(path)?;
+            let ini = crate::formats::clone_hero::decoder::read_sibling_ini(path);
+            MidDecoder::variants(&data)?
+                .iter()
+                .map(|v| FileVariant {
+                    name: v.section.clone(),
+                    chart: MidDecoder::decode_with_ini(&data, ini.as_deref(), v.index),
                 })
                 .collect()
         }
@@ -325,6 +342,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Bmson => BmsonDecoder::decode(data),
         DetectedFormat::Ojn => OjnDecoder::decode(data),
         DetectedFormat::CloneHero => ChartDecoder::decode(data),
+        DetectedFormat::CloneHeroMid => MidDecoder::decode(data),
         DetectedFormat::Fnfc => VSliceDecoder::decode_fnfc_variant(data, "default", 0),
         DetectedFormat::Sng => SngPackage::open(data)?.decode_variant(0),
         DetectedFormat::Edit => Err(edit_needs_its_song()),
@@ -350,6 +368,7 @@ fn encode_bytes(fmt: DetectedFormat, chart: &RoxChart) -> RoxResult<Vec<u8>> {
         | DetectedFormat::Bmson
         | DetectedFormat::Ojn
         | DetectedFormat::CloneHero
+        | DetectedFormat::CloneHeroMid
         | DetectedFormat::Sng
         | DetectedFormat::Edit
         | DetectedFormat::Ssq

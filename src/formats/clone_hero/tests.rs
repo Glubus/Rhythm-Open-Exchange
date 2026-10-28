@@ -797,14 +797,14 @@ fn auto_decode_reads_the_song_ini_of_the_folder() {
 
 // ------------------------------------------------------------------------------------------------------ sng
 
-struct SngBuilder {
+pub(super) struct SngBuilder {
     mask: [u8; 16],
     metadata: Vec<(String, String)>,
     files: Vec<(String, Vec<u8>)>,
 }
 
 impl SngBuilder {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             mask: [
                 0x13, 0x37, 0xA5, 0x5A, 0x00, 0xFF, 0x80, 0x01, 0x42, 0x24, 0x99, 0x66, 0xC3, 0x3C,
@@ -815,17 +815,17 @@ impl SngBuilder {
         }
     }
 
-    fn meta(mut self, key: &str, value: &str) -> Self {
+    pub(super) fn meta(mut self, key: &str, value: &str) -> Self {
         self.metadata.push((key.into(), value.into()));
         self
     }
 
-    fn file(mut self, name: &str, bytes: &[u8]) -> Self {
+    pub(super) fn file(mut self, name: &str, bytes: &[u8]) -> Self {
         self.files.push((name.into(), bytes.to_vec()));
         self
     }
 
-    fn build(&self) -> Vec<u8> {
+    pub(super) fn build(&self) -> Vec<u8> {
         let mut out = b"SNGPKG".to_vec();
         out.extend_from_slice(&1u32.to_le_bytes());
         out.extend_from_slice(&self.mask);
@@ -962,8 +962,9 @@ fn sng_without_a_chart_or_with_a_mid() {
     let bytes = SngBuilder::new().file("song.ogg", b"x").build();
     assert!(SngPackage::open(&bytes).unwrap().variants().is_err());
     let bytes = SngBuilder::new().file("notes.mid", b"MThd").build();
+    // A notes.mid is read now (see mid_tests.rs); this one is not a MIDI file.
     let err = SngPackage::open(&bytes).unwrap().variants().unwrap_err();
-    assert!(err.to_string().contains("notes.mid"));
+    assert!(err.to_string().contains("mid:"), "{err}");
     let bytes = SngBuilder::new().build();
     assert_eq!(SngPackage::open(&bytes).unwrap().entries.len(), 0);
 }
