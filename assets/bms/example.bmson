@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "info": {
+    "title": "ROX bmson features", "subtitle": "[FEATURES]", "artist": "Prism", "genre": "Test",
+    "subartists": ["music:Prism", "chart:Hand"],
+    "mode_hint": "beat-7k", "chart_name": "HYPER", "level": 7,
+    "init_bpm": 120.0, "resolution": 240, "back_image": "bg\\stage.png"
+  },
+  "lines": [ {"y": 0}, {"y": 960} ],
+  "bpm_events": [ {"y": 960, "bpm": 60.0} ],
+  "stop_events": [ {"y": 480, "duration": 240} ],
+  "sound_channels": [
+    { "name": "song.ogg", "notes": [ {"x": 0, "y": 0, "l": 0, "c": false} ] },
+    { "name": "kick.wav", "notes": [
+      {"x": 1, "y": 0, "l": 0, "c": false},
+      {"x": 8, "y": 480, "l": 0, "c": false},
+      {"x": 2, "y": 720, "l": 0, "c": false},
+      {"x": 3, "y": 960, "l": 480, "c": false},
+      {"x": 7, "y": 1440, "l": 0, "c": false}
+    ] },
+    { "name": "snare.wav", "notes": [ {"x": 1, "y": 0, "l": 0, "c": false}, {"x": 4, "y": 1200, "l": 0, "c": false} ] }
+  ],
+  "bga": { "bga_header": [], "bga_events": [], "layer_events": [], "poor_events": [] }
+}

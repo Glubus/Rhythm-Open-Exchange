@@ -1,0 +1,18 @@
+* Hand-written for Prism's ROX tests (public domain). Nine buttons, standard mapping: 11-15 then 22-25.
+#PLAYER 3
+#TITLE ROX PMS nine buttons
+#ARTIST Prism
+#BPM 120
+#WAV01 song.ogg
+#WAV02 hit.wav
+
+#00001:01
+#00011:02000000
+#00012:00020000
+#00013:00000200
+#00014:00000002
+#00015:02000000
+#00022:00020000
+#00023:00000200
+#00024:00000002
+#00025:02000000

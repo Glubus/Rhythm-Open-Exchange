@@ -1,0 +1,58 @@
+*---------------------- HEADER FIELD
+* Hand-written for Prism's ROX tests (public domain). 5 keys + scratch, one background sound.
+
+#PLAYER 1
+#GENRE Test
+#TITLE ROX BMS features
+#SUBTITLE [FEATURES]
+#ARTIST Prism
+#BPM 120
+#BPM01 180
+#STOP01 48
+#PLAYLEVEL 5
+#DIFFICULTY 3
+#LNTYPE 1
+#LNOBJ ZZ
+
+#WAV01 song.ogg
+#WAV02 kick.wav
+#WAV03 snare.wav
+
+* #RANDOM always draws 1 in ROX: the first branch is read.
+#RANDOM 2
+#IF 1
+#TITLE ROX BMS features (first branch)
+#ENDIF
+#IF 2
+#TITLE never read
+#ENDIF
+
+*---------------------- MAIN DATA FIELD
+
+* measure 0 (120 BPM): the background sound, a kick, a snare on key 1 and on the scratch
+#00001:01
+#00011:02000300
+#00016:0003
+
+* measure 1: BPM 180 from its start (channel 08 reads #BPM01), four notes
+#00108:01
+#00111:02020202
+
+* measure 2 is half as long; one note in its middle
+#00202:0.5
+#00212:0003
+
+* measure 3: a stop of one beat (#STOP01 48) at its start; a tap, and the head of a #LNOBJ long note
+#00309:01
+#00311:02
+#00313:02
+
+* measure 4: the #LNOBJ terminator (not a note), a mine on key 1, the head of a channel-5x long note
+#00413:ZZ
+#004D1:0A00
+#00454:02
+
+* measure 5: the end of the channel-5x long note, two taps
+#00554:02
+#00511:03
+#00515:02

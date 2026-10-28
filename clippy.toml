@@ -1,0 +1,2 @@
+# "StepMania" is a product name, not an identifier to put in backticks; ".." keeps clippy's default list.
+doc-valid-idents = ["StepMania", ".."]
