@@ -30,8 +30,10 @@
 pub mod bmson;
 pub mod decoder;
 mod parser;
-mod source;
-mod timing;
+pub(crate) mod source;
+pub(crate) mod timing;
+
+pub(crate) use parser::Frac;
 
 #[cfg(test)]
 mod bmson_tests;

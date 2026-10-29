@@ -12,11 +12,11 @@ use std::collections::BTreeMap;
 
 use super::parser::Frac;
 
-/// Highest measure number: three decimal digits.
-const MEASURES: usize = 1000;
+/// Number of measures: BMS numbers them with three decimal digits (000..=999), DTX with a base-36 hundreds digit (000..=Z99 = 3599).
+const MEASURES: usize = 3600;
 
 /// Beats at the start of every measure, `starts[m]`, and the length in beats of each.
-pub(super) struct Beats {
+pub(crate) struct Beats {
     starts: Vec<f64>,
     lengths: Vec<f64>,
 }
@@ -27,7 +27,7 @@ impl Beats {
         let mut lengths = Vec::with_capacity(MEASURES);
         let mut beat = 0.0;
         for measure in 0..MEASURES {
-            #[allow(clippy::cast_possible_truncation)] // MEASURES is 1000
+            #[allow(clippy::cast_possible_truncation)] // MEASURES is 3600
             let length = 4.0 * measure_len.get(&(measure as u16)).copied().unwrap_or(1.0);
             starts.push(beat);
             lengths.push(length);
@@ -45,7 +45,7 @@ impl Beats {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Change {
+pub(crate) enum Change {
     /// New BPM (already checked to be finite and positive).
     Bpm(f64),
     /// STOP in 1/48 beat units (already checked to be finite and positive).
@@ -64,12 +64,12 @@ struct Anchor {
     bpm: f64,
 }
 
-pub(super) struct Timeline {
+pub(crate) struct Timeline {
     anchors: Vec<Anchor>,
 }
 
 /// One BPM point of the result: seconds at the beat (before any STOP there) and the BPM from there on.
-pub(super) struct BpmPoint {
+pub(crate) struct BpmPoint {
     pub seconds: f64,
     pub bpm: f64,
 }

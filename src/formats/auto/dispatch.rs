@@ -6,7 +6,7 @@ use rox::codec::{Decoder, Encoder};
 use rox::error::{RoxError, RoxResult};
 use rox::model::RoxChart;
 
-use super::detect::{DetectedFormat, detect};
+use super::detect::{DetectedFormat, detect, detect_content, is_content_candidate};
 use crate::formats::{
     BmsDecoder, BmsonDecoder, FnfDecoder, FnfEncoder, JroxDecoder, JroxEncoder, McDecoder,
     McEncoder, OjnDecoder, OsuDecoder, OsuEncoder, PmsDecoder, QuaDecoder, QuaEncoder,
@@ -16,8 +16,14 @@ use crate::formats::VSliceDecoder;
 use crate::formats::{ChartDecoder, MidDecoder, SngPackage};
 use crate::formats::SsqDecoder;
 use crate::formats::{DwiDecoder, KsfContext, KsfDecoder};
+use crate::formats::{SusDecoder, UscDecoder};
+use crate::formats::{BestdoriDecoder, SimulatorDecoder};
+use crate::formats::ImdDecoder;
+use crate::formats::DtxDecoder;
+use crate::formats::KshDecoder;
 
-/// Decode a file to a `RoxChart`, detecting the format from the file extension.
+/// Decode a file to a `RoxChart`, detecting the format from the file extension. The two BanG Dream formats are told by content (a `.txt` that is a
+/// BanG! Simulator score, a Bestdori chart under one of its names): any other `.txt` or `.json` is read, or refused, as before.
 ///
 /// # Errors
 ///
@@ -28,6 +34,11 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &std::fs::read(path)?),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, 0),
+        Ok(DetectedFormat::Sus) => return SusDecoder::decode_file(path),
+        Ok(DetectedFormat::Usc) => return UscDecoder::decode_file(path),
+        Ok(DetectedFormat::Bestdori) => return BestdoriDecoder::decode_file(path),
+        Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
+        Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
         _ => {}
     }
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
@@ -39,6 +50,12 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     if let Some(chart) = decode_vslice_file(path, 0)? {
         return Ok(chart);
     }
+    if is_content_candidate(path) {
+        let data = std::fs::read(path)?;
+        if let Some(fmt) = detect_content(path, sniffed(&data)) {
+            return decode_bandori(fmt, path, &data);
+        }
+    }
     let fmt = detect(path)?;
     let data = std::fs::read(path)?;
     decode_bytes(fmt, &data)
@@ -46,10 +63,11 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
 
 /// Decode chart `index` of a file: the `index`-th playable chart of a `.sm`/`.ssc` file (the
 /// numbering `sm::parse_file` gives), the `index`-th playable difficulty of an `.ojn` file (the numbering
-/// of `OjnDecoder::variants`), of a V-Slice chart, a `.fnfc` (default variation), a Clone Hero `.chart`, `notes.mid` or `.sng` (the numbering of
+/// of `OjnDecoder::variants`), of a `.dtx` (the numbering of `DtxDecoder::variants`: Drums, Guitar, Bass), of a V-Slice chart, a `.fnfc` (default variation), a Clone Hero `.chart`, `notes.mid` or `.sng` (the numbering of
 /// their `variants`), a `.ssq` (the numbering of `SsqDecoder::variants`; the file stem is the title), a `.dwi` (the numbering of
 /// `DwiDecoder::variants`), a `.ksf` (one chart: its file name gives the step type and the difficulty, its folder the title and artist
-/// `#TITLE` lacks), the only chart of any other format.
+/// `#TITLE` lacks), a `.sus` or `.usc` (one chart; the file stem is the title `#TITLE` lacks), an `.imd` (one chart; its file name gives the lanes, the difficulty and the title), a `.ksh` (one chart; the file stem is the title `title=` lacks), a Bestdori chart or a BanG! Simulator `.txt` (one chart;
+/// the file stem is the title), the only chart of any other format.
 /// An `.edit` fails with `InvalidFormat("edit needs its song")`: it holds no timing or metadata, read it with `EditDecoder`.
 ///
 /// # Errors
@@ -61,13 +79,25 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
         Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&std::fs::read(path)?, index),
-        Ok(DetectedFormat::Ksf) if index > 0 => {
+        Ok(
+            DetectedFormat::Ksf
+            | DetectedFormat::Sus
+            | DetectedFormat::Usc
+            | DetectedFormat::Imd
+            | DetectedFormat::Ksh,
+        )
+            if index > 0 =>
+        {
             return Err(RoxError::InvalidFormat(format!(
                 "{} has a single chart, not chart {index}",
                 path.display()
             )));
         }
         Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &std::fs::read(path)?),
+        Ok(DetectedFormat::Sus) => return SusDecoder::decode_file(path),
+        Ok(DetectedFormat::Usc) => return UscDecoder::decode_file(path),
+        Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
+        Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
         _ => {}
     }
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
@@ -87,6 +117,9 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
     }
     if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Ojn) {
         return OjnDecoder::decode_variant(&std::fs::read(path)?, index);
+    }
+    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Dtx) {
+        return DtxDecoder::decode_variant(&std::fs::read(path)?, index);
     }
     if !crate::formats::sm::is_stepmania(path) {
         return if index == 0 {
@@ -157,7 +190,7 @@ pub struct FileVariant {
 }
 
 /// Every playable difficulty of a file of the formats that hold several, each decoded (a difficulty that fails is its own `Err`,
-/// the others are still returned), from one read of the file: an `.ojn`, a V-Slice `<song>-chart[-<variation>].json` (with its
+/// the others are still returned), from one read of the file: an `.ojn`, a `.dtx` (Drums, Guitar, Bass), a V-Slice `<song>-chart[-<variation>].json` (with its
 /// metadata file), a `.fnfc` (default variation), a Clone Hero `.chart` or `notes.mid` (with the `song.ini` beside it), a `.sng`, a `.ssq` or a `.dwi`. The order and
 /// the numbers are those of `auto_decode_variant`. `Ok(None)` for any other file (a `.json` that is not a V-Slice chart included),
 /// whose charts are read with `auto_decode_variant`.
@@ -236,6 +269,7 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
                 })
                 .collect()
         }
+        DetectedFormat::Dtx => dtx_variants(&std::fs::read(path)?)?,
         DetectedFormat::Dwi => {
             let data = std::fs::read(path)?;
             DwiDecoder::variants(&data)?
@@ -258,6 +292,17 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
         },
         _ => return Ok(None),
     }))
+}
+
+/// Every instrument of a `.dtx` (Drums, Guitar, Bass), each decoded.
+fn dtx_variants(data: &[u8]) -> RoxResult<Vec<FileVariant>> {
+    Ok(DtxDecoder::decode_all(data)?
+        .into_iter()
+        .map(|(variant, chart)| FileVariant {
+            name: variant.part.name().to_owned(),
+            chart,
+        })
+        .collect())
 }
 
 /// The bytes of a V-Slice chart file and of its metadata file; `None` when `path` is not a V-Slice chart (another name, or a
@@ -292,7 +337,14 @@ fn read_vslice_pair(path: &Path) -> RoxResult<Option<(Vec<u8>, Vec<u8>)>> {
 ///
 /// Returns `UnsupportedFormat` if the extension is unknown, or a decode error on failure.
 pub fn auto_decode_bytes(path_hint: impl AsRef<Path>, bytes: &[u8]) -> RoxResult<RoxChart> {
-    let fmt = detect(path_hint.as_ref())?;
+    let hint = path_hint.as_ref();
+    if let Some(fmt) = detect_content(hint, sniffed(bytes)) {
+        return decode_bandori(fmt, hint, bytes);
+    }
+    let fmt = detect(hint)?;
+    if fmt == DetectedFormat::Bestdori {
+        return decode_bandori(fmt, hint, bytes);
+    }
     if fmt == DetectedFormat::Ssq {
         let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
         return SsqDecoder::decode_with_title(bytes, 0, &title);
@@ -300,7 +352,38 @@ pub fn auto_decode_bytes(path_hint: impl AsRef<Path>, bytes: &[u8]) -> RoxResult
     if fmt == DetectedFormat::Ksf {
         return decode_ksf_bytes(path_hint.as_ref(), bytes);
     }
+    if fmt == DetectedFormat::Sus {
+        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
+        return SusDecoder::decode_with_title(bytes, &title);
+    }
+    if fmt == DetectedFormat::Usc {
+        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
+        return UscDecoder::decode_with_title(bytes, &title);
+    }
+    if fmt == DetectedFormat::Imd {
+        let file_name = path_hint.as_ref().file_name().map(|n| n.to_string_lossy());
+        return ImdDecoder::decode_with_name(bytes, file_name.as_deref().unwrap_or(""));
+    }
+    if fmt == DetectedFormat::Ksh {
+        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
+        return KshDecoder::decode_with_title(bytes, &title);
+    }
     decode_bytes(fmt, bytes)
+}
+
+/// The first bytes of a file, the ones `detect_content` looks at.
+fn sniffed(data: &[u8]) -> &[u8] {
+    &data[..data.len().min(crate::formats::sekai::SNIFF_BYTES)]
+}
+
+/// A BanG Dream chart (`fmt` is `Bestdori` or `BangSimulator`) with the file stem of `path_hint` as its title.
+fn decode_bandori(fmt: DetectedFormat, path_hint: &Path, data: &[u8]) -> RoxResult<RoxChart> {
+    let title = crate::formats::bandori::title_of(path_hint);
+    if fmt == DetectedFormat::BangSimulator {
+        SimulatorDecoder::decode_with_title(data, &title)
+    } else {
+        BestdoriDecoder::decode_with_title(data, &title)
+    }
 }
 
 /// Encode a `RoxChart` to a file, detecting the format from the file extension.
@@ -349,6 +432,13 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Ssq => SsqDecoder::decode_variant(data, 0),
         DetectedFormat::Dwi => DwiDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
+        DetectedFormat::Sus => SusDecoder::decode(data),
+        DetectedFormat::Usc => UscDecoder::decode(data),
+        DetectedFormat::Bestdori => BestdoriDecoder::decode(data),
+        DetectedFormat::Imd => ImdDecoder::decode(data),
+        DetectedFormat::Ksh => KshDecoder::decode(data),
+        DetectedFormat::Dtx => DtxDecoder::decode(data),
+        DetectedFormat::BangSimulator => SimulatorDecoder::decode(data),
     }
 }
 
@@ -374,8 +464,16 @@ fn encode_bytes(fmt: DetectedFormat, chart: &RoxChart) -> RoxResult<Vec<u8>> {
         | DetectedFormat::Ssq
         | DetectedFormat::Dwi
         | DetectedFormat::Ksf
+        | DetectedFormat::Sus
+        | DetectedFormat::Usc
+        | DetectedFormat::Bestdori
+        | DetectedFormat::Imd
+        | DetectedFormat::Ksh
+        | DetectedFormat::Dtx
+        | DetectedFormat::BangSimulator
         | DetectedFormat::Fnfc => Err(RoxError::UnsupportedFormat(
-            "BMS/PMS/bmson/ojn/fnfc/sng/edit/ssq/dwi/ksf files are read, not written".to_string(),
+            "BMS/PMS/bmson/ojn/fnfc/sng/edit/ssq/dwi/ksf/sus/usc/bestdori/BanG! Simulator/imd/dtx/ksh files are read, not written"
+                .to_string(),
         )),
     }
 }

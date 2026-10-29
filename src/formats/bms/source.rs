@@ -14,12 +14,12 @@ use std::borrow::Cow;
 use encoding_rs::{EUC_KR, SHIFT_JIS, UTF_8, UTF_16BE, UTF_16LE};
 
 /// The text of a BMS file and the name of the charset it was read with.
-pub(super) struct Text<'a> {
+pub(crate) struct Text<'a> {
     pub text: Cow<'a, str>,
     pub charset: &'static str,
 }
 
-pub(super) fn decode(data: &[u8]) -> Text<'_> {
+pub(crate) fn decode(data: &[u8]) -> Text<'_> {
     if data.starts_with(&[0xEF, 0xBB, 0xBF]) {
         let (text, _) = UTF_8.decode_with_bom_removal(data);
         return Text {

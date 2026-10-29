@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 
 /// A position inside a measure, as the reduced fraction `num / den` (`num < den`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Frac {
+pub(crate) struct Frac {
     pub num: u32,
     pub den: u32,
 }

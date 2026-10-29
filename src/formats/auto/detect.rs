@@ -44,6 +44,25 @@ pub enum DetectedFormat {
     Dwi,
     /// `.ksf` (Kick It Up / Direct Move): ONE chart per file; its step type and difficulty come from the file name. Decode only.
     Ksf,
+    /// `.sus` (Sliding Universal Score, the Project SEKAI dialect): ONE chart per file on 12 columns. Decode only.
+    Sus,
+    /// `.usc` (Universal Sekai Chart, JSON): ONE chart per file on 12 columns. Decode only.
+    Usc,
+    /// A Bestdori chart (BanG Dream, the JSON array of `BPM`/`Single`/`Long`/`Slide`/`Directional`): ONE chart per file on 7 columns. Decode only.
+    /// `detect` says it only for the names no other format uses (`.bestdori`, `.bestdori.json`); `detect_content` also for the other names of
+    /// a Bestdori chart (`expert.json`) when the content agrees. Any other `.json` stays `Fnf`.
+    Bestdori,
+    /// A BanG! Simulator `.txt` score (BanG Dream): ONE chart per file on 7 columns. Decode only. `detect` never says it (`.txt` is the most generic
+    /// extension there is): `detect_content` does, when the first lines are a simulator score.
+    BangSimulator,
+    /// `.imd` (Rhythm Master classic mode): ONE chart per file on 4 to 6 columns; the lane count and the difficulty come from the file name
+    /// (`<song>_<4|5|6>k_<ez|nm|hd>.imd`). Decode only. The extension is told by `detect`; whether a file is really one is `looks_like_imd`.
+    Imd,
+    /// `.dtx` (`DTXMania`): drums, guitar and bass of one song in one file, each instrument that has chips a variant. Decode only.
+    Dtx,
+    /// `.ksh` (`K-Shoot MANIA`, SOUND VOLTEX fan charts): ONE chart per file on 6 columns (BT A-D, FX-L, FX-R); the lasers are dropped. Decode only.
+    /// The extension is also a Korn shell script's, so `detect` says it and whether a file is really one is `looks_like_ksh`.
+    Ksh,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -52,6 +71,13 @@ pub enum DetectedFormat {
 ///
 /// Returns `UnsupportedFormat` if the extension is missing or unknown.
 pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
+    if path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.to_ascii_lowercase().ends_with(".bestdori.json"))
+    {
+        return Ok(DetectedFormat::Bestdori);
+    }
     if path
         .file_name()
         .and_then(|n| n.to_str())
@@ -81,8 +107,43 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "ssq" => Ok(DetectedFormat::Ssq),
         "dwi" => Ok(DetectedFormat::Dwi),
         "ksf" => Ok(DetectedFormat::Ksf),
+        "sus" => Ok(DetectedFormat::Sus),
+        "usc" => Ok(DetectedFormat::Usc),
+        "imd" => Ok(DetectedFormat::Imd),
+        "dtx" => Ok(DetectedFormat::Dtx),
+        "ksh" => Ok(DetectedFormat::Ksh),
+        "bestdori" => Ok(DetectedFormat::Bestdori),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),
     }
+}
+
+/// Whether `path` is a file `detect_content` may tell by its content: a `.txt`, or a name a Bestdori chart is listed under.
+pub(super) fn is_content_candidate(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+        || path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(crate::formats::bandori::is_bestdori_chart_name)
+}
+
+/// The formats `detect` does not claim because their extension is generic, told by the first bytes of the file `head` (or all of it): a
+/// BanG! Simulator score for a `.txt` ([`crate::formats::looks_like_simulator`]), a Bestdori chart for a file with a Bestdori name
+/// ([`crate::formats::is_bestdori_chart_name`]) whose content is one ([`crate::formats::looks_like_bestdori`]). `None` for anything else,
+/// an ordinary `.txt` or `.json` included.
+#[must_use]
+pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+    {
+        return crate::formats::bandori::looks_like_simulator(head)
+            .then_some(DetectedFormat::BangSimulator);
+    }
+    let name = path.file_name().and_then(|n| n.to_str())?;
+    (crate::formats::bandori::is_bestdori_chart_name(name)
+        && crate::formats::bandori::looks_like_bestdori(head))
+    .then_some(DetectedFormat::Bestdori)
 }
 
 #[cfg(test)]
@@ -121,8 +182,21 @@ mod tests {
     #[case("song.dwi", DetectedFormat::Dwi)]
     #[case("SONG.DWI", DetectedFormat::Dwi)]
     #[case("Crazy_1.ksf", DetectedFormat::Ksf)]
+    #[case("master.sus", DetectedFormat::Sus)]
+    #[case("MASTER.SUS", DetectedFormat::Sus)]
+    #[case("master.usc", DetectedFormat::Usc)]
+    #[case("MASTER.USC", DetectedFormat::Usc)]
     #[case("DOUBLE.KSF", DetectedFormat::Ksf)]
+    #[case("keluodiya_4k_hd.imd", DetectedFormat::Imd)]
+    #[case("SONG_6K_EZ.IMD", DetectedFormat::Imd)]
+    #[case("drums.dtx", DetectedFormat::Dtx)]
+    #[case("DRUMS.DTX", DetectedFormat::Dtx)]
+    #[case("exh.ksh", DetectedFormat::Ksh)]
+    #[case("INF.KSH", DetectedFormat::Ksh)]
     #[case("SONG.OSU", DetectedFormat::Osu)]
+    #[case("song.bestdori", DetectedFormat::Bestdori)]
+    #[case("Song.Bestdori.JSON", DetectedFormat::Bestdori)]
+    #[case("expert.json", DetectedFormat::Fnf)]
     fn test_detect_known(#[case] name: &str, #[case] expected: DetectedFormat) {
         assert_eq!(detect(Path::new(name)).unwrap(), expected);
     }
@@ -132,6 +206,8 @@ mod tests {
     #[case("song.mid")]
     #[case("my notes.mid")]
     #[case("notes.mid.bak")]
+    #[case("readme.txt")]
+    #[case("score.txt")]
     #[case("no_ext")]
     fn test_detect_unknown(#[case] name: &str) {
         assert!(detect(Path::new(name)).is_err());
