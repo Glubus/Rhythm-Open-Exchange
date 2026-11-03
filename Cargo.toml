@@ -54,9 +54,9 @@ thiserror = { version = "2.0", default-features = false }
 tracing = { version = "0.1", default-features = false, optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"], optional = true }
 zstd = { version = "0.13", optional = true }
-# `.fnfc` packages (FNF V-Slice). Prism's two workspaces use different majors (root: 8, `services/api`: 4); the range lets each keep
+# `.fnfc` packages (FNF V-Slice). Prism's two workspaces use different majors (root: 9, `services/api`: 4); the range lets each keep
 # its own, only the stable reader/writer API is used. Only the pure-Rust inflate backend, like the rest of the workspace.
-zip = { version = ">=4.6, <9", default-features = false, features = ["deflate-flate2-zlib-rs"], optional = true }
+zip = { version = ">=4.6, <10", default-features = false, features = ["deflate-flate2-zlib-rs"], optional = true }
 
 [dev-dependencies]
 rstest = "0.26.1"

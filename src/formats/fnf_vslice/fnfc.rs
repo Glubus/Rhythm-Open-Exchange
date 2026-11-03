@@ -42,6 +42,24 @@ fn zip_error(error: &zip::result::ZipError) -> rox::error::RoxError {
     bad(format!("fnfc is not a readable ZIP: {error}"))
 }
 
+/// An entry name as `ZipFile::name` returns it: a plain `&str` up to zip 8, a `Result<Cow<str>, ZipError>` (a name that cannot be
+/// decoded is an error) from zip 9. The manifest accepts both (`>=4.6, <10`: the game builds on 9, the site's workspace on 4).
+trait EntryName {
+    fn into_name(self) -> Option<String>;
+}
+
+impl EntryName for &str {
+    fn into_name(self) -> Option<String> {
+        Some(self.to_owned())
+    }
+}
+
+impl EntryName for Result<std::borrow::Cow<'_, str>, zip::result::ZipError> {
+    fn into_name(self) -> Option<String> {
+        self.ok().map(std::borrow::Cow::into_owned)
+    }
+}
+
 /// Unpacks one entry into memory, never more than `limit` bytes (the declared size is not trusted).
 fn read_limited(
     archive: &mut ZipArchive<Cursor<Vec<u8>>>,
@@ -87,7 +105,10 @@ impl FnfcPackage {
         for index in 0..archive.len() {
             let entry = archive.by_index_raw(index).map_err(|e| zip_error(&e))?;
             total = total.saturating_add(entry.size());
-            let name = entry.name().to_string();
+            let name = entry
+                .name()
+                .into_name()
+                .ok_or_else(|| bad(format!("fnfc entry {index} has a name that cannot be decoded")))?;
             let mut refused = 0;
             if safe_name(&name, &mut refused).is_none() || name.contains('\\') {
                 return Err(bad(format!(

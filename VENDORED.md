@@ -43,8 +43,8 @@ Prism's, not upstream's, and must be kept when ROX is updated from crates.io (ow
   containers are tested on files built in memory (hand-computed vectors and round trips); the ten real `.ojn` of `vsrg-format-docs` were used locally only.
 - **FNF V-Slice decoder** (2026-10-28): `src/formats/fnf_vslice/` (`mod.rs` decisions, `data.rs` JSON types, versions and tempo map, `decoder.rs` chart, variants and report,
   `audio.rs` audio plan, `fnfc.rs` package, `files.rs` file names, `tests.rs` with every file built in memory), `DetectedFormat::Fnfc` and the V-Slice routing of
-  `auto_decode*` (`src/formats/auto/`), the exports in `src/formats/mod.rs`, the optional dependency `zip` (`>=4.6, <9`, `deflate-flate2-zlib-rs`, in the `formats` feature:
-  the root workspace resolves it to 8, `services/api` to 4; licence MIT) in `Cargo.toml`, and in the legacy `src/formats/fnf/` the `format` field and the `psych_v1` lane
+  `auto_decode*` (`src/formats/auto/`), the exports in `src/formats/mod.rs`, the optional dependency `zip` (`>=4.6, <10`, `deflate-flate2-zlib-rs`, in the `formats` feature:
+  the root workspace resolves it to 9 since 2026-11-03 (zip 8 has four advisories), `services/api` to 4; `fnfc.rs` reads entry names through the `EntryName` trait so the same code builds on both; licence MIT) in `Cargo.toml`, and in the legacy `src/formats/fnf/` the `format` field and the `psych_v1` lane
   rule. Decode only. Written from `vendor/vsrg-format-docs/vsrg/friday-night-funkin/{vslice-chart-json,vslice-metadata-json,fnfc}` and checked against FunkinCrew/Funkin
   (`SongData.hx`, `SongRegistry.hx`, `Conductor.hx`, `Song.hx`, `VoicesGroup.hx`, `PlayState.hx`, `Paths.hx`; Apache-2.0, read not copied) and ShadowMario/FNF-PsychEngine
   (`Song.hx`, `PlayState.hx`; Apache-2.0, read not copied). No real file is in the repository: the game's songs (Funkin.assets) are proprietary, so tests use charts and zips
