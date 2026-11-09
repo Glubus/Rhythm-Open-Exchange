@@ -36,6 +36,9 @@ use crate::formats::CodenameDecoder;
 /// Returns `UnsupportedFormat` if the extension is unknown, or a decode error on failure.
 pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     let path = path.as_ref();
+    if let Some(data) = guitar_hero_mid(path)? {
+        return MidDecoder::decode_guitar_hero(&data, 0, &crate::formats::ssq::decoder::title_of(path));
+    }
     let detected = detect(path);
     match detected {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
@@ -131,6 +134,9 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
     let path = path.as_ref();
     let single = || RoxError::InvalidFormat(format!("{} has a single chart, not chart {index}", path.display()));
     let read = || std::fs::read(path);
+    if let Some(data) = guitar_hero_mid(path)? {
+        return MidDecoder::decode_guitar_hero(&data, index, &crate::formats::ssq::decoder::title_of(path));
+    }
     match detect(path) {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
@@ -226,6 +232,12 @@ pub struct FileVariant {
 /// Returns an error if the file cannot be read or its list of difficulties cannot be built.
 pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVariant>>> {
     let path = path.as_ref();
+    if let Some(data) = guitar_hero_mid(path)? {
+        let title = crate::formats::ssq::decoder::title_of(path);
+        return Ok(Some(each(&MidDecoder::guitar_hero_variants(&data)?, |v| v.section.clone(), |v| {
+            MidDecoder::decode_guitar_hero(&data, v.index, &title)
+        })));
+    }
     let Ok(fmt) = detect(path) else {
         return Ok(None);
     };
@@ -307,6 +319,17 @@ fn each<V>(
     decode: impl Fn(&V) -> RoxResult<RoxChart>,
 ) -> Vec<FileVariant> {
     variants.iter().map(|v| FileVariant { name: name(v), chart: decode(v) }).collect()
+}
+
+/// The bytes of a Guitar Hero 1/2 chart: a `.mid` not named `notes.mid` that holds a 5-lane instrument track; `None` for any other
+/// file (a `notes.mid` is Clone Hero's, another `.mid` an ordinary MIDI file).
+fn guitar_hero_mid(path: &Path) -> RoxResult<Option<Vec<u8>>> {
+    let is_mid = path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("mid"));
+    if !is_mid || path.file_name().and_then(|n| n.to_str()).is_some_and(crate::formats::clone_hero::is_mid_chart_name) {
+        return Ok(None);
+    }
+    let data = std::fs::read(path)?;
+    Ok(crate::formats::clone_hero::looks_like_guitar_hero_mid(&data).then_some(data))
 }
 
 /// The bytes of a V-Slice chart file and of its metadata file; `None` when `path` is not a V-Slice chart (another name, or a

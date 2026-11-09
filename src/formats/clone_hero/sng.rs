@@ -181,7 +181,7 @@ impl<'a> SngPackage<'a> {
             if self.entries[at].len > super::smf::MAX_FILE_BYTES as u64 {
                 return Err(err("notes.mid is too large"));
             }
-            return super::mid::convert(&self.read(at)?, Some(&self.ini()));
+            return super::mid::convert(&self.read(at)?, Some(&self.ini()), super::mid::Flavour::CloneHero);
         }
         let Some(at) = self.find("notes.chart") else {
             return Err(err("no notes.chart or notes.mid"));

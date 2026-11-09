@@ -94,7 +94,7 @@ pub use fnf_codename::{CodenameDecoder, CodenameReport, is_codename_chart_file, 
 #[cfg(feature = "std")]
 pub use fnf_ludum_dare::{LudumDareDecoder, LudumDareReport, is_ludum_dare_chart_file, looks_like_ludum_dare};
 #[cfg(feature = "std")]
-pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
+pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_guitar_hero_mid_file, is_mid_chart_name, looks_like_guitar_hero_mid};
 #[cfg(feature = "std")]
 pub use ksf::{KsfContext, KsfDecoder};
 #[cfg(feature = "std")]

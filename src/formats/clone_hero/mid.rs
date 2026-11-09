@@ -46,9 +46,37 @@ pub fn is_mid_chart_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("notes.mid")
 }
 
+/// Whether a `.mid` file is read as Clone Hero's `notes.mid` or as a Guitar Hero 1/2 chart (`<song>.mid`): the latter also reads
+/// Guitar Hero 1's lead track, `T1 GEMS`, as the guitar.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Flavour {
+    CloneHero,
+    GuitarHero,
+}
+
+/// Files above this size are not taken for a Guitar Hero chart (a real one is a few hundred kilobytes).
+const MAX_GUITAR_HERO_FILE: u64 = 16 * 1024 * 1024;
+
+/// Whether a MIDI file's bytes are a Guitar Hero 1/2 chart: a Standard MIDI File with a 5-lane instrument track (`T1 GEMS`,
+/// `PART GUITAR`, `PART GUITAR COOP`, `PART BASS`, `PART RHYTHM`, `PART KEYS`). Any other MIDI file (a song, a ringtone) is not one.
+#[must_use]
+pub fn looks_like_guitar_hero_mid(data: &[u8]) -> bool {
+    smf::parse(data).is_ok_and(|smf| smf.tracks.iter().any(|track| track_name(track, Flavour::GuitarHero).is_some_and(|name| instrument_of(name, Flavour::GuitarHero).is_some())))
+}
+
+/// Whether the file at `path` is a Guitar Hero 1/2 chart: a `.mid` not named `notes.mid` (that one is Clone Hero's) that
+/// [`looks_like_guitar_hero_mid`]. The file is read.
+#[must_use]
+pub fn is_guitar_hero_mid_file(path: &std::path::Path) -> bool {
+    path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("mid"))
+        && !path.file_name().and_then(|name| name.to_str()).is_some_and(is_mid_chart_name)
+        && std::fs::metadata(path).is_ok_and(|file| file.len() <= MAX_GUITAR_HERO_FILE)
+        && std::fs::read(path).is_ok_and(|data| looks_like_guitar_hero_mid(&data))
+}
+
 impl Decoder for MidDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
-        nth(convert(data, None)?, 0).map(|built| built.chart)
+        nth(convert(data, None, Flavour::CloneHero)?, 0).map(|built| built.chart)
     }
 }
 
@@ -60,7 +88,26 @@ impl MidDecoder {
     /// Returns an error if the file is not a readable Standard MIDI File (format 0 or 1, ticks per quarter note) or one
     /// of its instrument tracks is cut short or malformed.
     pub fn variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
-        Ok(variants_of(&convert(data, None)?))
+        Ok(variants_of(&convert(data, None, Flavour::CloneHero)?))
+    }
+
+    /// The playable tracks of a Guitar Hero 1/2 chart (`T1 GEMS` read as the guitar), numbered as [`Self::variants`] numbers them.
+    ///
+    /// # Errors
+    /// Same as [`Self::variants`].
+    pub fn guitar_hero_variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
+        Ok(variants_of(&convert(data, None, Flavour::GuitarHero)?))
+    }
+
+    /// Decodes playable track `index` of a Guitar Hero 1/2 chart (numbered by [`Self::guitar_hero_variants`]). The file names no
+    /// song: `title` is the caller's (the file stem); nothing else of the metadata is known.
+    ///
+    /// # Errors
+    /// Returns an error if the file does not parse or has no such track.
+    pub fn decode_guitar_hero(data: &[u8], index: usize, title: &str) -> RoxResult<RoxChart> {
+        let mut chart = nth(convert(data, None, Flavour::GuitarHero)?, index)?.chart;
+        chart.metadata.title = title.into();
+        Ok(chart)
     }
 
     /// Decodes playable track `index` (the numbering of [`Self::variants`]) without a `song.ini`.
@@ -102,7 +149,7 @@ impl MidDecoder {
         index: usize,
     ) -> RoxResult<(RoxChart, ChartReport)> {
         let ini = ini.map(SongIni::parse).transpose()?;
-        let built = nth(convert(data, ini.as_ref())?, index)?;
+        let built = nth(convert(data, ini.as_ref(), Flavour::CloneHero)?, index)?;
         Ok((built.chart, built.report))
     }
 
@@ -117,7 +164,7 @@ impl MidDecoder {
         index: usize,
     ) -> RoxResult<(RoxChart, ChartReport, AudioPlan)> {
         let ini = ctx.ini.map(SongIni::parse).transpose()?;
-        let converted = convert(data, ini.as_ref())?;
+        let converted = convert(data, ini.as_ref(), Flavour::CloneHero)?;
         let song = converted.song.clone();
         let mut built = nth(converted, index)?;
         let listing = ctx.files.map(Listing::from_names);
@@ -233,9 +280,10 @@ fn timing_points(tempo: &MidiTempo, signatures: &[(u64, u8)], shift_us: i64) -> 
 }
 
 /// The 5-lane instrument of a track name, exactly as written.
-fn instrument_of(name: &[u8]) -> Option<Instrument> {
+fn instrument_of(name: &[u8], flavour: Flavour) -> Option<Instrument> {
     Some(match name {
         b"PART GUITAR" => Instrument::Guitar,
+        b"T1 GEMS" if flavour == Flavour::GuitarHero => Instrument::Guitar,
         b"PART GUITAR COOP" => Instrument::GuitarCoop,
         b"PART BASS" => Instrument::Bass,
         b"PART RHYTHM" => Instrument::Rhythm,
@@ -245,13 +293,13 @@ fn instrument_of(name: &[u8]) -> Option<Instrument> {
 }
 
 /// The tracks that look like instruments but are not read: every `PART ...` name that is not one of the five (drums,
-/// vocals, GHL, pro tracks, `PART DANCE`, ...), the harmony tracks and the Guitar Hero 1 lead (`T1 GEMS`).
+/// vocals, GHL, pro tracks, `PART DANCE`, ...), the harmony tracks and, in a `notes.mid`, the Guitar Hero 1 lead (`T1 GEMS`).
 fn looks_like_instrument(name: &[u8]) -> bool {
     name.starts_with(b"PART ") || name.starts_with(b"HARM") || name == b"T1 GEMS"
 }
 
 /// The name of a track: the track-name events at tick 0; the first one that names a 5-lane instrument, else the first.
-fn track_name(track: &[u8]) -> Option<&[u8]> {
+fn track_name(track: &[u8], flavour: Flavour) -> Option<&[u8]> {
     let mut first: Option<&[u8]> = None;
     for item in Events::new(track) {
         let Ok((tick, event)) = item else { break };
@@ -259,7 +307,7 @@ fn track_name(track: &[u8]) -> Option<&[u8]> {
             break;
         }
         if let Event::TrackName(name) = event {
-            if instrument_of(name).is_some() {
+            if instrument_of(name, flavour).is_some() {
                 return Some(name);
             }
             first.get_or_insert(name);
@@ -472,7 +520,7 @@ fn drop_open_phrase_notes(frets: &mut Vec<(u64, u8, u64)>, ranges: &mut [(u64, u
 }
 
 /// Parses a `.mid` and converts every 5-lane track and difficulty that has a note on the five frets.
-pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted> {
+pub(super) fn convert(data: &[u8], ini: Option<&SongIni>, flavour: Flavour) -> RoxResult<Converted> {
     let Smf { format, ticks_per_quarter, tracks } = smf::parse(data).map_err(|m| invalid(&m))?;
     let Some(&sync_track) = tracks.first() else {
         return Err(invalid("no track"));
@@ -494,7 +542,7 @@ pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted
     shared.shift_source = source;
 
     // In a type 1 file the first track is the tempo track alone; a type 0 file has no other.
-    let picked = pick_tracks(&tracks[usize::from(format == 1)..])?;
+    let picked = pick_tracks(&tracks[usize::from(format == 1)..], flavour)?;
     shared.duplicate_tracks_ignored = picked.duplicates;
     shared.unsupported_tracks = picked.unsupported;
     let song_charts = SongCharts {
@@ -528,11 +576,11 @@ struct Picked {
     duplicates: usize,
 }
 
-fn pick_tracks(tracks: &[&[u8]]) -> RoxResult<Picked> {
+fn pick_tracks(tracks: &[&[u8]], flavour: Flavour) -> RoxResult<Picked> {
     let mut picked = Picked { slots: Default::default(), unsupported: Vec::new(), duplicates: 0 };
     for &chunk in tracks {
-        let Some(name) = track_name(chunk) else { continue };
-        let Some(instrument) = instrument_of(name) else {
+        let Some(name) = track_name(chunk, flavour) else { continue };
+        let Some(instrument) = instrument_of(name, flavour) else {
             if looks_like_instrument(name) {
                 picked.unsupported.push(String::from_utf8_lossy(name).into_owned());
             }

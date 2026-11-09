@@ -68,9 +68,10 @@
 //! `.chart` above; what differs is pinned by `mid_tests.rs` (every file there is built byte by byte; no real chart is
 //! used, community charts carry no licence to redistribute them).
 //!
-//! - **Detection**: `.mid` is the extension of every MIDI file, so only a file NAMED `notes.mid` (any case) is a chart
-//!   ([`is_mid_chart_name`], `DetectedFormat::CloneHeroMid`): any other `.mid` stays an unsupported format for
-//!   `auto_decode*`. The same name rule is used by Prism's scan, downloader, optimizer and audio code. A folder that holds
+//! - **Detection**: `.mid` is the extension of every MIDI file, so only a file NAMED `notes.mid` (any case) is a Clone Hero chart
+//!   ([`is_mid_chart_name`], `DetectedFormat::CloneHeroMid`). Any other `.mid` is a Guitar Hero 1/2 chart when it holds a 5-lane
+//!   instrument track ([`looks_like_guitar_hero_mid`]: `T1 GEMS`, Guitar Hero 1's lead, is then read as the guitar; no `song.ini`, the file
+//!   stem is the title), else an unsupported format for `auto_decode*`. The same rules are used by Prism's scan, downloader, optimizer and audio code. A folder that holds
 //!   a `notes.mid` and a `notes.chart` is read through the `.mid` by Clone Hero's readers (`YARG.Core`).
 //! - **File**: Standard MIDI File format 0 or 1 in ticks per quarter note (format 2, SMPTE division and a division of 0
 //!   are errors, as the notes say they are not supported); `smf.rs` is the reader (variable-length numbers of at most 4
@@ -145,6 +146,6 @@ pub use decoder::{
     ChartContext, ChartDecoder, ChartReport, Difficulty, Instrument, ShiftSource, Variant,
 };
 pub use ini::SongIni;
-pub use mid::{MidDecoder, is_mid_chart_name};
+pub use mid::{MidDecoder, is_guitar_hero_mid_file, is_mid_chart_name, looks_like_guitar_hero_mid};
 pub use plan::Listing;
 pub use sng::{SngEntry, SngPackage};

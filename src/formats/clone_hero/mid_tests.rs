@@ -1335,11 +1335,16 @@ fn auto_decode_routes_a_notes_mid_by_its_name_and_reads_its_song_ini() {
         detect(&dir.join("NOTES.MID")).unwrap(),
         DetectedFormat::CloneHeroMid
     );
-    // Any other .mid is an ordinary MIDI file: not a chart.
+    // Any other .mid with a 5-lane instrument track is a Guitar Hero 1/2 chart: no song.ini read, the stem is the title.
     std::fs::write(dir.join("song.mid"), &data).unwrap();
-    assert!(auto_decode(dir.join("song.mid")).is_err());
-    assert!(auto_decode_variant(dir.join("song.mid"), 0).is_err());
-    assert!(auto_decode_all(dir.join("song.mid")).unwrap().is_none());
+    let guitar_hero = auto_decode(dir.join("song.mid")).unwrap();
+    assert_eq!((guitar_hero.metadata.title.as_str(), times(&guitar_hero).as_slice()), ("song", [500_000].as_slice()));
+    assert_eq!(auto_decode_all(dir.join("song.mid")).unwrap().unwrap().len(), 2);
+    // An ordinary MIDI file (no instrument track) is no chart.
+    std::fs::write(dir.join("tune.mid"), file(&[Tk::new("Piano").note(0, 60, 480)])).unwrap();
+    assert!(auto_decode(dir.join("tune.mid")).is_err());
+    assert!(auto_decode_variant(dir.join("tune.mid"), 0).is_err());
+    assert!(auto_decode_all(dir.join("tune.mid")).unwrap().is_none());
     // A broken notes.mid is an error, not a panic.
     std::fs::write(dir.join("notes.mid"), b"MThd nope").unwrap();
     assert!(auto_decode(dir.join("notes.mid")).is_err());
@@ -1364,4 +1369,19 @@ fn auto_decode_bytes_and_encode_follow_the_name() {
         "read, not written"
     );
     std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn a_guitar_hero_1_chart_reads_t1_gems_as_the_guitar() {
+    // Guitar Hero 1's lead track, with a vocalist mouth note (108) that is no lane.
+    let data = file(&[Tk::new("T1 GEMS").note(0, 96, 0).note(480, 98, 480).note(0, 108, 240)]);
+    assert!(super::looks_like_guitar_hero_mid(&data));
+    let variants = MidDecoder::guitar_hero_variants(&data).unwrap();
+    assert_eq!(variants.iter().map(|v| v.section.as_str()).collect::<Vec<_>>(), ["T1 GEMS Expert"]);
+    let chart = MidDecoder::decode_guitar_hero(&data, 0, "Song").unwrap();
+    assert_eq!((columns(&chart), times(&chart)), (vec![0, 2], vec![0, 500_000]));
+    assert_eq!(chart.metadata.title, "Song");
+    // A notes.mid is Clone Hero's: the track is not one of its instruments.
+    assert!(MidDecoder::variants(&data).map_or(true, |found| found.is_empty()));
+    assert!(!super::looks_like_guitar_hero_mid(&file(&[Tk::new("Piano").note(0, 60, 480)])));
 }
