@@ -15,7 +15,7 @@ use crate::formats::keysound;
 
 pub use super::channels::Part;
 use super::channels::{BLUE, GREEN, OPEN, PINK, Pad, RED, Role, YELLOW, classify};
-use super::parser::{self, Chip, DtxFile, Sound};
+use super::parser::{self, Chip, Dialect, DtxFile, Sound};
 use crate::formats::bms::Frac;
 use crate::formats::bms::source;
 use crate::formats::bms::timing::{Beats, Change, Timeline};
@@ -113,72 +113,79 @@ struct Built {
     holds: usize,
 }
 
-impl Decoder for DtxDecoder {
-    fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
-        decode_nth(data, 0).map(|built| built.chart)
-    }
+/// The public API of a decoder of the DTX family, for one dialect of the parser.
+macro_rules! dtx_family {
+    ($decoder:ident, $dialect:expr) => {
+        impl Decoder for $decoder {
+            fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
+                decode_nth(data, 0, $dialect).map(|built| built.chart)
+            }
+        }
+
+        impl $decoder {
+            /// The instruments of the file that have chips, in the order Drums, Guitar, Bass.
+            ///
+            /// # Errors
+            /// Returns an error if the file has no chip of any instrument.
+            pub fn variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
+                Ok(build_all(data, usize::MAX, $dialect)?.iter().enumerate().map(|(index, built)| variant_of(index, built)).collect())
+            }
+
+            /// Every instrument of the file, each with its [`Variant`] and its validated chart (an instrument whose chart is not valid is
+            /// its own `Err`), from ONE read of the file: what [`Self::variants`] then [`Self::decode_variant`] for each give, without
+            /// reading the text three more times.
+            ///
+            /// # Errors
+            /// Returns an error if the file has no chip of any instrument.
+            pub fn decode_all(data: &[u8]) -> RoxResult<Vec<(Variant, RoxResult<RoxChart>)>> {
+                Ok(build_all(data, usize::MAX, $dialect)?
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, built)| {
+                        let variant = variant_of(index, &built);
+                        (variant, built.chart.validate().map(|()| built.chart))
+                    })
+                    .collect())
+            }
+
+            /// Decodes instrument `index` (the numbering of [`Self::variants`]).
+            ///
+            /// # Errors
+            /// Returns an error if the file has no chip, or no such instrument.
+            pub fn decode_variant(data: &[u8], index: usize) -> RoxResult<RoxChart> {
+                decode_nth(data, index, $dialect).map(|built| built.chart)
+            }
+
+            /// [`Self::decode_variant`] and what the decoder chose, skipped or repaired.
+            ///
+            /// # Errors
+            /// Returns an error if the file has no chip, or no such instrument.
+            pub fn decode_with_report(data: &[u8], index: usize) -> RoxResult<(RoxChart, DtxReport)> {
+                decode_nth(data, index, $dialect).map(|built| (built.chart, built.report))
+            }
+
+            /// [`Self::decode_with_report`] plus the [`AudioPlan`]: the background sounds (channel `01` and the effect channels), and the
+            /// sound of every chip of the instrument (also the ones the chart drops: the left pedal folded onto the bass drum, a note
+            /// inside a hold), at their chart times. The chips of the other instruments, hidden chips, blank-hit settings and wailing
+            /// chips make no sound. Each event carries its `#VOLUMEzz` (when not 100); `#PANzz` is not used (a plan has no pan).
+            ///
+            /// # Errors
+            /// Returns an error if the file has no chip, or no such instrument.
+            pub fn decode_with_audio_plan(data: &[u8], index: usize) -> RoxResult<(RoxChart, DtxReport, AudioPlan)> {
+                decode_nth(data, index, $dialect).map(|built| (built.chart, built.report, built.plan))
+            }
+        }
+    };
 }
 
-impl DtxDecoder {
-    /// The instruments of the file that have chips, in the order Drums, Guitar, Bass.
-    ///
-    /// # Errors
-    /// Returns an error if the file has no chip of any instrument.
-    pub fn variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
-        Ok(build_all(data, usize::MAX)?
-            .iter()
-            .enumerate()
-            .map(|(index, built)| variant_of(index, built))
-            .collect())
-    }
+dtx_family!(DtxDecoder, Dialect::Dtx);
 
-    /// Every instrument of the file, each with its [`Variant`] and its validated chart (an instrument whose chart is not valid is
-    /// its own `Err`), from ONE read of the file: what [`Self::variants`] then [`Self::decode_variant`] for each give, without
-    /// reading the text three more times.
-    ///
-    /// # Errors
-    /// Returns an error if the file has no chip of any instrument.
-    pub fn decode_all(data: &[u8]) -> RoxResult<Vec<(Variant, RoxResult<RoxChart>)>> {
-        Ok(build_all(data, usize::MAX)?
-            .into_iter()
-            .enumerate()
-            .map(|(index, built)| {
-                let variant = variant_of(index, &built);
-                (variant, built.chart.validate().map(|()| built.chart))
-            })
-            .collect())
-    }
+/// Decoder of the older `.gda` and `.g2d` files of `DTXMania` (`GuitarFreaks` / `DrumMania`): the DTX grammar with two-letter channel names
+/// (`HH`, `SD`, `G1`...), which `DTXMania` translates into DTX channels before reading them as a `.dtx`.
+pub struct GdaDecoder;
+crate::impl_format!(GdaDecoder, ["gda", "g2d"]);
 
-    /// Decodes instrument `index` (the numbering of [`Self::variants`]).
-    ///
-    /// # Errors
-    /// Returns an error if the file has no chip, or no such instrument.
-    pub fn decode_variant(data: &[u8], index: usize) -> RoxResult<RoxChart> {
-        decode_nth(data, index).map(|built| built.chart)
-    }
-
-    /// [`Self::decode_variant`] and what the decoder chose, skipped or repaired.
-    ///
-    /// # Errors
-    /// Returns an error if the file has no chip, or no such instrument.
-    pub fn decode_with_report(data: &[u8], index: usize) -> RoxResult<(RoxChart, DtxReport)> {
-        decode_nth(data, index).map(|built| (built.chart, built.report))
-    }
-
-    /// [`Self::decode_with_report`] plus the [`AudioPlan`]: the background sounds (channel `01` and the effect channels), and the
-    /// sound of every chip of the instrument (also the ones the chart drops: the left pedal folded onto the bass drum, a note
-    /// inside a hold), at their chart times. The chips of the other instruments, hidden chips, blank-hit settings and wailing
-    /// chips make no sound. Each event carries its `#VOLUMEzz` (when not 100); `#PANzz` is not used (a plan has no pan).
-    ///
-    /// # Errors
-    /// Returns an error if the file has no chip, or no such instrument.
-    pub fn decode_with_audio_plan(
-        data: &[u8],
-        index: usize,
-    ) -> RoxResult<(RoxChart, DtxReport, AudioPlan)> {
-        decode_nth(data, index).map(|built| (built.chart, built.report, built.plan))
-    }
-}
+dtx_family!(GdaDecoder, Dialect::Gda);
 
 fn variant_of(index: usize, built: &Built) -> Variant {
     Variant {
@@ -192,8 +199,8 @@ fn variant_of(index: usize, built: &Built) -> Variant {
     }
 }
 
-fn decode_nth(data: &[u8], index: usize) -> RoxResult<Built> {
-    let mut built = build_all(data, index.saturating_add(1))?;
+fn decode_nth(data: &[u8], index: usize, dialect: Dialect) -> RoxResult<Built> {
+    let mut built = build_all(data, index.saturating_add(1), dialect)?;
     if index < built.len() {
         let one = built.swap_remove(index);
         one.chart.validate()?;
@@ -216,9 +223,9 @@ struct Song {
 }
 
 impl Song {
-    fn new(data: &[u8]) -> Self {
+    fn new(data: &[u8], dialect: Dialect) -> Self {
         let text = source::decode(data);
-        let file = parser::parse(&text.text);
+        let file = parser::parse(&text.text, dialect);
         // The length of a measure holds until the next channel-`02` line (unlike BMS, where it is the measure's alone).
         let mut lengths = BTreeMap::new();
         let mut length = 1.0;
@@ -294,8 +301,8 @@ fn to_us(seconds: f64) -> i64 {
 }
 
 /// The instruments that have chips, converted, stopping once `want` of them are built.
-fn build_all(data: &[u8], want: usize) -> RoxResult<Vec<Built>> {
-    let song = Song::new(data);
+fn build_all(data: &[u8], want: usize, dialect: Dialect) -> RoxResult<Vec<Built>> {
+    let song = Song::new(data, dialect);
     let mut present = [false; 3];
     for chip in &song.file.chips {
         match classify(chip.channel) {

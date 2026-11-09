@@ -75,4 +75,4 @@ mod parser;
 #[cfg(test)]
 mod tests;
 
-pub use decoder::{DtxDecoder, DtxReport, Part, Variant};
+pub use decoder::{DtxDecoder, DtxReport, GdaDecoder, Part, Variant};

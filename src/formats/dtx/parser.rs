@@ -215,15 +215,59 @@ fn statement(line: &str) -> Option<(&str, &str)> {
     Some((command, rest.split(';').next().unwrap_or("").trim()))
 }
 
+/// The two languages this parser reads: DTX, and the older GDA / G2D, whose data lines name the channel with two letters or digits
+/// (`HH`, `G1`, `0A`) that `DTXMania` translates into a DTX channel (`STGDAPARAM` of `CDTX.cs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    Dtx,
+    Gda,
+}
+
 /// A data line command: `mmmcc`, the measure and the channel.
-fn data_command(command: &str) -> Option<(u16, u8)> {
+fn data_command(command: &str, dialect: Dialect) -> Option<(u16, u8)> {
     let c = command.as_bytes();
     if c.len() != 5 || !c[1].is_ascii_digit() || !c[2].is_ascii_digit() {
         return None;
     }
     let measure = b36(c[0])? * 100 + u16::from(c[1] - b'0') * 10 + u16::from(c[2] - b'0');
-    let channel = u8::try_from(hex(c[3])? * 16 + hex(c[4])?).ok()?;
+    let channel = match dialect {
+        Dialect::Dtx => u8::try_from(hex(c[3])? * 16 + hex(c[4])?).ok()?,
+        Dialect::Gda => gda_channel([c[3].to_ascii_uppercase(), c[4].to_ascii_uppercase()])?,
+    };
     Some((measure, channel))
+}
+
+/// The DTX channel of a GDA channel name (`STGDAPARAM`); `None` for a name the table does not have.
+fn gda_channel(name: [u8; 2]) -> Option<u8> {
+    Some(match &name {
+        b"TC" => 0x03,
+        b"BL" => 0x02,
+        b"GS" => 0x29,
+        b"DS" => 0x30,
+        b"FI" => 0x53,
+        b"HH" => 0x11,
+        b"SD" => 0x12,
+        b"BD" => 0x13,
+        b"HT" => 0x14,
+        b"LT" => 0x15,
+        b"CY" => 0x16,
+        b"G0" => 0x20,
+        b"GW" => 0x28,
+        b"B0" => 0xA0,
+        b"BW" => 0xA8,
+        [b'G', b'1'..=b'7'] => 0x20 + (name[1] - b'0'),
+        [b'B', b'1'..=b'7'] => 0xA0 + (name[1] - b'0'),
+        // `01`..`20` (hexadecimal) are the sound effects SE01..SE32, DTX channels 61-69, 70-79, 80-89, 90-92.
+        _ => {
+            let se = u8::try_from(hex(name[0])? * 16 + hex(name[1])?).ok().filter(|se| (1..=32).contains(se))?;
+            match se {
+                1..=9 => 0x60 + se,
+                10..=19 => 0x70 + se - 10,
+                20..=29 => 0x80 + se - 20,
+                _ => 0x90 + se - 30,
+            }
+        }
+    })
 }
 
 /// The statements that set a header, in the order the game tests them (a name that is the start of another comes after it).
@@ -252,7 +296,7 @@ const NAMES: [&str; 22] = [
     "BASEBPM",
 ];
 
-pub(super) fn parse(text: &str) -> DtxFile {
+pub(super) fn parse(text: &str, dialect: Dialect) -> DtxFile {
     let mut file = DtxFile::default();
     let mut wav: Table<String> = Table::default();
     let mut volume: Table<u8> = Table::default();
@@ -282,7 +326,7 @@ pub(super) fn parse(text: &str) -> DtxFile {
                 skipped.pop();
             }
         } else if skipped.last().copied().unwrap_or(false) {
-        } else if let Some((measure, channel)) = data_command(command) {
+        } else if let Some((measure, channel)) = data_command(command, dialect) {
             data_line(&mut file, seq, measure, channel, param);
         } else if starts_with(command, "RANDOM") {
             // The game draws 1..=n at random; the decoder always draws 1 and does not read n.

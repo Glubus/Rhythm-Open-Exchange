@@ -72,7 +72,7 @@ pub use bandori::{
 #[cfg(feature = "std")]
 pub use bms::{BmsDecoder, BmsonDecoder, PmsDecoder};
 #[cfg(feature = "std")]
-pub use dtx::{DtxDecoder, DtxReport};
+pub use dtx::{DtxDecoder, DtxReport, GdaDecoder};
 #[cfg(feature = "std")]
 pub use djhero::XmkDecoder;
 #[cfg(feature = "std")]

@@ -1384,3 +1384,29 @@ fn the_part_names_and_report_are_stable() {
     assert_eq!(report.part, Part::Drums);
     assert_eq!(report.charset, "UTF-8");
 }
+
+#[test]
+fn a_gda_names_its_channels_with_two_letters_and_reads_as_a_dtx() {
+    use super::GdaDecoder;
+    // `HH` hi-hat, `SD` snare, `BL` a half measure, `TC` a BPM change to 0xF0 = 240, `G4` red guitar, `0A` sound effect SE10.
+    let gda = file(&[
+        "#TITLE HAPPY MAN BASIC",
+        "#BPM 120",
+        "#WAV01 a.wav",
+        "#001HH:01",
+        "#001SD:0001",
+        "#002BL:0.5",
+        "#003TC:F0",
+        "#003G4:01",
+        "#0040A:01",
+    ]);
+    let variants = GdaDecoder::variants(&gda).unwrap();
+    assert_eq!(variants.iter().map(|v| v.part).collect::<Vec<_>>(), vec![Part::Drums, Part::Guitar]);
+    let drums = GdaDecoder::decode_variant(&gda, 0).unwrap();
+    assert_eq!(drums.notes.iter().map(|n| n.time_us).collect::<Vec<_>>(), vec![M, M + M / 2]);
+    // Measure 2 lasts half a measure (1 s); at 240 BPM measure 3 starts at 2 x M + M / 2 and lasts M / 2.
+    let guitar = GdaDecoder::decode_variant(&gda, 1).unwrap();
+    assert_eq!(guitar.notes.iter().map(|n| n.time_us).collect::<Vec<_>>(), vec![2 * M + M / 2]);
+    // The same name in a `.dtx` is no channel: the line is not a data line.
+    assert!(DtxDecoder::decode(&gda).is_err());
+}

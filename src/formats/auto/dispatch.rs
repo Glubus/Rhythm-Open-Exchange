@@ -20,7 +20,7 @@ use crate::formats::{DwiDecoder, KsfContext, KsfDecoder, MsdDecoder};
 use crate::formats::{SusDecoder, UscDecoder};
 use crate::formats::{BestdoriDecoder, SimulatorDecoder};
 use crate::formats::ImdDecoder;
-use crate::formats::DtxDecoder;
+use crate::formats::{DtxDecoder, GdaDecoder};
 use crate::formats::KshDecoder;
 use crate::formats::BdonDecoder;
 use crate::formats::XmkDecoder;
@@ -132,6 +132,7 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
         Ok(DetectedFormat::Sng) => return SngPackage::open(&read()?)?.decode_variant(index),
         Ok(DetectedFormat::Ojn) => return OjnDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Dtx) => return DtxDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Gda) => return GdaDecoder::decode_variant(&read()?, index),
         Ok(fmt) => {
             if let Some(decoded) = decode_single_file(fmt, path) {
                 return if index == 0 { decoded } else { Err(single()) };
@@ -263,10 +264,11 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
                 StepDecoder::decode_with_title(&data, v.index, &title)
             })
         }
-        DetectedFormat::Dtx => DtxDecoder::decode_all(&read()?)?
-            .into_iter()
-            .map(|(variant, chart)| FileVariant { name: variant.part.name().to_owned(), chart })
-            .collect(),
+        DetectedFormat::Dtx | DetectedFormat::Gda => {
+            let data = read()?;
+            let all = if fmt == DetectedFormat::Dtx { DtxDecoder::decode_all(&data)? } else { GdaDecoder::decode_all(&data)? };
+            all.into_iter().map(|(variant, chart)| FileVariant { name: variant.part.name().to_owned(), chart }).collect()
+        }
         DetectedFormat::Dwi => {
             let data = read()?;
             each(&DwiDecoder::variants(&data)?, |v| format!("{} {}", v.stepstype, v.name), |v| DwiDecoder::decode_variant(&data, v.index))
@@ -396,6 +398,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Imd => ImdDecoder::decode(data),
         DetectedFormat::Ksh => KshDecoder::decode(data),
         DetectedFormat::Dtx => DtxDecoder::decode(data),
+        DetectedFormat::Gda => GdaDecoder::decode(data),
         DetectedFormat::BangSimulator => SimulatorDecoder::decode(data),
         DetectedFormat::Bdon => BdonDecoder::decode(data),
     }

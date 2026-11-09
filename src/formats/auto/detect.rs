@@ -60,6 +60,9 @@ pub enum DetectedFormat {
     Imd,
     /// `.dtx` (`DTXMania`): drums, guitar and bass of one song in one file, each instrument that has chips a variant. Decode only.
     Dtx,
+    /// `.gda` and `.g2d` (`DTXMania`'s older `GuitarFreaks` / `DrumMania` files): the DTX grammar with two-letter channel names; one instrument per
+    /// file in practice, read as a `.dtx`. Decode only.
+    Gda,
     /// `.ksh` (`K-Shoot MANIA`, SOUND VOLTEX fan charts): ONE chart per file on 6 columns (BT A-D, FX-L, FX-R); the lasers are dropped. Decode only.
     /// The extension is also a Korn shell script's, so `detect` says it and whether a file is really one is `looks_like_ksh`.
     Ksh,
@@ -122,6 +125,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "usc" => Ok(DetectedFormat::Usc),
         "imd" => Ok(DetectedFormat::Imd),
         "dtx" => Ok(DetectedFormat::Dtx),
+        "gda" | "g2d" => Ok(DetectedFormat::Gda),
         "ksh" => Ok(DetectedFormat::Ksh),
         "xmk" | "fsgmub" => Ok(DetectedFormat::Xmk),
         "bestdori" => Ok(DetectedFormat::Bestdori),
