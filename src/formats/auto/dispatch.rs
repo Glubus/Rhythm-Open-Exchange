@@ -25,6 +25,7 @@ use crate::formats::KshDecoder;
 use crate::formats::BdonDecoder;
 use crate::formats::XmkDecoder;
 use crate::formats::FscDecoder;
+use crate::formats::SwfDecoder;
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -401,6 +402,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Dtx => DtxDecoder::decode(data),
         DetectedFormat::Gda => GdaDecoder::decode(data),
         DetectedFormat::Fsc => FscDecoder::decode(data),
+        DetectedFormat::Swf => SwfDecoder::decode(data),
         DetectedFormat::BangSimulator => SimulatorDecoder::decode(data),
         DetectedFormat::Bdon => BdonDecoder::decode(data),
     }

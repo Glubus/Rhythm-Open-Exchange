@@ -27,6 +27,8 @@ pub mod dtx;
 #[cfg(feature = "std")]
 pub mod dwi;
 #[cfg(feature = "std")]
+pub mod ffr;
+#[cfg(feature = "std")]
 pub mod fluxis;
 #[cfg(feature = "std")]
 pub mod fnf_vslice;
@@ -81,6 +83,8 @@ pub use djhero::XmkDecoder;
 pub use dwi::{DwiDecoder, MsdDecoder};
 #[cfg(feature = "std")]
 pub use fluxis::FscDecoder;
+#[cfg(feature = "std")]
+pub use ffr::{SwfDecoder, looks_like_swf};
 #[cfg(feature = "std")]
 pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
 #[cfg(feature = "std")]
