@@ -26,6 +26,7 @@ use crate::formats::BdonDecoder;
 use crate::formats::XmkDecoder;
 use crate::formats::FscDecoder;
 use crate::formats::SwfDecoder;
+use crate::formats::CodenameDecoder;
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -56,6 +57,10 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         let data = std::fs::read(path)?;
         if let Some(fmt) = detect_content(path, sniffed(&data)) {
             return decode_named(fmt, path, || Ok(Cow::Borrowed(&data))).unwrap_or_else(|| decode_bytes(fmt, &data));
+        }
+        // A Codename Engine chart says so after its notes: the whole file is looked at, and the song folder around it read.
+        if crate::formats::fnf_codename::looks_like_codename(&data) {
+            return crate::formats::fnf_codename::decode_file(path, &data);
         }
     }
     let fmt = detected?;
@@ -301,7 +306,7 @@ fn each<V>(
 }
 
 /// The bytes of a V-Slice chart file and of its metadata file; `None` when `path` is not a V-Slice chart (another name, or a
-/// legacy chart that happens to be named like one).
+/// legacy or Codename chart that happens to be named like one).
 fn read_vslice_pair(path: &Path) -> RoxResult<Option<(Vec<u8>, Vec<u8>)>> {
     let Some(metadata_name) = path
         .file_name()
@@ -311,7 +316,7 @@ fn read_vslice_pair(path: &Path) -> RoxResult<Option<(Vec<u8>, Vec<u8>)>> {
         return Ok(None);
     };
     let chart = std::fs::read(path)?;
-    if !crate::formats::fnf_vslice::files::looks_like_vslice_chart(&chart) {
+    if !crate::formats::fnf_vslice::files::looks_like_vslice_chart(&chart) || crate::formats::fnf_codename::looks_like_codename(&chart) {
         return Ok(None);
     }
     let metadata_path = path.with_file_name(&metadata_name);
@@ -335,6 +340,7 @@ pub fn auto_decode_bytes(path_hint: impl AsRef<Path>, bytes: &[u8]) -> RoxResult
     let hint = path_hint.as_ref();
     let fmt = match detect_content(hint, sniffed(bytes)) {
         Some(fmt) => fmt,
+        None if is_content_candidate(hint) && crate::formats::fnf_codename::looks_like_codename(bytes) => return CodenameDecoder::decode(bytes),
         None => detect(hint)?,
     };
     decode_named(fmt, hint, || Ok(Cow::Borrowed(bytes))).unwrap_or_else(|| decode_bytes(fmt, bytes))
