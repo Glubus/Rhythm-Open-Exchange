@@ -38,6 +38,21 @@ pub struct FnfSong {
     /// the lanes 0-3 to the player and 4-7 to the opponent whatever `mustHitSection` says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// Keys per side for engines with more lanes (NightmareVision's `keys`; 4 when absent or not a count from 1 to 9).
+    #[serde(default, deserialize_with = "lenient_keys", skip_serializing_if = "Option::is_none")]
+    pub keys: Option<u8>,
+}
+
+impl FnfSong {
+    /// The lanes of one side: `keys` when the chart gives a usable count, else the game's 4.
+    #[must_use]
+    pub fn keys_per_side(&self) -> u8 {
+        self.keys.filter(|keys| (1..=9).contains(keys)).unwrap_or(4)
+    }
+}
+
+fn lenient_keys<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<u8>, D::Error> {
+    Ok(serde_json::Value::deserialize(deserializer)?.as_u64().and_then(|keys| u8::try_from(keys).ok()))
 }
 
 fn default_speed() -> f32 {

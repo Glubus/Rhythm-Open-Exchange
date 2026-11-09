@@ -30,9 +30,10 @@ impl Decoder for FnfDecoder {
 
 #[must_use]
 pub fn from_fnf(fnf: &FnfChart, side: FnfSide) -> RoxChart {
+    let keys = fnf.song.keys_per_side();
     let key_count = match side {
-        FnfSide::Both => 8,
-        _ => 4,
+        FnfSide::Both => keys * 2,
+        _ => keys,
     };
     let mut chart = RoxChart::new(key_count);
     chart.metadata = build_metadata(fnf, side);
@@ -58,16 +59,19 @@ fn build_metadata(fnf: &FnfChart, side: FnfSide) -> Metadata {
     }
 }
 
-fn resolve_column(raw_lane: u8, must_hit_section: bool, side: FnfSide) -> Option<u8> {
-    let (is_player, base_lane) = if raw_lane < 4 {
+/// The column of a note of lane `raw_lane` (`0..keys` one side, `keys..2*keys` the other); a lane beyond both sides is no note.
+fn resolve_column(raw_lane: u8, must_hit_section: bool, side: FnfSide, keys: u8) -> Option<u8> {
+    let (is_player, base_lane) = if raw_lane < keys {
         (must_hit_section, raw_lane)
+    } else if raw_lane < keys * 2 {
+        (!must_hit_section, raw_lane - keys)
     } else {
-        (!must_hit_section, raw_lane - 4)
+        return None;
     };
     match side {
         FnfSide::Player => is_player.then_some(base_lane),
         FnfSide::Opponent => (!is_player).then_some(base_lane),
-        FnfSide::Both => Some(if is_player { base_lane + 4 } else { base_lane }),
+        FnfSide::Both => Some(if is_player { base_lane + keys } else { base_lane }),
     }
 }
 
@@ -95,8 +99,9 @@ fn build_notes(fnf: &FnfChart, side: FnfSide, chart: &mut RoxChart) {
         .format
         .as_deref()
         .is_some_and(|format| format.starts_with("psych_v1"));
+    let keys = fnf.song.keys_per_side();
     for section in &fnf.song.notes {
-        add_section_notes(section, absolute_lanes, side, chart);
+        add_section_notes(section, absolute_lanes, side, keys, chart);
     }
 }
 
@@ -104,13 +109,14 @@ fn add_section_notes(
     section: &FnfSection,
     absolute_lanes: bool,
     side: FnfSide,
+    keys: u8,
     chart: &mut RoxChart,
 ) {
     // `psych_v1`: lanes 0-3 are the player's, 4-7 the opponent's, `mustHitSection` only moves the camera
     // (Psych Engine `PlayState.generateSong`: `gottaHitNote = noteData < 4`).
     let must_hit = absolute_lanes || section.must_hit_section;
     for fnf_note in section.section_notes.iter().filter(|note| note.is_note()) {
-        if let Some(col) = resolve_column(fnf_note.lane(), must_hit, side) {
+        if let Some(col) = resolve_column(fnf_note.lane(), must_hit, side, keys) {
             #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
             let time_us = (fnf_note.time_ms() * 1000.0) as i64;
             let note = if fnf_note.is_hold() {
@@ -221,6 +227,16 @@ mod tests {
         assert_eq!(chart.metadata.title, "Stress");
         let notes: Vec<(i64, u8, i64)> = chart.notes.iter().map(|note| (note.time_us, note.column, note.duration_us())).collect();
         assert_eq!(notes, [(0, 1, 300_000), (300_000, 1, 0), (300_000, 2, 0)]);
+    }
+
+    /// An engine with more lanes says how many per side (`keys`, NightmareVision): 5 keys give lanes 0-4 and 5-9, read on 5 columns.
+    #[rstest]
+    fn keys_per_side_widen_the_chart() {
+        let data = br#"{"song":{"song":"t","bpm":120,"keys":5,"notes":[{"mustHitSection":true,"sectionNotes":[[0,4,0],[100,9,0],[200,12,0]]}]}}"#;
+        let chart = FnfDecoder::decode(data).expect("decode failed");
+        assert_eq!(chart.key_count, 5);
+        assert_eq!(chart.notes.iter().map(|note| note.column).collect::<Vec<_>>(), [4]);
+        assert_eq!(FnfDecoder::decode_with_side(data, FnfSide::Both).expect("both").key_count, 10);
     }
 
     #[rstest]

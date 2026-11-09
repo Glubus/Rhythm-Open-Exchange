@@ -3,7 +3,7 @@ use rox::codec::Encoder;
 use rox::error::RoxResult;
 use rox::model::RoxChart;
 
-use super::types::{QuaChart, QuaHitObject, QuaSliderVelocity, QuaTimingPoint};
+use super::types::{QuaChart, QuaHitObject, QuaMode, QuaSliderVelocity, QuaTimingPoint};
 
 pub struct QuaEncoder;
 crate::impl_format!(QuaEncoder, ["qua"]);
@@ -76,6 +76,7 @@ fn build_qua_hit_objects(chart: &RoxChart) -> Vec<QuaHitObject> {
 
 fn to_qua(chart: &RoxChart) -> QuaChart {
     QuaChart {
+        mode: QuaMode(chart.key_count),
         audio_file: chart.metadata.audio_file.to_string(),
         #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
         preview_time: (chart.metadata.preview_time_us / 1000) as i32,

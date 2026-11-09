@@ -161,14 +161,26 @@ mod tests {
         assert!(!chart.timing_points.is_empty());
     }
 
+    /// The encoder writes the chart's own mode: a 7K map comes back as 7K (it used to be written `Keys4`).
     #[rstest]
-    fn test_roundtrip() {
-        let data = rox_test_utils::get_test_asset("quaver/4K.qua");
+    #[case("quaver/4K.qua")]
+    #[case("quaver/7K.qua")]
+    fn test_roundtrip(#[case] asset: &str) {
+        let data = rox_test_utils::get_test_asset(asset);
         let chart1 = QuaDecoder::decode(&data).expect("decode failed");
         let encoded = super::super::encoder::QuaEncoder::encode(&chart1).expect("encode failed");
         let chart2 = QuaDecoder::decode(&encoded).expect("decode 2 failed");
         assert_eq!(chart1.key_count, chart2.key_count);
         assert_eq!(chart1.notes.len(), chart2.notes.len());
+    }
+
+    /// Modes beyond Quaver's two (`Keys10` from editors and forks) are read on their key count.
+    #[test]
+    fn any_keys_mode_is_read() {
+        let qua = "AudioFile: a.mp3\nMode: Keys10\nTimingPoints:\n- Bpm: 120\nHitObjects:\n- StartTime: 0\n  Lane: 10\n";
+        let chart = QuaDecoder::decode(qua.as_bytes()).expect("decode failed");
+        assert_eq!((chart.key_count, chart.notes[0].column), (10, 9));
+        assert!(QuaDecoder::decode(b"Mode: Keys0\nHitObjects: []\n").is_err());
     }
 
     fn chart(signature: &str, first_note_ms: i64) -> String {

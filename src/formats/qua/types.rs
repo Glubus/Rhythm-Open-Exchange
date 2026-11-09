@@ -1,20 +1,37 @@
 #![warn(clippy::pedantic)]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub enum QuaMode {
-    #[default]
-    Keys4,
-    Keys7,
+/// The game mode, `Keys<N>`: Quaver ships `Keys4` and `Keys7`, editors and forks write other counts (`Keys10`); any count from 1 is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuaMode(pub u8);
+
+impl Default for QuaMode {
+    fn default() -> Self {
+        Self(4)
+    }
 }
 
 impl QuaMode {
     #[must_use]
     pub const fn key_count(&self) -> u8 {
-        match self {
-            Self::Keys4 => 4,
-            Self::Keys7 => 7,
-        }
+        self.0
+    }
+}
+
+impl Serialize for QuaMode {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("Keys{}", self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for QuaMode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        name.strip_prefix("Keys")
+            .and_then(|keys| keys.parse::<u8>().ok())
+            .filter(|keys| *keys > 0)
+            .map(Self)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown mode `{name}`, expected Keys<N>")))
     }
 }
 
