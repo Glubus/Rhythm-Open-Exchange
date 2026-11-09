@@ -89,6 +89,8 @@ pub enum DetectedFormat {
     Stx,
     /// `.not` / `.not5` (Pump It Up `NOT4` / `NOT5`): ONE chart per file; double when the name says so or a 2P panel is used. Decode only.
     Not,
+    /// R2Beat `.xml`, told by its content (an XML `TITLE` root with `BPM Frame` entries): ONE 4-column chart. Decode only.
+    R2Beat,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -158,7 +160,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
 /// Whether `path` is a file `detect_content` may tell by its content: a `.txt`, or a `.json` (a Bestdori chart is saved under any name).
 pub(super) fn is_content_candidate(path: &Path) -> bool {
     path.extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt") || ext.eq_ignore_ascii_case("json"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt") || ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("xml"))
         || path
             .file_name()
             .and_then(|n| n.to_str())
@@ -184,6 +186,8 @@ pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
     }
     if crate::formats::bandori::looks_like_bestdori(head) {
         Some(DetectedFormat::Bestdori)
+    } else if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("xml")) {
+        crate::formats::r2beat::looks_like_r2beat(head).then_some(DetectedFormat::R2Beat)
     } else {
         crate::formats::sekai::looks_like_bdon(head).then_some(DetectedFormat::Bdon)
     }

@@ -1,2 +1,2 @@
-# "StepMania" and "BanG" (BanG Dream!) are product names, not an identifier to put in backticks; ".." keeps clippy's default list.
-doc-valid-idents = ["StepMania", "BanG", ".."]
+# "StepMania", "BanG" (BanG Dream!) and "R2Beat" are product names, not identifiers to put in backticks; ".." keeps clippy's default list.
+doc-valid-idents = ["StepMania", "BanG", "R2Beat", ".."]

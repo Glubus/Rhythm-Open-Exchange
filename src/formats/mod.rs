@@ -53,6 +53,8 @@ pub mod pydance;
 #[cfg(feature = "std")]
 pub mod pump;
 #[cfg(feature = "std")]
+pub mod r2beat;
+#[cfg(feature = "std")]
 pub mod sekai;
 #[cfg(feature = "std")]
 pub mod sm_edit;
@@ -123,6 +125,8 @@ pub use sm_edit::EditDecoder;
 pub use pydance::{DanceDecoder, DanceReport, PyddrStepDecoder, looks_like_pyddr_step};
 #[cfg(feature = "std")]
 pub use pump::{NotDecoder, StxDecoder, UcsDecoder};
+#[cfg(feature = "std")]
+pub use r2beat::{R2BeatDecoder, is_r2beat_chart_file, looks_like_r2beat};
 #[cfg(feature = "std")]
 pub use ssq::{SsqDecoder, StepDecoder, looks_like_step};
 #[cfg(feature = "std")]

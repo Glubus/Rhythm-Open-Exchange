@@ -30,7 +30,7 @@ use crate::formats::CodenameDecoder;
 use crate::formats::YavDecoder;
 use crate::formats::DanceDecoder;
 use crate::formats::PyddrStepDecoder;
-use crate::formats::{NotDecoder, StxDecoder, UcsDecoder};
+use crate::formats::{NotDecoder, R2BeatDecoder, StxDecoder, UcsDecoder};
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -469,6 +469,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Ucs => UcsDecoder::decode(data),
         DetectedFormat::Stx => StxDecoder::decode(data),
         DetectedFormat::Not => NotDecoder::decode(data),
+        DetectedFormat::R2Beat => R2BeatDecoder::decode(data),
         DetectedFormat::Xmk => XmkDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),
