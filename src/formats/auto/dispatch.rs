@@ -23,6 +23,7 @@ use crate::formats::ImdDecoder;
 use crate::formats::DtxDecoder;
 use crate::formats::KshDecoder;
 use crate::formats::BdonDecoder;
+use crate::formats::XmkDecoder;
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -76,36 +77,32 @@ fn decode_named<'a>(
     data: impl FnOnce() -> RoxResult<Cow<'a, [u8]>>,
 ) -> Option<RoxResult<RoxChart>> {
     let title = || crate::formats::ssq::decoder::title_of(path);
-    let decode = |data: &[u8]| match fmt {
-        DetectedFormat::Ssq => SsqDecoder::decode_with_title(data, 0, &title()),
-        DetectedFormat::Step => StepDecoder::decode_with_title(data, 0, &title()),
-        DetectedFormat::Ksf => decode_ksf_bytes(path, data),
-        DetectedFormat::Sus => SusDecoder::decode_with_title(data, &title()),
-        DetectedFormat::Usc => UscDecoder::decode_with_title(data, &title()),
-        DetectedFormat::Ksh => KshDecoder::decode_with_title(data, &title()),
-        DetectedFormat::Bdon => BdonDecoder::decode_with_title(data, &title()),
-        DetectedFormat::Imd => {
+    let bandori_title = || crate::formats::bandori::title_of(path);
+    let decode: ChartReader<'_> = match fmt {
+        DetectedFormat::Ssq => Box::new(move |data| SsqDecoder::decode_with_title(data, 0, &title())),
+        DetectedFormat::Step => Box::new(move |data| StepDecoder::decode_with_title(data, 0, &title())),
+        DetectedFormat::Ksf => Box::new(|data| decode_ksf_bytes(path, data)),
+        DetectedFormat::Sus => Box::new(move |data| SusDecoder::decode_with_title(data, &title())),
+        DetectedFormat::Usc => Box::new(move |data| UscDecoder::decode_with_title(data, &title())),
+        DetectedFormat::Ksh => Box::new(move |data| KshDecoder::decode_with_title(data, &title())),
+        DetectedFormat::Bdon => Box::new(move |data| BdonDecoder::decode_with_title(data, &title())),
+        DetectedFormat::Xmk => Box::new(|data| {
+            let (title, difficulty) = crate::formats::djhero::names_of(path);
+            XmkDecoder::decode_named(data, &title, &difficulty)
+        }),
+        DetectedFormat::Imd => Box::new(|data| {
             let file_name = path.file_name().map(|n| n.to_string_lossy());
             ImdDecoder::decode_with_name(data, file_name.as_deref().unwrap_or(""))
-        }
-        DetectedFormat::BangSimulator => SimulatorDecoder::decode_with_title(data, &crate::formats::bandori::title_of(path)),
-        _ => BestdoriDecoder::decode_with_title(data, &crate::formats::bandori::title_of(path)),
+        }),
+        DetectedFormat::BangSimulator => Box::new(move |data| SimulatorDecoder::decode_with_title(data, &bandori_title())),
+        DetectedFormat::Bestdori => Box::new(move |data| BestdoriDecoder::decode_with_title(data, &bandori_title())),
+        _ => return None,
     };
-    let named = matches!(
-        fmt,
-        DetectedFormat::Ssq
-            | DetectedFormat::Step
-            | DetectedFormat::Ksf
-            | DetectedFormat::Sus
-            | DetectedFormat::Usc
-            | DetectedFormat::Ksh
-            | DetectedFormat::Bdon
-            | DetectedFormat::Imd
-            | DetectedFormat::BangSimulator
-            | DetectedFormat::Bestdori
-    );
-    named.then(|| data().and_then(|data| decode(&data)))
+    Some(data().and_then(|data| decode(&data)))
 }
+
+/// A decoder of one format, given the bytes of a file.
+type ChartReader<'p> = Box<dyn Fn(&[u8]) -> RoxResult<RoxChart> + 'p>;
 
 /// Decode chart `index` of a file: the `index`-th playable chart of a `.sm`/`.ssc` file (the
 /// numbering `sm::parse_file` gives), the `index`-th playable difficulty of an `.ojn` file (the numbering
@@ -391,6 +388,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Step => StepDecoder::decode(data),
         DetectedFormat::Dwi => DwiDecoder::decode(data),
         DetectedFormat::Msd => MsdDecoder::decode(data),
+        DetectedFormat::Xmk => XmkDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),
         DetectedFormat::Usc => UscDecoder::decode(data),

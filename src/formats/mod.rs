@@ -21,6 +21,8 @@ pub mod bms;
 #[cfg(feature = "std")]
 pub mod clone_hero;
 #[cfg(feature = "std")]
+pub mod djhero;
+#[cfg(feature = "std")]
 pub mod dtx;
 #[cfg(feature = "std")]
 pub mod dwi;
@@ -71,6 +73,8 @@ pub use bandori::{
 pub use bms::{BmsDecoder, BmsonDecoder, PmsDecoder};
 #[cfg(feature = "std")]
 pub use dtx::{DtxDecoder, DtxReport};
+#[cfg(feature = "std")]
+pub use djhero::XmkDecoder;
 #[cfg(feature = "std")]
 pub use dwi::{DwiDecoder, MsdDecoder};
 #[cfg(feature = "std")]

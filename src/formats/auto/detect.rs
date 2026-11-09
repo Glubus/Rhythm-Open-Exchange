@@ -70,6 +70,8 @@ pub enum DetectedFormat {
     Msd,
     /// `.step` (DDR 2nd to 3rd Mix Plus, "DDR Utility" export, binary): the charts of a song, each playable one a variant. Decode only.
     Step,
+    /// `.xmk` (DJ Hero 2) and `.fsgmub` (DJ Hero): ONE chart per file on 5 columns (crossfader left, green, red, blue, crossfader right). Decode only.
+    Xmk,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -121,6 +123,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "imd" => Ok(DetectedFormat::Imd),
         "dtx" => Ok(DetectedFormat::Dtx),
         "ksh" => Ok(DetectedFormat::Ksh),
+        "xmk" | "fsgmub" => Ok(DetectedFormat::Xmk),
         "bestdori" => Ok(DetectedFormat::Bestdori),
         "bdon" => Ok(DetectedFormat::Bdon),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),
