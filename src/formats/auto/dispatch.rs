@@ -15,7 +15,7 @@ use crate::formats::{
 };
 use crate::formats::VSliceDecoder;
 use crate::formats::{ChartDecoder, MidDecoder, SngPackage};
-use crate::formats::SsqDecoder;
+use crate::formats::{SsqDecoder, StepDecoder};
 use crate::formats::{DwiDecoder, KsfContext, KsfDecoder, MsdDecoder};
 use crate::formats::{SusDecoder, UscDecoder};
 use crate::formats::{BestdoriDecoder, SimulatorDecoder};
@@ -36,6 +36,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     match detected {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, 0),
+        Ok(DetectedFormat::Step) => return StepDecoder::decode_file(path, 0),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, 0),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, 0),
         Ok(fmt) => {
@@ -61,7 +62,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
 /// The formats of one chart per file whose decoder reads the file itself (the title, the lanes or the step type come from its name);
 /// `None` for the others.
 fn decode_single_file(fmt: DetectedFormat, path: &Path) -> Option<RoxResult<RoxChart>> {
-    if fmt == DetectedFormat::Ssq {
+    if matches!(fmt, DetectedFormat::Ssq | DetectedFormat::Step) {
         return None; // several charts per file
     }
     decode_named(fmt, path, || Ok(Cow::Owned(std::fs::read(path)?)))
@@ -77,6 +78,7 @@ fn decode_named<'a>(
     let title = || crate::formats::ssq::decoder::title_of(path);
     let decode = |data: &[u8]| match fmt {
         DetectedFormat::Ssq => SsqDecoder::decode_with_title(data, 0, &title()),
+        DetectedFormat::Step => StepDecoder::decode_with_title(data, 0, &title()),
         DetectedFormat::Ksf => decode_ksf_bytes(path, data),
         DetectedFormat::Sus => SusDecoder::decode_with_title(data, &title()),
         DetectedFormat::Usc => UscDecoder::decode_with_title(data, &title()),
@@ -92,6 +94,7 @@ fn decode_named<'a>(
     let named = matches!(
         fmt,
         DetectedFormat::Ssq
+            | DetectedFormat::Step
             | DetectedFormat::Ksf
             | DetectedFormat::Sus
             | DetectedFormat::Usc
@@ -123,6 +126,7 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
     match detect(path) {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
+        Ok(DetectedFormat::Step) => return StepDecoder::decode_file(path, index),
         Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Msd) => return MsdDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, index),
@@ -255,6 +259,13 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
                 SsqDecoder::decode_with_title(&data, v.index, &title)
             })
         }
+        DetectedFormat::Step => {
+            let data = read()?;
+            let title = crate::formats::ssq::decoder::title_of(path);
+            each(&StepDecoder::variants(&data)?, crate::formats::ssq::StepVariant::name, |v| {
+                StepDecoder::decode_with_title(&data, v.index, &title)
+            })
+        }
         DetectedFormat::Dtx => DtxDecoder::decode_all(&read()?)?
             .into_iter()
             .map(|(variant, chart)| FileVariant { name: variant.part.name().to_owned(), chart })
@@ -377,6 +388,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Sng => SngPackage::open(data)?.decode_variant(0),
         DetectedFormat::Edit => Err(edit_needs_its_song()),
         DetectedFormat::Ssq => SsqDecoder::decode_variant(data, 0),
+        DetectedFormat::Step => StepDecoder::decode(data),
         DetectedFormat::Dwi => DwiDecoder::decode(data),
         DetectedFormat::Msd => MsdDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),

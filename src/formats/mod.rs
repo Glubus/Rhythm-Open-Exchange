@@ -94,7 +94,7 @@ pub use sekai::{
 #[cfg(feature = "std")]
 pub use sm_edit::EditDecoder;
 #[cfg(feature = "std")]
-pub use ssq::SsqDecoder;
+pub use ssq::{SsqDecoder, StepDecoder, looks_like_step};
 #[cfg(feature = "std")]
 pub use yrox::{YroxDecoder, YroxEncoder};
 

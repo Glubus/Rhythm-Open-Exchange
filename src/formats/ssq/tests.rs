@@ -757,3 +757,38 @@ fn auto_decode_routes_an_ssq_by_its_path_and_lists_every_variant() {
     assert_eq!(all[1].chart.as_ref().unwrap().notes, second.notes);
     assert!(missing.is_err());
 }
+
+// ---------------------------------------------------------------------------------------------------- DDR STEP
+
+/// A STEP chunk: `{i32 length, body}` with the given `i32` words.
+fn step_chunk(words: &[i32]) -> Vec<u8> {
+    let mut out = i32::try_from(4 + 4 * words.len()).unwrap().to_le_bytes().to_vec();
+    out.extend(words.iter().flat_map(|word| word.to_le_bytes()));
+    out
+}
+
+#[test]
+fn a_step_file_is_one_chart_per_chunk_with_its_panels_choosing_the_layout() {
+    use super::{StepDecoder, looks_like_step};
+    // Tempo: tick 0 at 0 s, tick 8192 (two measures) at 4 s in 1/75 s: 120 BPM, a measure is 2 s.
+    let tempo = step_chunk(&[0, 0, 8192, 300]);
+    // A single chart is written for both players (each nibble a panel): left then right, Maniac (code 0x0200).
+    let single = step_chunk(&[0x0200, 0, 0x0001_0001, 2048, 0x1000_1000, 3072, -1]);
+    // A Solo-mix 3-panel chart (up-left, down, up-right: panel bits 4, 1, 6): Basic.
+    let solo3 = step_chunk(&[0x0000, 0, 0x0001_0000, 1024, 0x0000_0010, 2048, 0x0100_0000]);
+    // A couple chart (code 1, second player's panels): skipped.
+    let couple = step_chunk(&[0x0001, 0, 0x0010_0001]);
+    let file = [tempo, single, solo3, couple, vec![0; 4]].concat();
+    assert!(looks_like_step(&file));
+    assert!(!looks_like_step(b"#TITLE:pydance step;\n"));
+    let variants = StepDecoder::variants(&file).unwrap();
+    let names: Vec<(String, u8)> = variants.iter().map(|v| (v.name(), v.key_count)).collect();
+    assert_eq!(names, vec![("Single Maniac".to_string(), 4), ("Solo 3 Basic".to_string(), 3)]);
+    let notes = |index| -> Vec<(i64, u8)> {
+        StepDecoder::decode_with_title(&file, index, "t").unwrap().notes.iter().map(|n| (n.time_us, n.column)).collect()
+    };
+    assert_eq!(notes(0), vec![(0, 0), (1_000_000, 3)]);
+    assert_eq!(notes(1), vec![(0, 0), (500_000, 1), (1_000_000, 2)]);
+    let chart = StepDecoder::decode_with_title(&file, 0, "t").unwrap();
+    assert_eq!(chart.timing_points, vec![TimingPoint::bpm(0, 120.0)]);
+}

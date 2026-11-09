@@ -189,8 +189,8 @@ fn single(note: &Map<String, Value>, notes: &mut Vec<ScoreNote>, report: &mut Se
 fn long(note: &Map<String, Value>, notes: &mut Vec<ScoreNote>, report: &mut SekaiReport) {
     let listed = note.get("node").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let own = note.get("t").is_some().then_some(note);
-    let nodes: Vec<&Map<String, Value>> = own.into_iter().chain(listed.iter().filter_map(Value::as_object)).collect();
-    let (Some(first), Some(last)) = (nodes.first(), nodes.last()) else {
+    let chain: Vec<&Map<String, Value>> = own.into_iter().chain(listed.iter().filter_map(Value::as_object)).collect();
+    let (Some(first), Some(last)) = (chain.first(), chain.last()) else {
         report.invalid_slides += 1;
         return;
     };
@@ -198,12 +198,12 @@ fn long(note: &Map<String, Value>, notes: &mut Vec<ScoreNote>, report: &mut Seka
         report.invalid_slides += 1;
         return;
     };
-    if nodes.len() < 2 || end_beat < beat {
+    if chain.len() < 2 || end_beat < beat {
         report.invalid_slides += 1;
         return;
     }
     let Some(column) = column_of_board(first, report) else { return };
-    report.slide_joints_dropped += nodes.len() - 2;
+    report.slide_joints_dropped += chain.len() - 2;
     report.critical_flags += usize::from(flag(first, "crit"));
     notes.push(ScoreNote { beat, end_beat: Some(end_beat), column });
 }

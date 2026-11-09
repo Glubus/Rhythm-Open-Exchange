@@ -68,6 +68,8 @@ pub enum DetectedFormat {
     Bdon,
     /// `.msd` (the DDR'99 simulator script DWI grew from): the charts of a song, each playable one a variant (as `.dwi`). Decode only.
     Msd,
+    /// `.step` (DDR 2nd to 3rd Mix Plus, "DDR Utility" export, binary): the charts of a song, each playable one a variant. Decode only.
+    Step,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -110,6 +112,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "sng" => Ok(DetectedFormat::Sng),
         "edit" => Ok(DetectedFormat::Edit),
         "ssq" => Ok(DetectedFormat::Ssq),
+        "step" => Ok(DetectedFormat::Step),
         "dwi" => Ok(DetectedFormat::Dwi),
         "msd" => Ok(DetectedFormat::Msd),
         "ksf" => Ok(DetectedFormat::Ksf),

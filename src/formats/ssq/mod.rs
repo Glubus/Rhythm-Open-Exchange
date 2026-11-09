@@ -49,9 +49,11 @@
 
 mod chunks;
 pub mod decoder;
+mod step;
 mod tempo;
 
 #[cfg(test)]
 mod tests;
 
 pub use decoder::{Difficulty, SsqDecoder, SsqReport, Style, Variant};
+pub use step::{StepDecoder, StepVariant, looks_like_step};
