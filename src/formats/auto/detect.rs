@@ -79,6 +79,10 @@ pub enum DetectedFormat {
     Fsc,
     /// `.swf` (Flash Flash Revolution legacy level): ONE 4-column chart, the movie's `_root.beatBox`. Decode only.
     Swf,
+    /// `.yav` (Interlude's legacy chart file): ONE chart, its key count in the file. Decode only.
+    Yav,
+    /// `.dance` (pydance): several charts per file, one per step section. Decode only.
+    Dance,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -134,6 +138,8 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "xmk" | "fsgmub" => Ok(DetectedFormat::Xmk),
         "fsc" => Ok(DetectedFormat::Fsc),
         "swf" => Ok(DetectedFormat::Swf),
+        "yav" => Ok(DetectedFormat::Yav),
+        "dance" => Ok(DetectedFormat::Dance),
         "bestdori" => Ok(DetectedFormat::Bestdori),
         "bdon" => Ok(DetectedFormat::Bdon),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),

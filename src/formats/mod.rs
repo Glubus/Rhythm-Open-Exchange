@@ -49,11 +49,15 @@ pub mod o2jam;
 #[cfg(feature = "std")]
 pub mod qua;
 #[cfg(feature = "std")]
+pub mod pydance;
+#[cfg(feature = "std")]
 pub mod sekai;
 #[cfg(feature = "std")]
 pub mod sm_edit;
 #[cfg(feature = "std")]
 pub mod ssq;
+#[cfg(feature = "std")]
+pub mod yav;
 #[cfg(feature = "std")]
 pub mod yrox;
 
@@ -114,7 +118,11 @@ pub use sekai::{
 #[cfg(feature = "std")]
 pub use sm_edit::EditDecoder;
 #[cfg(feature = "std")]
+pub use pydance::{DanceDecoder, DanceReport, PyddrStepDecoder, looks_like_pyddr_step};
+#[cfg(feature = "std")]
 pub use ssq::{SsqDecoder, StepDecoder, looks_like_step};
+#[cfg(feature = "std")]
+pub use yav::{YavDecoder, YavReport};
 #[cfg(feature = "std")]
 pub use yrox::{YroxDecoder, YroxEncoder};
 

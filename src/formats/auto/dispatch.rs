@@ -27,6 +27,9 @@ use crate::formats::XmkDecoder;
 use crate::formats::FscDecoder;
 use crate::formats::SwfDecoder;
 use crate::formats::CodenameDecoder;
+use crate::formats::YavDecoder;
+use crate::formats::DanceDecoder;
+use crate::formats::PyddrStepDecoder;
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -43,7 +46,7 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     match detected {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, 0),
-        Ok(DetectedFormat::Step) => return StepDecoder::decode_file(path, 0),
+        Ok(DetectedFormat::Step) => return step_variant(path, 0),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, 0),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, 0),
         Ok(fmt) => {
@@ -94,7 +97,13 @@ fn decode_named<'a>(
     let bandori_title = || crate::formats::bandori::title_of(path);
     let decode: ChartReader<'_> = match fmt {
         DetectedFormat::Ssq => Box::new(move |data| SsqDecoder::decode_with_title(data, 0, &title())),
-        DetectedFormat::Step => Box::new(move |data| StepDecoder::decode_with_title(data, 0, &title())),
+        DetectedFormat::Step => Box::new(move |data| {
+            if crate::formats::pydance::looks_like_pyddr_step(data) {
+                PyddrStepDecoder::decode_variant(data, 0)
+            } else {
+                StepDecoder::decode_with_title(data, 0, &title())
+            }
+        }),
         DetectedFormat::Ksf => Box::new(|data| decode_ksf_bytes(path, data)),
         DetectedFormat::Sus => Box::new(move |data| SusDecoder::decode_with_title(data, &title())),
         DetectedFormat::Usc => Box::new(move |data| UscDecoder::decode_with_title(data, &title())),
@@ -140,9 +149,10 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
     match detect(path) {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
-        Ok(DetectedFormat::Step) => return StepDecoder::decode_file(path, index),
+        Ok(DetectedFormat::Step) => return step_variant(path, index),
         Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Msd) => return MsdDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Dance) => return DanceDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, index),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, index),
         Ok(DetectedFormat::Fnfc) => return VSliceDecoder::decode_fnfc_variant(&read()?, "default", index),
@@ -282,10 +292,14 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
         }
         DetectedFormat::Step => {
             let data = read()?;
-            let title = crate::formats::ssq::decoder::title_of(path);
-            each(&StepDecoder::variants(&data)?, crate::formats::ssq::StepVariant::name, |v| {
-                StepDecoder::decode_with_title(&data, v.index, &title)
-            })
+            if crate::formats::pydance::looks_like_pyddr_step(&data) {
+                each(&PyddrStepDecoder::variants(&data)?, |v| format!("{} {}", v.mode, v.difficulty), |v| PyddrStepDecoder::decode_variant(&data, v.index))
+            } else {
+                let title = crate::formats::ssq::decoder::title_of(path);
+                each(&StepDecoder::variants(&data)?, crate::formats::ssq::StepVariant::name, |v| {
+                    StepDecoder::decode_with_title(&data, v.index, &title)
+                })
+            }
         }
         DetectedFormat::Dtx | DetectedFormat::Gda => {
             let data = read()?;
@@ -299,6 +313,10 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
         DetectedFormat::Msd => {
             let data = read()?;
             each(&MsdDecoder::variants(&data)?, |v| format!("{} {}", v.stepstype, v.name), |v| MsdDecoder::decode_variant(&data, v.index))
+        }
+        DetectedFormat::Dance => {
+            let data = read()?;
+            each(&DanceDecoder::variants(&data)?, |v| format!("{} {}", v.mode, v.difficulty), |v| DanceDecoder::decode_variant(&data, v.index))
         }
         DetectedFormat::Fnf => match read_vslice_pair(path)? {
             Some((chart, metadata)) => each(
@@ -330,6 +348,16 @@ fn guitar_hero_mid(path: &Path) -> RoxResult<Option<Vec<u8>>> {
     }
     let data = std::fs::read(path)?;
     Ok(crate::formats::clone_hero::looks_like_guitar_hero_mid(&data).then_some(data))
+}
+
+/// Chart `index` of a `.step`: pyDDR's text format when the file starts like one, else DDR's binary STEP data (the file stem is its title).
+fn step_variant(path: &Path, index: usize) -> RoxResult<RoxChart> {
+    let data = std::fs::read(path)?;
+    if crate::formats::pydance::looks_like_pyddr_step(&data) {
+        PyddrStepDecoder::decode_variant(&data, index)
+    } else {
+        StepDecoder::decode_with_title(&data, index, &crate::formats::ssq::decoder::title_of(path))
+    }
 }
 
 /// The bytes of a V-Slice chart file and of its metadata file; `None` when `path` is not a V-Slice chart (another name, or a
@@ -422,9 +450,11 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Sng => SngPackage::open(data)?.decode_variant(0),
         DetectedFormat::Edit => Err(edit_needs_its_song()),
         DetectedFormat::Ssq => SsqDecoder::decode_variant(data, 0),
+        DetectedFormat::Step if crate::formats::pydance::looks_like_pyddr_step(data) => PyddrStepDecoder::decode_variant(data, 0),
         DetectedFormat::Step => StepDecoder::decode(data),
         DetectedFormat::Dwi => DwiDecoder::decode(data),
         DetectedFormat::Msd => MsdDecoder::decode(data),
+        DetectedFormat::Dance => DanceDecoder::decode(data),
         DetectedFormat::Xmk => XmkDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),
@@ -436,6 +466,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Gda => GdaDecoder::decode(data),
         DetectedFormat::Fsc => FscDecoder::decode(data),
         DetectedFormat::Swf => SwfDecoder::decode(data),
+        DetectedFormat::Yav => YavDecoder::decode(data),
         DetectedFormat::BangSimulator => SimulatorDecoder::decode(data),
         DetectedFormat::Bdon => BdonDecoder::decode(data),
     }
