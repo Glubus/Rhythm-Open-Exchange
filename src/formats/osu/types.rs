@@ -40,12 +40,19 @@ pub struct OsuMetadata {
     pub beatmap_set_id: Option<i32>,
 }
 
-/// `[Difficulty]` section.
-#[derive(Debug, Clone, Default)]
+/// `[Difficulty]` section. A value the file leaves out is osu!'s default, 5 (`BeatmapDifficulty.DEFAULT_DIFFICULTY`): a mania map
+/// without `CircleSize` is a 5K map, as osu! plays it.
+#[derive(Debug, Clone)]
 pub struct OsuDifficulty {
     pub circle_size: f32,
     pub overall_difficulty: f32,
     pub hp_drain_rate: f32,
+}
+
+impl Default for OsuDifficulty {
+    fn default() -> Self {
+        Self { circle_size: 5.0, overall_difficulty: 5.0, hp_drain_rate: 5.0 }
+    }
 }
 
 /// A timing point (BPM or SV change).

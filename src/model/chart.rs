@@ -1,5 +1,5 @@
 #[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -55,6 +55,25 @@ impl RoxChart {
     /// Returns the first validation error found.
     pub fn validate(&self) -> crate::error::RoxResult<()> {
         crate::codec::validate::validate(self)
+    }
+
+    /// Sorts the notes and drops the ones a game cannot play on top of another of their column: a note at the same time as the
+    /// previous one of its column, or starting inside one of its long notes (a note may start exactly where a long note ends). At the
+    /// same time a long note is kept before a tap. Returns how many were dropped. Decoders of formats whose files carry such stacks
+    /// (FNF charts, Quaver maps) call it so that the chart passes [`Self::validate`] instead of being refused.
+    pub fn drop_overlapping_notes(&mut self) -> usize {
+        self.notes.sort_by_key(|note| (note.time_us, u8::from(!note.is_hold()), note.column));
+        let mut last = vec![(i64::MIN, i64::MIN); usize::from(self.key_count)];
+        let before = self.notes.len();
+        self.notes.retain(|note| {
+            let Some((start, end)) = last.get_mut(usize::from(note.column)) else { return true };
+            if note.time_us == *start || note.time_us < *end {
+                return false;
+            }
+            (*start, *end) = (note.time_us, note.end_time_us());
+            true
+        });
+        before - self.notes.len()
     }
 
     /// Drops every mine and every roll (`Burst`, head and tail together) and keeps all other

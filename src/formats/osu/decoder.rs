@@ -146,6 +146,12 @@ pub(crate) fn from_beatmap(beatmap: &super::types::OsuBeatmap) -> RoxChart {
     chart.metadata = build_metadata(beatmap);
     build_timing_points(beatmap, &mut chart);
     build_notes(beatmap, key_count, &mut chart);
+    // A map without any BPM line plays in osu! at its default beat length of 1000 ms (60 BPM, `TimingControlPoint.DEFAULT`).
+    if let Some(first) = chart.notes.first().map(|note| note.time_us) {
+        if !chart.timing_points.iter().any(|point| matches!(point, TimingPoint::Bpm { .. })) {
+            chart.timing_points.insert(0, TimingPoint::Bpm { time_us: first.min(0), bpm: 60.0, signature: 4 });
+        }
+    }
     chart
 }
 
@@ -277,6 +283,16 @@ mod tests {
     fn test_decode_rejects_non_mania() {
         let data = b"osu file format v14\n\n[General]\nMode: 1\n\n[Difficulty]\nCircleSize:4\n";
         assert!(OsuDecoder::decode(data).is_err());
+    }
+
+    /// osu!'s defaults for what a map leaves out: no `CircleSize` is 5 keys, no BPM line is 60 BPM.
+    #[rstest]
+    fn missing_circle_size_and_timing_take_the_osu_defaults() {
+        let data = b"osu file format v14\n\n[General]\nMode: 3\n\n[HitObjects]\n51,192,500,1,0,0:0:0:0:\n461,192,1000,1,0,0:0:0:0:\n";
+        let chart = OsuDecoder::decode(data).expect("decode failed");
+        assert_eq!(chart.key_count, 5);
+        assert_eq!(chart.notes.iter().map(|note| note.column).collect::<Vec<_>>(), [0, 4]);
+        assert!(matches!(chart.timing_points[0], TimingPoint::Bpm { time_us: 0, bpm, .. } if bpm == 60.0), "{:?}", chart.timing_points);
     }
 
     /// The header answer is the full parser's: the last `Mode:` of `[General]`, `0` without one, decided at the next section.

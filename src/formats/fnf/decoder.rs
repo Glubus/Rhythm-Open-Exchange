@@ -38,7 +38,8 @@ pub fn from_fnf(fnf: &FnfChart, side: FnfSide) -> RoxChart {
     chart.metadata = build_metadata(fnf, side);
     build_timing_points(fnf, &mut chart);
     build_notes(fnf, side, &mut chart);
-    chart.notes.sort_by_key(|n| n.time_us);
+    // The game's own charts stack notes on a lane (two at once, or one inside a long note): one is played, the others dropped.
+    chart.drop_overlapping_notes();
     chart.timing_points.sort_by_key(TimingPoint::time_us);
     chart
 }
@@ -209,6 +210,17 @@ mod tests {
             _ => None,
         }).collect();
         assert_eq!(bpms, [120.0, 180.0]);
+    }
+
+    /// A chart without the `{"song": {...}}` wrapper (its `song` is the name) is read the same, and notes stacked on a lane (the game's
+    /// own Senpai chart has two at once) keep one, the long note first.
+    #[rstest]
+    fn a_flat_chart_is_read_and_stacked_notes_keep_one() {
+        let data = br#"{"song":"Stress","bpm":120,"notes":[{"mustHitSection":true,"sectionNotes":[[0,1,0],[0,1,300],[100,1,0],[300,1,0],[300,2,0]]}]}"#;
+        let chart = FnfDecoder::decode(data).expect("decode failed");
+        assert_eq!(chart.metadata.title, "Stress");
+        let notes: Vec<(i64, u8, i64)> = chart.notes.iter().map(|note| (note.time_us, note.column, note.duration_us())).collect();
+        assert_eq!(notes, [(0, 1, 300_000), (300_000, 1, 0), (300_000, 2, 0)]);
     }
 
     #[rstest]

@@ -119,22 +119,29 @@ fn build_timing_points(qua: &QuaChart, chart: &mut RoxChart) {
     }
 }
 
+/// The notes as Quaver plays them: a long note whose `EndTime` is not after its start (`0` is how Quaver writes "no end", and tools
+/// leave shorter ones) is a tap; a note on a lane the mode does not have is dropped; a note that starts on another note of its lane, or
+/// inside a long note of its lane, is dropped (the first one stays), so one odd object never refuses the whole map.
 fn build_notes(qua: &QuaChart, chart: &mut RoxChart) {
+    let keys = chart.key_count;
+    let mut notes: Vec<Note> = Vec::with_capacity(qua.hit_objects.len());
     for ho in &qua.hit_objects {
+        // Quaver lanes are 1-indexed.
+        let Some(column) = ho.lane.checked_sub(1).filter(|column| *column < keys) else {
+            continue;
+        };
         #[allow(clippy::cast_possible_truncation)]
         // ms→µs i64: safe for any realistic timestamp or duration
         let time_us = (ho.start_time * 1000.0) as i64;
-        let column = ho.lane.saturating_sub(1); // Quaver lanes are 1-indexed
-        let note = if let Some(end) = ho.end_time {
-            #[allow(clippy::cast_possible_truncation)]
-            // ms→µs i64: safe for any realistic timestamp or duration
-            let end_us = (end * 1000.0) as i64;
-            Note::hold(time_us, end_us - time_us, column)
-        } else {
-            Note::tap(time_us, column)
-        };
-        chart.notes.push(note);
+        #[allow(clippy::cast_possible_truncation)]
+        let end_us = ho.end_time.map(|end| (end * 1000.0) as i64);
+        notes.push(match end_us {
+            Some(end_us) if end_us > time_us => Note::hold(time_us, end_us - time_us, column),
+            _ => Note::tap(time_us, column),
+        });
     }
+    chart.notes = notes;
+    chart.drop_overlapping_notes();
 }
 
 #[cfg(test)]
@@ -190,5 +197,23 @@ mod tests {
         let chart = QuaDecoder::decode(chart("Quadruple", 500).as_bytes()).expect("decode failed");
         assert_eq!(chart.timing_points[0].time_us(), 500_000);
         assert_eq!(chart.notes[0].time_us, 500_000);
+    }
+
+    /// Objects real maps carry (Quaver.API's test maps, editor leftovers): `EndTime: 0` or an end not after the start is a tap, a lane
+    /// the mode does not have is dropped, a note on another one or inside a long note of its lane is dropped, the BOM written twice is
+    /// skipped. The map is read, never refused for one of them.
+    #[test]
+    fn odd_objects_are_read_as_quaver_plays_them() {
+        let qua = "\u{feff}\u{feff}AudioFile: a.mp3\nMode: Keys4\nTimingPoints:\n- Bpm: 120\nHitObjects:\n\
+            - StartTime: 0\n  Lane: 1\n  EndTime: 0\n\
+            - StartTime: 100\n  Lane: 2\n  EndTime: 50\n\
+            - StartTime: 100\n  Lane: 2\n\
+            - StartTime: 200\n  Lane: 3\n  EndTime: 600\n\
+            - StartTime: 300\n  Lane: 3\n\
+            - StartTime: 600\n  Lane: 3\n\
+            - StartTime: 700\n  Lane: 9\n";
+        let chart = QuaDecoder::decode(qua.as_bytes()).expect("decode failed");
+        let notes: Vec<(i64, u8, i64)> = chart.notes.iter().map(|note| (note.time_us, note.column, note.duration_us())).collect();
+        assert_eq!(notes, [(0, 0, 0), (100_000, 1, 0), (200_000, 2, 400_000), (600_000, 2, 0)]);
     }
 }

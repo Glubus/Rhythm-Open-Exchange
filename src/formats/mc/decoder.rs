@@ -32,7 +32,8 @@ impl McDecoder {
 
         let audio = audio_metadata(mc);
         let timeline = BeatTimeline::new(&mc.time, audio.offset_ms);
-        let mut chart = RoxChart::new(mc.meta.mode_ext.column);
+        let keys = mc.meta.mode_ext.column.ok_or_else(|| RoxError::InvalidFormat("Malody Key chart without `mode_ext.column`".to_string()))?;
+        let mut chart = RoxChart::new(keys);
         chart.metadata = build_metadata(mc, &audio);
         build_timing_points(mc, &timeline, &mut chart);
         build_notes(mc, &timeline, &mut chart);
@@ -209,6 +210,14 @@ mod tests {
     fn test_reject_non_key_mode() {
         let json = r#"{"meta":{"mode":1,"song":{"title":"T","artist":"A"},"mode_ext":{"column":4},"background":"","creator":"c","version":"E"},"time":[{"beat":[0,0,1],"bpm":120}],"note":[{"type":1,"sound":"x.ogg","offset":0}]}"#;
         assert!(<McDecoder as Decoder>::decode_inner(json.as_bytes()).is_err());
+    }
+
+    /// A Catch chart has no `column`: it is refused for its mode, which says why, not for a missing field.
+    #[test]
+    fn a_chart_of_another_mode_without_column_names_its_mode() {
+        let json = r#"{"meta":{"mode":5,"song":{"title":"T","artist":"A"},"mode_ext":{"bar_begin":2}},"time":[{"beat":[0,0,1],"bpm":120}],"note":[{"beat":[0,0,1],"x":100}]}"#;
+        let error = <McDecoder as Decoder>::decode_inner(json.as_bytes()).unwrap_err().to_string();
+        assert!(error.contains("mode 5"), "{error}");
     }
 
     #[test]

@@ -866,6 +866,8 @@ fn the_file_rule_lists_a_chart_by_name_and_content_and_nothing_else() {
         write("expert.json", &chart),
         write("Song.bestdori.json", &chart),
         write("x.bestdori", &chart),
+        // The content is right under any `.json` name: a chart saved under the player's own name.
+        write("song.json", &chart),
         write("ex.txt", format!("{HEAD}1/1/1\n").as_bytes()),
     ];
     for path in &listed {
@@ -877,8 +879,7 @@ fn the_file_rule_lists_a_chart_by_name_and_content_and_nothing_else() {
         write("normal.json", b"[1, 2]"),
         write("package.json", b"{\"name\": \"x\"}"),
         write("legacy.bestdori.json", b"{\"notes\": []}"),
-        // The content is right, the name is not.
-        write("song.json", &chart),
+        // The content is right, the extension is not a chart's.
         write("chart.jrox", &chart),
         // Ordinary text.
         write("readme.txt", b"Read me\nFirst line\n"),

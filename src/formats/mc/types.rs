@@ -56,9 +56,12 @@ pub struct McSong {
     pub artistorg: Option<String>,
 }
 
+/// Mode settings. `column` (the key count) exists only in Key mode charts; the other modes (Catch, Pad...) have none and are refused
+/// by their mode, not by a missing field.
 #[derive(Debug, Deserialize)]
 pub struct McModeExt {
-    pub column: u8,
+    #[serde(default)]
+    pub column: Option<u8>,
 }
 
 /// BPM timing point.

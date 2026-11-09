@@ -16,5 +16,7 @@ pub fn parse(data: &[u8]) -> RoxResult<QuaChart> {
     }
     let content = std::str::from_utf8(data)
         .map_err(|e| RoxError::InvalidFormat(format!("Invalid UTF-8: {e}")))?;
+    // Files saved by Quaver.API's tests and some editors start with the BOM twice: it is no YAML.
+    let content = content.trim_start_matches('\u{feff}');
     serde_yaml::from_str(content).map_err(|e| RoxError::InvalidFormat(format!("Invalid YAML: {e}")))
 }
