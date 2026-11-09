@@ -4,7 +4,7 @@ use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
 use rox::model::RoxChart;
 
-use super::parser::{Parsed, parse_detailed};
+use super::parser::{Dialect, Parsed, parse_detailed, parse_dialect};
 use crate::formats::sm::decoder::from_chart;
 use crate::formats::sm::ssc_decoder::first_chart;
 use crate::formats::sm::types::SmFile;
@@ -67,26 +67,7 @@ impl DwiDecoder {
     /// # Errors
     /// Returns an error if the data is too large.
     pub fn variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
-        let file = super::parser::parse(data)?;
-        Ok(file
-            .charts
-            .iter()
-            .enumerate()
-            .map(|(index, chart)| {
-                let rox = from_chart(&file, chart);
-                Variant {
-                    index,
-                    stepstype: chart.stepstype.clone(),
-                    difficulty: chart.difficulty.clone(),
-                    name: chart.description.clone(),
-                    meter: chart.meter,
-                    key_count: chart.column_count,
-                    notes: rox.notes.len(),
-                    holds: rox.notes.iter().filter(|note| note.is_hold()).count(),
-                    duration_us: rox.duration_us(),
-                }
-            })
-            .collect())
+        variants_of(&parse_dialect(data, Dialect::Dwi)?.file)
     }
 
     /// Decodes playable chart `index` (the numbering of [`Self::variants`]).
@@ -102,29 +83,81 @@ impl DwiDecoder {
     /// # Errors
     /// Returns an error if the file has no such chart.
     pub fn decode_with_report(data: &[u8], index: usize) -> RoxResult<(RoxChart, DwiReport)> {
-        let Parsed { file, warnings } = parse_detailed(data)?;
-        let Some(chart) = file.charts.get(index) else {
-            return Err(RoxError::InvalidFormat(if file.charts.is_empty() {
-                match first_chart(&file) {
-                    Err(error) => error.to_string(),
-                    Ok(_) => "No charts found".to_string(),
-                }
-            } else {
-                format!(
-                    "dwi: {} playable charts, not chart {index}",
-                    file.charts.len()
-                )
-            }));
-        };
-        let rox = from_chart(&file, chart);
-        rox.validate()?;
-        Ok((
-            rox,
-            DwiReport {
-                skipped: file.skipped.clone(),
-                warnings,
-                playable_charts: file.charts.len(),
-            },
-        ))
+        decode_nth(parse_dialect(data, Dialect::Dwi)?, index, "dwi")
     }
+}
+
+/// Decoder of `.msd` files (the DDR'99 simulator script DWI grew from; see [`Dialect::Msd`]): the first playable chart of the file.
+pub struct MsdDecoder;
+crate::impl_format!(MsdDecoder, ["msd"]);
+
+impl Decoder for MsdDecoder {
+    fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
+        first_chart(&parse_dialect(data, Dialect::Msd)?.file)
+    }
+}
+
+impl MsdDecoder {
+    /// The playable charts of the file, in file order.
+    ///
+    /// # Errors
+    /// Returns an error if the data is too large.
+    pub fn variants(data: &[u8]) -> RoxResult<Vec<Variant>> {
+        variants_of(&parse_dialect(data, Dialect::Msd)?.file)
+    }
+
+    /// Decodes playable chart `index` (the numbering of [`Self::variants`]).
+    ///
+    /// # Errors
+    /// Returns an error if the file has no such chart.
+    pub fn decode_variant(data: &[u8], index: usize) -> RoxResult<RoxChart> {
+        Self::decode_with_report(data, index).map(|(chart, _)| chart)
+    }
+
+    /// [`Self::decode_variant`] and what the reader skipped or repaired.
+    ///
+    /// # Errors
+    /// Returns an error if the file has no such chart.
+    pub fn decode_with_report(data: &[u8], index: usize) -> RoxResult<(RoxChart, DwiReport)> {
+        decode_nth(parse_dialect(data, Dialect::Msd)?, index, "msd")
+    }
+}
+
+#[allow(clippy::unnecessary_wraps)] // the same shape as the readers that call it
+fn variants_of(file: &SmFile) -> RoxResult<Vec<Variant>> {
+    Ok(file
+        .charts
+        .iter()
+        .enumerate()
+        .map(|(index, chart)| {
+            let rox = from_chart(file, chart);
+            Variant {
+                index,
+                stepstype: chart.stepstype.clone(),
+                difficulty: chart.difficulty.clone(),
+                name: chart.description.clone(),
+                meter: chart.meter,
+                key_count: chart.column_count,
+                notes: rox.notes.len(),
+                holds: rox.notes.iter().filter(|note| note.is_hold()).count(),
+                duration_us: rox.duration_us(),
+            }
+        })
+        .collect())
+}
+
+fn decode_nth(Parsed { file, warnings }: Parsed, index: usize, format: &str) -> RoxResult<(RoxChart, DwiReport)> {
+    let Some(chart) = file.charts.get(index) else {
+        return Err(RoxError::InvalidFormat(if file.charts.is_empty() {
+            match first_chart(&file) {
+                Err(error) => error.to_string(),
+                Ok(_) => "No charts found".to_string(),
+            }
+        } else {
+            format!("{format}: {} playable charts, not chart {index}", file.charts.len())
+        }));
+    };
+    let rox = from_chart(&file, chart);
+    rox.validate()?;
+    Ok((rox, DwiReport { skipped: file.skipped.clone(), warnings, playable_charts: file.charts.len() }))
 }

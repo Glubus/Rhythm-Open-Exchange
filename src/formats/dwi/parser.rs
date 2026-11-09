@@ -30,6 +30,17 @@ pub struct Parsed {
     pub warnings: Vec<String>,
 }
 
+/// The two languages this parser reads: DWI, and MSD, the DDR'99 simulator script DWI grew from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    Dwi,
+    /// `.msd`: the step grammar of DWI without holds. `#GAP` is in the simulator's own dots, not milliseconds: it is not applied
+    /// (warned). The text is Shift-JIS when it is not UTF-8. The chart tags give the level first in the spec (`#SINGLE:4:BASIC:...`) and
+    /// the mode first in real files (`#SINGLE:BASIC:4:...`, as DWI): a first parameter that is a number and a second that is not is
+    /// read as the spec's order.
+    Msd,
+}
+
 /// Parses a `.dwi` file.
 ///
 /// Charts that can not be played (`COUPLE` steps, no step data, timing that can not be honoured)
@@ -38,16 +49,34 @@ pub struct Parsed {
 /// # Errors
 /// Returns an error if the data exceeds 100 MB.
 pub fn parse_detailed(data: &[u8]) -> RoxResult<Parsed> {
+    parse_dialect(data, Dialect::Dwi)
+}
+
+/// Parses a `.dwi` or a `.msd` file (see [`parse_detailed`]).
+///
+/// # Errors
+/// Returns an error if the data exceeds 100 MB.
+pub fn parse_dialect(data: &[u8], dialect: Dialect) -> RoxResult<Parsed> {
     if data.len() > MAX_FILE_SIZE {
         return Err(RoxError::InvalidFormat(format!(
             "File too large: {} bytes (max 100MB)",
             data.len()
         )));
     }
-    let text = decode_text(data, false);
-    let tags = tokenize_raw(&text);
+    let text = match (dialect, std::str::from_utf8(data)) {
+        (Dialect::Msd, Err(_)) => encoding_rs::SHIFT_JIS.decode(data).0,
+        _ => decode_text(data, false),
+    };
+    let mut tags = tokenize_raw(&text);
     let mut warnings = Vec::new();
-    let header = Header::read(&tags, &mut warnings);
+    let mut header = Header::read(&tags, &mut warnings);
+    if dialect == Dialect::Msd {
+        if header.gap_ms != 0 {
+            warnings.push(format!("#GAP {} is in the simulator's dots, not milliseconds: not applied", header.gap_ms));
+        }
+        header.gap_ms = 0;
+        tags.iter_mut().filter(|tag| is_chart_tag(&tag.name)).for_each(level_first_to_mode_first);
+    }
     let song_timing = SongTiming::new(header.bpms(), header.stops(), Vec::new());
     let mut file = SmFile {
         metadata: header.metadata,
@@ -65,6 +94,17 @@ pub fn parse_detailed(data: &[u8]) -> RoxResult<Parsed> {
         }
     }
     Ok(Parsed { file, warnings })
+}
+
+/// An MSD chart tag in the spec's order (`level:mode:steps`) put in DWI's (`mode:level:steps`).
+fn level_first_to_mode_first(tag: &mut Tag) {
+    let is_number = |param: &String| !param.trim().is_empty() && param.trim().bytes().all(|b| b.is_ascii_digit());
+    if let [first, second, ..] = tag.params.as_mut_slice()
+        && is_number(first)
+        && !is_number(second)
+    {
+        std::mem::swap(first, second);
+    }
 }
 
 /// Parses a `.dwi` file into the `.sm` types (see [`parse_detailed`] for what was repaired).

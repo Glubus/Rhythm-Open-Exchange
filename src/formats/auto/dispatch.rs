@@ -16,7 +16,7 @@ use crate::formats::{
 use crate::formats::VSliceDecoder;
 use crate::formats::{ChartDecoder, MidDecoder, SngPackage};
 use crate::formats::SsqDecoder;
-use crate::formats::{DwiDecoder, KsfContext, KsfDecoder};
+use crate::formats::{DwiDecoder, KsfContext, KsfDecoder, MsdDecoder};
 use crate::formats::{SusDecoder, UscDecoder};
 use crate::formats::{BestdoriDecoder, SimulatorDecoder};
 use crate::formats::ImdDecoder;
@@ -124,6 +124,7 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
         Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Msd) => return MsdDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, index),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, index),
         Ok(DetectedFormat::Fnfc) => return VSliceDecoder::decode_fnfc_variant(&read()?, "default", index),
@@ -262,6 +263,10 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
             let data = read()?;
             each(&DwiDecoder::variants(&data)?, |v| format!("{} {}", v.stepstype, v.name), |v| DwiDecoder::decode_variant(&data, v.index))
         }
+        DetectedFormat::Msd => {
+            let data = read()?;
+            each(&MsdDecoder::variants(&data)?, |v| format!("{} {}", v.stepstype, v.name), |v| MsdDecoder::decode_variant(&data, v.index))
+        }
         DetectedFormat::Fnf => match read_vslice_pair(path)? {
             Some((chart, metadata)) => each(
                 &VSliceDecoder::variants(&chart, &metadata)?,
@@ -373,6 +378,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Edit => Err(edit_needs_its_song()),
         DetectedFormat::Ssq => SsqDecoder::decode_variant(data, 0),
         DetectedFormat::Dwi => DwiDecoder::decode(data),
+        DetectedFormat::Msd => MsdDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),
         DetectedFormat::Usc => UscDecoder::decode(data),

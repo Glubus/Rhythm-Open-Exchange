@@ -59,4 +59,4 @@ pub mod parser;
 #[cfg(test)]
 mod tests;
 
-pub use decoder::{DwiDecoder, DwiReport, Variant};
+pub use decoder::{DwiDecoder, DwiReport, MsdDecoder, Variant};

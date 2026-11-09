@@ -326,3 +326,22 @@ fn the_auto_decoders_route_dwi_files() {
     assert!(all.iter().all(|variant| variant.chart.is_ok()));
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn an_msd_is_read_as_dwi_with_either_parameter_order_and_no_gap() {
+    use super::MsdDecoder;
+    // 120 BPM: an 8th note is 0.25 s. The spec writes the level first, real files the mode first; `#GAP` is in the simulator's dots.
+    let file = "#TITLE:T;\n#BPM:120;\n#GAP:-104\n\n#SINGLE:4:BASIC:2000 8000;\n#SINGLE:MANIAC:7:\n(4646) 0B;\n#COUPLE:BASIC:3:2:8;\n";
+    let variants = MsdDecoder::variants(file.as_bytes()).unwrap();
+    let names: Vec<(&str, u32)> = variants.iter().map(|v| (v.difficulty.as_str(), v.meter)).collect();
+    assert_eq!(names, vec![("Easy", 4), ("Hard", 7)]);
+    let (basic, report) = MsdDecoder::decode_with_report(file.as_bytes(), 0).unwrap();
+    assert_eq!(taps(&basic), vec![(0, 1), (1_000_000, 2)]);
+    assert!(report.warnings.iter().any(|w| w.contains("#GAP -104")));
+    // `(4646)` is four 16th notes, then `B` (left + right) on the next 8th.
+    let maniac = MsdDecoder::decode_variant(file.as_bytes(), 1).unwrap();
+    assert_eq!(taps(&maniac), vec![(0, 0), (125_000, 3), (250_000, 0), (375_000, 3), (750_000, 0), (750_000, 3)]);
+    // Shift-JIS text that is not UTF-8.
+    let (sjis, _, _) = encoding_rs::SHIFT_JIS.encode("#TITLE:電車;\n#BPM:120;\n#SINGLE:BASIC:1:20;\n");
+    assert_eq!(MsdDecoder::decode(&sjis).unwrap().metadata.title.as_str(), "電車");
+}

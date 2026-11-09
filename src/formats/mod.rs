@@ -72,7 +72,7 @@ pub use bms::{BmsDecoder, BmsonDecoder, PmsDecoder};
 #[cfg(feature = "std")]
 pub use dtx::{DtxDecoder, DtxReport};
 #[cfg(feature = "std")]
-pub use dwi::DwiDecoder;
+pub use dwi::{DwiDecoder, MsdDecoder};
 #[cfg(feature = "std")]
 pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
 #[cfg(feature = "std")]

@@ -121,22 +121,23 @@ pub fn looks_like_simulator(head: &[u8]) -> bool {
         && lines.all(is_note_line)
 }
 
-/// Whether the file at `path` is a BanG Dream chart: a `.txt` that [`looks_like_simulator`], or a `.json` (any name) or a file with a Bestdori
-/// name ([`is_bestdori_chart_name`]) that [`looks_like_bestdori`]. Reads the first bytes of the file; `false` when it can not be read.
+/// Whether the file at `path` is a BanG Dream chart: a `.txt` that [`looks_like_simulator`], a `.json` (any name) or a file with a Bestdori
+/// name ([`is_bestdori_chart_name`]) that [`looks_like_bestdori`], or a `.json` or `.bdon` that is a BDON chart (`crate::formats::looks_like_bdon`,
+/// BanG Dream! Our Notes). Reads the first bytes of the file; `false` when it can not be read.
 #[must_use]
 pub fn is_bandori_chart_file(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
         return false;
     };
-    let looks_like: fn(&[u8]) -> bool = if path
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
-    {
+    let extension = |wanted: &str| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case(wanted));
+    let looks_like: fn(&[u8]) -> bool = if extension("txt") {
         looks_like_simulator
-    } else if is_bestdori_chart_name(name)
-        || path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-    {
+    } else if extension("json") {
+        |head| looks_like_bestdori(head) || crate::formats::looks_like_bdon(head)
+    } else if is_bestdori_chart_name(name) {
         looks_like_bestdori
+    } else if extension("bdon") {
+        crate::formats::looks_like_bdon
     } else {
         return false;
     };

@@ -66,6 +66,8 @@ pub enum DetectedFormat {
     /// A BDON chart (BanG Dream! Our Notes): ONE chart per file on the 12 lanes of the Project SEKAI model. Decode only. `detect` says it for
     /// `.bdon`; `detect_content` for a `.json` whose content is one (a JSON object with a `score` key).
     Bdon,
+    /// `.msd` (the DDR'99 simulator script DWI grew from): the charts of a song, each playable one a variant (as `.dwi`). Decode only.
+    Msd,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -109,6 +111,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "edit" => Ok(DetectedFormat::Edit),
         "ssq" => Ok(DetectedFormat::Ssq),
         "dwi" => Ok(DetectedFormat::Dwi),
+        "msd" => Ok(DetectedFormat::Msd),
         "ksf" => Ok(DetectedFormat::Ksf),
         "sus" => Ok(DetectedFormat::Sus),
         "usc" => Ok(DetectedFormat::Usc),
