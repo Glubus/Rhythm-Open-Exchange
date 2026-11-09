@@ -75,6 +75,8 @@ pub enum DetectedFormat {
     Step,
     /// `.xmk` (DJ Hero 2) and `.fsgmub` (DJ Hero): ONE chart per file on 5 columns (crossfader left, green, red, blue, crossfader right). Decode only.
     Xmk,
+    /// `.fsc` (fluXis): ONE chart per file, as many columns as its highest lane. Decode only.
+    Fsc,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -128,6 +130,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "gda" | "g2d" => Ok(DetectedFormat::Gda),
         "ksh" => Ok(DetectedFormat::Ksh),
         "xmk" | "fsgmub" => Ok(DetectedFormat::Xmk),
+        "fsc" => Ok(DetectedFormat::Fsc),
         "bestdori" => Ok(DetectedFormat::Bestdori),
         "bdon" => Ok(DetectedFormat::Bdon),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),

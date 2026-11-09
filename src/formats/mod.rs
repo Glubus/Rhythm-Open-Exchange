@@ -27,6 +27,8 @@ pub mod dtx;
 #[cfg(feature = "std")]
 pub mod dwi;
 #[cfg(feature = "std")]
+pub mod fluxis;
+#[cfg(feature = "std")]
 pub mod fnf_vslice;
 #[cfg(feature = "std")]
 pub mod imd;
@@ -77,6 +79,8 @@ pub use dtx::{DtxDecoder, DtxReport, GdaDecoder};
 pub use djhero::XmkDecoder;
 #[cfg(feature = "std")]
 pub use dwi::{DwiDecoder, MsdDecoder};
+#[cfg(feature = "std")]
+pub use fluxis::FscDecoder;
 #[cfg(feature = "std")]
 pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
 #[cfg(feature = "std")]
