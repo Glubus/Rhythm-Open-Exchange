@@ -62,6 +62,10 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         if crate::formats::fnf_codename::looks_like_codename(&data) {
             return crate::formats::fnf_codename::decode_file(path, &data);
         }
+        // A Ludum Dare song file names its section bitmaps, read beside it.
+        if crate::formats::fnf_ludum_dare::looks_like_ludum_dare(&data) {
+            return crate::formats::fnf_ludum_dare::decode_file(path, &data);
+        }
     }
     let fmt = detected?;
     decode_bytes(fmt, &std::fs::read(path)?)

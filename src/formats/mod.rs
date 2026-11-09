@@ -31,6 +31,8 @@ pub mod ffr;
 #[cfg(feature = "std")]
 pub mod fnf_codename;
 #[cfg(feature = "std")]
+pub mod fnf_ludum_dare;
+#[cfg(feature = "std")]
 pub mod fluxis;
 #[cfg(feature = "std")]
 pub mod fnf_vslice;
@@ -89,6 +91,8 @@ pub use fluxis::FscDecoder;
 pub use ffr::{SwfDecoder, looks_like_swf};
 #[cfg(feature = "std")]
 pub use fnf_codename::{CodenameDecoder, CodenameReport, is_codename_chart_file, looks_like_codename};
+#[cfg(feature = "std")]
+pub use fnf_ludum_dare::{LudumDareDecoder, LudumDareReport, is_ludum_dare_chart_file, looks_like_ludum_dare};
 #[cfg(feature = "std")]
 pub use clone_hero::{ChartDecoder, MidDecoder, SngPackage, SongIni, is_mid_chart_name};
 #[cfg(feature = "std")]
