@@ -344,8 +344,8 @@ fn a_slide_with_no_segment_beside_it_stays_a_tap() {
     assert_eq!(
         summary(&chart),
         vec![
-            (1_000_000, 1, 0),
             (1_000_000, 3, 100_000),
+            (1_000_000, 1, 0),
             (5_000_000, 0, 0),
             (9_000_000, 2, 0)
         ]
@@ -419,8 +419,8 @@ fn notes_are_sorted_whatever_the_order_of_the_file() {
     assert_eq!(
         summary(&chart),
         vec![
-            (1_000_000, 0, 0),
             (1_000_000, 2, 500_000),
+            (1_000_000, 0, 0),
             (2_000_000, 0, 0),
             (3_000_000, 1, 0)
         ]

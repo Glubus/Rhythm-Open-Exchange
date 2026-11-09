@@ -57,23 +57,11 @@ impl RoxChart {
         crate::codec::validate::validate(self)
     }
 
-    /// Sorts the notes and drops the ones a game cannot play on top of another of their column: a note at the same time as the
-    /// previous one of its column, or starting inside one of its long notes (a note may start exactly where a long note ends). At the
-    /// same time a long note is kept before a tap. Returns how many were dropped. Decoders of formats whose files carry such stacks
-    /// (FNF charts, Quaver maps) call it so that the chart passes [`Self::validate`] instead of being refused.
+    /// Sorts the notes and drops the ones a game can not play on top of another of their column (see [`drop_stacked`]). Returns
+    /// how many were dropped. Decoders of formats whose files carry such stacks (FNF charts, Quaver maps) call it so that the chart
+    /// passes [`Self::validate`] instead of being refused.
     pub fn drop_overlapping_notes(&mut self) -> usize {
-        self.notes.sort_by_key(|note| (note.time_us, u8::from(!note.is_hold()), note.column));
-        let mut last = vec![(i64::MIN, i64::MIN); usize::from(self.key_count)];
-        let before = self.notes.len();
-        self.notes.retain(|note| {
-            let Some((start, end)) = last.get_mut(usize::from(note.column)) else { return true };
-            if note.time_us == *start || note.time_us < *end {
-                return false;
-            }
-            (*start, *end) = (note.time_us, note.end_time_us());
-            true
-        });
-        before - self.notes.len()
+        drop_stacked(&mut self.notes, self.key_count, |note| note).total()
     }
 
     /// Drops every mine and every roll (`Burst`, head and tail together) and keeps all other
@@ -130,6 +118,52 @@ impl core::fmt::Display for RemovedNotes {
         }
         Ok(())
     }
+}
+
+/// What [`drop_stacked`] dropped.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Stacked {
+    /// Taps at the same time as the tap kept before them on their column.
+    pub taps: usize,
+    /// The other notes: starting inside a long note of their column, or at the same time as a long note or a mine there.
+    pub overlapping: usize,
+}
+
+impl Stacked {
+    #[must_use]
+    pub fn total(self) -> usize {
+        self.taps + self.overlapping
+    }
+}
+
+/// Sorts `items` by the time of their note (at one time long notes first, then taps, then mines, then by column) and drops the notes a
+/// game can not play on top of another of their column: a note at the same time as the one kept before it, or starting inside one of
+/// its long notes (a note may start exactly where a long note ends). `note` gives the note of an item, so decoders can keep what goes
+/// with it (a keysound) until the stacks are gone. Columns at or past `key_count` are kept as they are.
+pub fn drop_stacked<T>(items: &mut Vec<T>, key_count: u8, note: impl Fn(&T) -> &Note) -> Stacked {
+    items.sort_by_key(|item| {
+        let note = note(item);
+        (note.time_us, u8::from(!note.is_hold()) + u8::from(note.is_mine()), note.column)
+    });
+    // Per column: the start and the end of the note kept last, and whether it is a tap.
+    let mut last = vec![(i64::MIN, i64::MIN, false); usize::from(key_count)];
+    let mut dropped = Stacked::default();
+    items.retain(|item| {
+        let note = note(item);
+        let Some((start, end, tap)) = last.get_mut(usize::from(note.column)) else { return true };
+        let is_tap = !note.is_hold() && !note.is_mine() && !note.is_burst();
+        if note.time_us == *start && *tap && is_tap {
+            dropped.taps += 1;
+            return false;
+        }
+        if note.time_us == *start || note.time_us < *end {
+            dropped.overlapping += 1;
+            return false;
+        }
+        (*start, *end, *tap) = (note.time_us, note.end_time_us(), is_tap);
+        true
+    });
+    dropped
 }
 
 #[cfg(test)]

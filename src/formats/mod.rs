@@ -97,3 +97,17 @@ pub use sm_edit::EditDecoder;
 pub use ssq::SsqDecoder;
 #[cfg(feature = "std")]
 pub use yrox::{YroxDecoder, YroxEncoder};
+
+/// The index in `chart.hitsounds` of the keysound `key`, added on its first use (`sound` makes it); `seen` remembers the keys added.
+#[cfg(feature = "std")]
+pub(crate) fn keysound<K: std::hash::Hash + Eq>(
+    chart: &mut rox::model::RoxChart,
+    seen: &mut std::collections::HashMap<K, u16>,
+    key: K,
+    sound: impl FnOnce() -> rox::model::Hitsound,
+) -> u16 {
+    *seen.entry(key).or_insert_with(|| {
+        chart.hitsounds.push(sound());
+        u16::try_from(chart.hitsounds.len() - 1).unwrap_or(u16::MAX)
+    })
+}

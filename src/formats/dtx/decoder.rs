@@ -9,7 +9,9 @@ use std::collections::{BTreeMap, HashMap};
 use rox::audio_plan::{AudioPlan, SoundEvent};
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
-use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint};
+use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint, drop_stacked};
+
+use crate::formats::keysound;
 
 pub use super::channels::Part;
 use super::channels::{BLUE, GREEN, OPEN, PINK, Pad, RED, Role, YELLOW, classify};
@@ -456,26 +458,13 @@ fn add_notes(rox: &mut RoxChart, hits: &[Hit], columns: &Columns, end_us: impl F
             built.push((note, hit.sound));
         }
     }
-    built.sort_by_key(|(note, _)| (note.time_us, !note.is_hold(), note.column));
-    let mut last = vec![(i64::MIN, i64::MIN); usize::from(columns.key_count)];
-    let mut sounds: HashMap<(&str, u8), u16> = HashMap::new();
+    report.overlapping_notes_dropped += drop_stacked(&mut built, columns.key_count, |(note, _)| note).total();
+    let mut sounds = HashMap::new();
     for (mut note, sound) in built {
-        let (start, end) = &mut last[usize::from(note.column)];
-        if note.time_us < *end || note.time_us == *start {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        (*start, *end) = (note.time_us, note.end_time_us());
         if let Some(sound) = sound {
-            let index = *sounds.entry((sound.name.as_str(), sound.volume)).or_insert_with(|| {
-                rox.hitsounds.push(if sound.volume == 100 {
-                    Hitsound::new(sound.name.as_str())
-                } else {
-                    Hitsound::with_volume(sound.name.as_str(), sound.volume)
-                });
-                u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
-            });
-            note.hitsound_index = Some(index);
+            let name = sound.name.as_str();
+            let make = || if sound.volume == 100 { Hitsound::new(name) } else { Hitsound::with_volume(name, sound.volume) };
+            note.hitsound_index = Some(keysound(rox, &mut sounds, (name, sound.volume), make));
         }
         rox.notes.push(note);
     }

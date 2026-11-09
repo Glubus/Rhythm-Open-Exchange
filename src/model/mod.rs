@@ -4,7 +4,7 @@ mod metadata;
 mod note;
 mod timing;
 
-pub use chart::{ROX_MAGIC, ROX_VERSION, RemovedNotes, RoxChart};
+pub use chart::{ROX_MAGIC, ROX_VERSION, RemovedNotes, RoxChart, Stacked, drop_stacked};
 pub use hitsound::Hitsound;
 pub use metadata::Metadata;
 pub use note::{Note, NoteType};

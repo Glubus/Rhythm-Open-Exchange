@@ -3,7 +3,7 @@
 //! the ROX chart. See `mod.rs` for the decisions.
 
 use rox::error::{RoxError, RoxResult};
-use rox::model::{Metadata, Note, RoxChart, TimingPoint};
+use rox::model::{Metadata, Note, RoxChart, TimingPoint, drop_stacked};
 
 /// Columns of a chart: the 7 lanes of the game.
 pub const COLUMNS: u8 = 7;
@@ -267,36 +267,14 @@ fn timing_points(mut points: Vec<(i64, f64)>) -> Vec<TimingPoint> {
     points.into_iter().map(point).collect()
 }
 
-/// Sorts the notes by time and column (holds first at a tie) and drops the ones the model forbids: inside a hold of their column,
-/// and a second tap on the same column and time.
-fn settle(mut timed: Vec<Timed>, report: &mut BandoriReport) -> Vec<Note> {
-    timed.sort_by(|a, b| {
-        a.time_us
-            .cmp(&b.time_us)
-            .then(a.column.cmp(&b.column))
-            .then(b.duration_us.is_some().cmp(&a.duration_us.is_some()))
-    });
-    let mut busy_until = [i64::MIN; COLUMNS as usize];
-    let mut last_tap: [Option<i64>; COLUMNS as usize] = [None; COLUMNS as usize];
-    let mut kept = Vec::with_capacity(timed.len());
-    for note in timed {
-        let column = usize::from(note.column);
-        if note.time_us < busy_until[column] {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        if note.duration_us.is_none() && last_tap[column] == Some(note.time_us) {
-            report.duplicate_taps += 1;
-            continue;
-        }
-        if let Some(duration) = note.duration_us {
-            busy_until[column] = note.time_us.saturating_add(duration);
-            last_tap[column] = None;
-            kept.push(Note::hold(note.time_us, duration, note.column));
-        } else {
-            last_tap[column] = Some(note.time_us);
-            kept.push(Note::tap(note.time_us, note.column));
-        }
-    }
-    kept
+/// The notes, sorted, without the ones the model forbids: inside a hold of their column, and a second tap on the same column and time.
+fn settle(timed: Vec<Timed>, report: &mut BandoriReport) -> Vec<Note> {
+    let mut notes: Vec<Note> = timed
+        .into_iter()
+        .map(|t| t.duration_us.map_or_else(|| Note::tap(t.time_us, t.column), |d| Note::hold(t.time_us, d, t.column)))
+        .collect();
+    let dropped = drop_stacked(&mut notes, COLUMNS, |note| note);
+    report.overlapping_notes_dropped += dropped.overlapping;
+    report.duplicate_taps += dropped.taps;
+    notes
 }

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
-use rox::model::{Metadata, Note, RoxChart, TimingPoint};
+use rox::model::{Metadata, Note, RoxChart, TimingPoint, drop_stacked};
 
 /// Decoder of `.imd` files (Rhythm Master classic mode): one chart per file.
 pub struct ImdDecoder;
@@ -405,42 +405,20 @@ fn place_notes(records: &[Record], key_count: u8, report: &mut ImdReport) -> Vec
     timed
 }
 
-/// Sorts the notes by time and lane (holds first at a tie) and drops the ones the model forbids: inside a hold of their lane, and a
-/// second tap on the same lane and time. Times become microseconds.
-fn settle(mut timed: Vec<Timed>, report: &mut ImdReport) -> Vec<Note> {
-    timed.sort_by(|a, b| {
-        a.time_ms
-            .cmp(&b.time_ms)
-            .then(a.column.cmp(&b.column))
-            .then(b.duration_ms.is_some().cmp(&a.duration_ms.is_some()))
-    });
-    let mut busy_until = [i64::MIN; MAX_LANES as usize];
-    let mut last_tap: [Option<i64>; MAX_LANES as usize] = [None; MAX_LANES as usize];
-    let mut kept = Vec::with_capacity(timed.len());
-    for note in timed {
-        let lane = usize::from(note.column);
-        if note.time_ms < busy_until[lane] {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        if note.duration_ms.is_none() && last_tap[lane] == Some(note.time_ms) {
-            report.duplicate_taps += 1;
-            continue;
-        }
-        if let Some(duration) = note.duration_ms {
-            busy_until[lane] = note.time_ms + duration;
-            last_tap[lane] = None;
-            kept.push(Note::hold(
-                note.time_ms * 1000,
-                duration * 1000,
-                note.column,
-            ));
-        } else {
-            last_tap[lane] = Some(note.time_ms);
-            kept.push(Note::tap(note.time_ms * 1000, note.column));
-        }
-    }
-    kept
+/// The notes in microseconds, sorted, without the ones the model forbids: inside a hold of their lane, and a second tap on the same lane
+/// and time.
+fn settle(timed: Vec<Timed>, report: &mut ImdReport) -> Vec<Note> {
+    let mut notes: Vec<Note> = timed
+        .into_iter()
+        .map(|t| {
+            let start = t.time_ms * 1000;
+            t.duration_ms.map_or_else(|| Note::tap(start, t.column), |d| Note::hold(start, d * 1000, t.column))
+        })
+        .collect();
+    let dropped = drop_stacked(&mut notes, MAX_LANES, |note| note);
+    report.overlapping_notes_dropped += dropped.overlapping;
+    report.duplicate_taps += dropped.taps;
+    notes
 }
 
 /// The BPM table as timing points: the usable entries sorted by time (of two at the same time the last wins), one point where the BPM

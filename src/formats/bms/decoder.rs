@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
 use rox::audio_plan::{AudioPlan, SoundEvent};
-use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint};
+use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint, drop_stacked};
+
+use crate::formats::keysound;
 
 use super::parser::{self, BmsFile, Frac, id as obj_id};
 use super::source;
@@ -368,24 +370,13 @@ fn add_notes(rox: &mut RoxChart, file: &BmsFile, drafts: &[Draft], layout: &Layo
         };
         built.push((note, (!draft.mine).then_some(draft.id)));
     }
-    built.sort_by_key(|(note, _)| (note.time_us, kind_rank(note), note.column));
-    let mut last = vec![(i64::MIN, i64::MIN); usize::from(layout.key_count)];
-    let mut sounds: HashMap<u16, u16> = HashMap::new();
+    report.overlapping_notes_dropped += drop_stacked(&mut built, layout.key_count, |(note, _)| note).total();
+    let mut sounds = HashMap::new();
     for (mut note, id) in built {
-        let (start, end) = &mut last[usize::from(note.column)];
-        if note.time_us < *end || note.time_us == *start {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        (*start, *end) = (note.time_us, note.end_time_us());
         if let Some(id) = id
             && let Some(name) = sound_of(file, id)
         {
-            let index = *sounds.entry(id).or_insert_with(|| {
-                rox.hitsounds.push(Hitsound::new(name.as_str()));
-                u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
-            });
-            note.hitsound_index = Some(index);
+            note.hitsound_index = Some(keysound(rox, &mut sounds, id, || Hitsound::new(name.as_str())));
         }
         rox.notes.push(note);
     }
@@ -414,16 +405,6 @@ fn sanitize_names(file: &mut BmsFile) -> usize {
         }
     }
     refused
-}
-
-fn kind_rank(note: &Note) -> u8 {
-    if note.is_hold() {
-        0
-    } else if note.is_mine() {
-        2
-    } else {
-        1
-    }
 }
 
 /// BPM and STOP changes with their beat, sorted: at one beat the BPM changes come before the STOP, channel 03 before 08.

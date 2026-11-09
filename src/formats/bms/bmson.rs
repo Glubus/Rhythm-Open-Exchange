@@ -24,7 +24,9 @@ use std::collections::HashMap;
 use rox::audio_plan::{AudioPlan, SoundEvent};
 use rox::codec::Decoder;
 use rox::error::{RoxError, RoxResult};
-use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint};
+use rox::model::{Hitsound, Metadata, Note, RoxChart, TimingPoint, drop_stacked};
+
+use crate::formats::keysound;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -441,22 +443,11 @@ fn add_notes(
         let note = if end > start { Note::hold(start, end - start, column) } else { Note::tap(start, column) };
         built.push((note, draft.channel));
     }
-    built.sort_by_key(|(note, _)| (note.time_us, u8::from(!note.is_hold()), note.column));
-    let mut last = vec![(i64::MIN, i64::MIN); usize::from(rox.key_count)];
-    let mut sounds: HashMap<String, u16> = HashMap::new();
+    report.overlapping_notes_dropped += drop_stacked(&mut built, rox.key_count, |(note, _)| note).total();
+    let mut sounds = HashMap::new();
     for (mut note, channel) in built {
-        let (start, end) = &mut last[usize::from(note.column)];
-        if note.time_us < *end || note.time_us == *start {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        (*start, *end) = (note.time_us, note.end_time_us());
         if let Some(name) = safe_name(&channels[channel].name, &mut report.unsafe_names) {
-            let index = *sounds.entry(name.clone()).or_insert_with(|| {
-                rox.hitsounds.push(Hitsound::new(name));
-                u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
-            });
-            note.hitsound_index = Some(index);
+            note.hitsound_index = Some(keysound(rox, &mut sounds, name.clone(), || Hitsound::new(name)));
         }
         rox.notes.push(note);
     }
