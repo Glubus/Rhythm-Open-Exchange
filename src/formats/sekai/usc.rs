@@ -125,7 +125,7 @@ fn read_object(object: &Value, score: &mut Score, report: &mut SekaiReport) {
 }
 
 /// A finite number field.
-fn number(object: &Map<String, Value>, key: &str) -> Option<f64> {
+pub(super) fn number(object: &Map<String, Value>, key: &str) -> Option<f64> {
     object
         .get(key)
         .and_then(Value::as_f64)
@@ -133,13 +133,13 @@ fn number(object: &Map<String, Value>, key: &str) -> Option<f64> {
 }
 
 /// A boolean field, `false` when absent.
-fn flag(object: &Map<String, Value>, key: &str) -> bool {
+pub(super) fn flag(object: &Map<String, Value>, key: &str) -> bool {
     object.get(key).and_then(Value::as_bool) == Some(true)
 }
 
 /// The column of a note from its centre and half width, as `susToUSC` writes them (`lane = x - 8 + width / 2`, `size = width / 2`,
 /// so the left edge is `lane - size + 6` lanes from the left of the stage); `None` (counted) when it is not entirely on the stage.
-fn column(lane: f64, size: f64, report: &mut SekaiReport) -> Option<u8> {
+pub(super) fn column(lane: f64, size: f64, report: &mut SekaiReport) -> Option<u8> {
     if size <= 0.0 {
         report.zero_width_notes += 1;
         return None;

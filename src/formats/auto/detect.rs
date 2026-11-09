@@ -63,6 +63,9 @@ pub enum DetectedFormat {
     /// `.ksh` (`K-Shoot MANIA`, SOUND VOLTEX fan charts): ONE chart per file on 6 columns (BT A-D, FX-L, FX-R); the lasers are dropped. Decode only.
     /// The extension is also a Korn shell script's, so `detect` says it and whether a file is really one is `looks_like_ksh`.
     Ksh,
+    /// A BDON chart (BanG Dream! Our Notes): ONE chart per file on the 12 lanes of the Project SEKAI model. Decode only. `detect` says it for
+    /// `.bdon`; `detect_content` for a `.json` whose content is one (a JSON object with a `score` key).
+    Bdon,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -113,6 +116,7 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "dtx" => Ok(DetectedFormat::Dtx),
         "ksh" => Ok(DetectedFormat::Ksh),
         "bestdori" => Ok(DetectedFormat::Bestdori),
+        "bdon" => Ok(DetectedFormat::Bdon),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),
     }
 }
@@ -129,8 +133,9 @@ pub(super) fn is_content_candidate(path: &Path) -> bool {
 
 /// The formats `detect` does not claim because their extension is generic, told by the first bytes of the file `head` (or all of it): a
 /// BanG! Simulator score for a `.txt` ([`crate::formats::looks_like_simulator`]), a Bestdori chart for a `.json` or a `.bestdori` whose content
-/// is one ([`crate::formats::looks_like_bestdori`]: a JSON array of Bestdori notes; an FNF chart, a V-Slice file or a `.jrox` is an object).
-/// `None` for anything else, an ordinary `.txt` or `.json` included.
+/// is one ([`crate::formats::looks_like_bestdori`]: a JSON array of Bestdori notes; an FNF chart, a V-Slice file or a `.jrox` is an object), a BDON
+/// chart for a `.json` ([`crate::formats::looks_like_bdon`]: an object with a `score` key). `None` for anything else, an ordinary `.txt` or `.json`
+/// included.
 #[must_use]
 pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
     if path
@@ -140,9 +145,14 @@ pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
         return crate::formats::bandori::looks_like_simulator(head)
             .then_some(DetectedFormat::BangSimulator);
     }
-    is_content_candidate(path)
-        .then(|| crate::formats::bandori::looks_like_bestdori(head))
-        .and_then(|bestdori| bestdori.then_some(DetectedFormat::Bestdori))
+    if !is_content_candidate(path) {
+        return None;
+    }
+    if crate::formats::bandori::looks_like_bestdori(head) {
+        Some(DetectedFormat::Bestdori)
+    } else {
+        crate::formats::sekai::looks_like_bdon(head).then_some(DetectedFormat::Bdon)
+    }
 }
 
 #[cfg(test)]

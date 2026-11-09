@@ -44,6 +44,8 @@ pub struct SekaiReport {
     pub flicks: usize,
     /// Trace notes (critical ones included): dropped.
     pub traces: usize,
+    /// Hidden notes (BDON `visible: false`): not judged, dropped.
+    pub hidden_notes: usize,
     /// Damage notes (`.usc` `damage`): dropped.
     pub damage_notes: usize,
     /// Skill activations (SUS tap kind 4, `.usc` `skill`): dropped.

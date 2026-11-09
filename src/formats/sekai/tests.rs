@@ -1016,3 +1016,39 @@ fn the_first_bytes_tell_a_sus_and_a_usc_from_other_files() {
     let usc_text = usc_bytes(&json!({"objects": [bpm_object(0.0, 120.0), usc_single(0.0, 2, 1)]}));
     assert!(looks_like_usc(&usc_text) && UscDecoder::decode(&usc_text).is_ok());
 }
+
+// ---------------------------------------------------------------------------------------------------- BDON
+
+#[test]
+fn a_bdon_chart_maps_its_24_unit_board_onto_the_twelve_columns() {
+    // 480 ticks per beat; no `bpm` event: 120 BPM, a beat is 0.5 s. `pos` is the left edge on 24 units: `pos / 2` is the column.
+    let file = json!({"score": {
+        "events": {"skill": [960], "fever": [[0, 960]]},
+        "notes": [
+            {"t": 480, "pos": 12, "size": 8},
+            {"type": "flick", "t": 960, "pos": 0, "size": 6, "dir": "right"},
+            {"type": "long", "node": [{"t": 1440, "pos": 22, "size": 2}, {"t": 1680, "pos": "auto"}, {"t": 1920, "pos": 4}]},
+            {"type": "trace", "t": 480, "pos": 0},
+            {"type": "guide", "node": [{"t": 0, "pos": 0}, {"t": 480, "pos": 0}]},
+            {"t": 480, "pos": 4, "visible": false},
+            {"t": 480, "pos": 20, "size": 8}
+        ]
+    }});
+    let (chart, report) = super::BdonDecoder::decode_with_report(&serde_json::to_vec(&file).unwrap()).unwrap();
+    assert_eq!(chart.key_count, COLUMNS);
+    assert_eq!(notes_of(&chart), vec![(500_000, 6, 0), (1_000_000, 0, 0), (1_500_000, 11, 500_000)]);
+    assert_eq!(chart.timing_points, vec![TimingPoint::bpm(0, 120.0)]);
+    assert_eq!(
+        (report.flicks, report.traces, report.guides, report.hidden_notes, report.slide_joints_dropped, report.notes_outside_lanes),
+        (1, 1, 1, 1, 1, 1)
+    );
+    assert_eq!((report.skill_markers, report.fever_markers), (1, 1));
+}
+
+#[test]
+fn a_bdon_json_is_told_by_its_score_key() {
+    assert!(super::looks_like_bdon(br#"{"meta":{"version":100},"score":{"notes":[]}}"#));
+    assert!(!super::looks_like_bdon(br#"{"song":{"notes":[]}}"#));
+    assert!(!super::looks_like_bdon(br#"[{"type":"BPM","bpm":120,"beat":0}]"#));
+    assert!(super::BdonDecoder::decode(&[0x1F, 0x8B, 8, 0]).unwrap_err().to_string().contains("gunzip"));
+}

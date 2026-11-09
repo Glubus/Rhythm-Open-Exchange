@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
-//! Project SEKAI lane charts: `.sus` ([`SusDecoder`]) and `.usc` ([`UscDecoder`]). Decode only.
+//! Project SEKAI lane charts: `.sus` ([`SusDecoder`]) and `.usc` ([`UscDecoder`]), and the BDON chart of BanG Dream! Our Notes
+//! ([`BdonDecoder`], same 12-lane model, see `bdon.rs`). Decode only.
 //!
 //! Both formats describe one chart per file on the 12 fixed lanes of Project SEKAI. Format notes:
 //! `vsrg-format-docs/vsrg/project-sekai/{sus,usc}` in Prism's repository, cross-checked against
@@ -104,6 +105,7 @@
 //!
 //! What the decoder dropped or repaired is in the [`SekaiReport`] of `decode_with_report`.
 
+mod bdon;
 mod score;
 mod sniff;
 mod sus;
@@ -112,6 +114,7 @@ mod usc;
 #[cfg(test)]
 mod tests;
 
+pub use bdon::{BdonDecoder, looks_like_bdon};
 pub use score::{COLUMNS, SekaiReport};
 pub use sniff::{SNIFF_BYTES, looks_like_sus, looks_like_usc};
 pub use sus::SusDecoder;

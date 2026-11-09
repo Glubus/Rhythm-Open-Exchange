@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use rox::codec::{Decoder, Encoder};
@@ -21,9 +22,10 @@ use crate::formats::{BestdoriDecoder, SimulatorDecoder};
 use crate::formats::ImdDecoder;
 use crate::formats::DtxDecoder;
 use crate::formats::KshDecoder;
+use crate::formats::BdonDecoder;
 
-/// Decode a file to a `RoxChart`, detecting the format from the file extension. The two BanG Dream formats are told by content (a `.txt` that is a
-/// BanG! Simulator score, a `.json` that is a Bestdori chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
+/// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
+/// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
 ///
 /// # Errors
 ///
@@ -33,16 +35,15 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     let detected = detect(path);
     match detected {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
-        Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &std::fs::read(path)?),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, 0),
-        Ok(DetectedFormat::Sus) => return SusDecoder::decode_file(path),
-        Ok(DetectedFormat::Usc) => return UscDecoder::decode_file(path),
-        Ok(DetectedFormat::Bestdori) => return BestdoriDecoder::decode_file(path),
-        Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
-        Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, 0),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, 0),
-        _ => {}
+        Ok(fmt) => {
+            if let Some(decoded) = decode_single_file(fmt, path) {
+                return decoded;
+            }
+        }
+        Err(_) => {}
     }
     if let Some(chart) = decode_vslice_file(path, 0)? {
         return Ok(chart);
@@ -50,11 +51,57 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     if is_content_candidate(path) {
         let data = std::fs::read(path)?;
         if let Some(fmt) = detect_content(path, sniffed(&data)) {
-            return decode_bandori(fmt, path, &data);
+            return decode_named(fmt, path, || Ok(Cow::Borrowed(&data))).unwrap_or_else(|| decode_bytes(fmt, &data));
         }
     }
     let fmt = detected?;
     decode_bytes(fmt, &std::fs::read(path)?)
+}
+
+/// The formats of one chart per file whose decoder reads the file itself (the title, the lanes or the step type come from its name);
+/// `None` for the others.
+fn decode_single_file(fmt: DetectedFormat, path: &Path) -> Option<RoxResult<RoxChart>> {
+    if fmt == DetectedFormat::Ssq {
+        return None; // several charts per file
+    }
+    decode_named(fmt, path, || Ok(Cow::Owned(std::fs::read(path)?)))
+}
+
+/// The formats whose decoder takes something from the file name (`path`): the title (`.sus`, `.usc`, `.ksh`, `.ssq`, BDON and the two BanG
+/// Dream formats), the lanes and the difficulty (`.imd`), the step type (`.ksf`). `data` gives the bytes; `None` for the other formats.
+fn decode_named<'a>(
+    fmt: DetectedFormat,
+    path: &Path,
+    data: impl FnOnce() -> RoxResult<Cow<'a, [u8]>>,
+) -> Option<RoxResult<RoxChart>> {
+    let title = || crate::formats::ssq::decoder::title_of(path);
+    let decode = |data: &[u8]| match fmt {
+        DetectedFormat::Ssq => SsqDecoder::decode_with_title(data, 0, &title()),
+        DetectedFormat::Ksf => decode_ksf_bytes(path, data),
+        DetectedFormat::Sus => SusDecoder::decode_with_title(data, &title()),
+        DetectedFormat::Usc => UscDecoder::decode_with_title(data, &title()),
+        DetectedFormat::Ksh => KshDecoder::decode_with_title(data, &title()),
+        DetectedFormat::Bdon => BdonDecoder::decode_with_title(data, &title()),
+        DetectedFormat::Imd => {
+            let file_name = path.file_name().map(|n| n.to_string_lossy());
+            ImdDecoder::decode_with_name(data, file_name.as_deref().unwrap_or(""))
+        }
+        DetectedFormat::BangSimulator => SimulatorDecoder::decode_with_title(data, &crate::formats::bandori::title_of(path)),
+        _ => BestdoriDecoder::decode_with_title(data, &crate::formats::bandori::title_of(path)),
+    };
+    let named = matches!(
+        fmt,
+        DetectedFormat::Ssq
+            | DetectedFormat::Ksf
+            | DetectedFormat::Sus
+            | DetectedFormat::Usc
+            | DetectedFormat::Ksh
+            | DetectedFormat::Bdon
+            | DetectedFormat::Imd
+            | DetectedFormat::BangSimulator
+            | DetectedFormat::Bestdori
+    );
+    named.then(|| data().and_then(|data| decode(&data)))
 }
 
 /// Decode chart `index` of a file: the `index`-th playable chart of a `.sm`/`.ssc` file (the
@@ -83,17 +130,12 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
         Ok(DetectedFormat::Sng) => return SngPackage::open(&read()?)?.decode_variant(index),
         Ok(DetectedFormat::Ojn) => return OjnDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Dtx) => return DtxDecoder::decode_variant(&read()?, index),
-        Ok(DetectedFormat::Ksf | DetectedFormat::Sus | DetectedFormat::Usc | DetectedFormat::Imd | DetectedFormat::Ksh)
-            if index > 0 =>
-        {
-            return Err(single());
+        Ok(fmt) => {
+            if let Some(decoded) = decode_single_file(fmt, path) {
+                return if index == 0 { decoded } else { Err(single()) };
+            }
         }
-        Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &read()?),
-        Ok(DetectedFormat::Sus) => return SusDecoder::decode_file(path),
-        Ok(DetectedFormat::Usc) => return UscDecoder::decode_file(path),
-        Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
-        Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
-        _ => {}
+        Err(_) => {}
     }
     if let Some(chart) = decode_vslice_file(path, index)? {
         return Ok(chart);
@@ -274,52 +316,16 @@ fn read_vslice_pair(path: &Path) -> RoxResult<Option<(Vec<u8>, Vec<u8>)>> {
 /// Returns `UnsupportedFormat` if the extension is unknown, or a decode error on failure.
 pub fn auto_decode_bytes(path_hint: impl AsRef<Path>, bytes: &[u8]) -> RoxResult<RoxChart> {
     let hint = path_hint.as_ref();
-    if let Some(fmt) = detect_content(hint, sniffed(bytes)) {
-        return decode_bandori(fmt, hint, bytes);
-    }
-    let fmt = detect(hint)?;
-    if fmt == DetectedFormat::Bestdori {
-        return decode_bandori(fmt, hint, bytes);
-    }
-    if fmt == DetectedFormat::Ssq {
-        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
-        return SsqDecoder::decode_with_title(bytes, 0, &title);
-    }
-    if fmt == DetectedFormat::Ksf {
-        return decode_ksf_bytes(path_hint.as_ref(), bytes);
-    }
-    if fmt == DetectedFormat::Sus {
-        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
-        return SusDecoder::decode_with_title(bytes, &title);
-    }
-    if fmt == DetectedFormat::Usc {
-        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
-        return UscDecoder::decode_with_title(bytes, &title);
-    }
-    if fmt == DetectedFormat::Imd {
-        let file_name = path_hint.as_ref().file_name().map(|n| n.to_string_lossy());
-        return ImdDecoder::decode_with_name(bytes, file_name.as_deref().unwrap_or(""));
-    }
-    if fmt == DetectedFormat::Ksh {
-        let title = crate::formats::ssq::decoder::title_of(path_hint.as_ref());
-        return KshDecoder::decode_with_title(bytes, &title);
-    }
-    decode_bytes(fmt, bytes)
+    let fmt = match detect_content(hint, sniffed(bytes)) {
+        Some(fmt) => fmt,
+        None => detect(hint)?,
+    };
+    decode_named(fmt, hint, || Ok(Cow::Borrowed(bytes))).unwrap_or_else(|| decode_bytes(fmt, bytes))
 }
 
 /// The first bytes of a file, the ones `detect_content` looks at.
 fn sniffed(data: &[u8]) -> &[u8] {
     &data[..data.len().min(crate::formats::sekai::SNIFF_BYTES)]
-}
-
-/// A BanG Dream chart (`fmt` is `Bestdori` or `BangSimulator`) with the file stem of `path_hint` as its title.
-fn decode_bandori(fmt: DetectedFormat, path_hint: &Path, data: &[u8]) -> RoxResult<RoxChart> {
-    let title = crate::formats::bandori::title_of(path_hint);
-    if fmt == DetectedFormat::BangSimulator {
-        SimulatorDecoder::decode_with_title(data, &title)
-    } else {
-        BestdoriDecoder::decode_with_title(data, &title)
-    }
 }
 
 /// Encode a `RoxChart` to a file, detecting the format from the file extension.
@@ -375,6 +381,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Ksh => KshDecoder::decode(data),
         DetectedFormat::Dtx => DtxDecoder::decode(data),
         DetectedFormat::BangSimulator => SimulatorDecoder::decode(data),
+        DetectedFormat::Bdon => BdonDecoder::decode(data),
     }
 }
 
@@ -389,27 +396,6 @@ fn encode_bytes(fmt: DetectedFormat, chart: &RoxChart) -> RoxResult<Vec<u8>> {
         DetectedFormat::Yrox => YroxEncoder::encode(chart),
         DetectedFormat::Rox => RoxNativeCodec::encode(chart),
         DetectedFormat::Mc => McEncoder::encode(chart),
-        DetectedFormat::Bms
-        | DetectedFormat::Pms
-        | DetectedFormat::Bmson
-        | DetectedFormat::Ojn
-        | DetectedFormat::CloneHero
-        | DetectedFormat::CloneHeroMid
-        | DetectedFormat::Sng
-        | DetectedFormat::Edit
-        | DetectedFormat::Ssq
-        | DetectedFormat::Dwi
-        | DetectedFormat::Ksf
-        | DetectedFormat::Sus
-        | DetectedFormat::Usc
-        | DetectedFormat::Bestdori
-        | DetectedFormat::Imd
-        | DetectedFormat::Ksh
-        | DetectedFormat::Dtx
-        | DetectedFormat::BangSimulator
-        | DetectedFormat::Fnfc => Err(RoxError::UnsupportedFormat(
-            "BMS/PMS/bmson/ojn/fnfc/sng/edit/ssq/dwi/ksf/sus/usc/bestdori/BanG! Simulator/imd/dtx/ksh files are read, not written"
-                .to_string(),
-        )),
+        _ => Err(RoxError::UnsupportedFormat(format!("{fmt:?} files are read, not written"))),
     }
 }

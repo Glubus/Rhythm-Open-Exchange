@@ -105,8 +105,8 @@
 //! simulator score is read lossily, flagged in [`BandoriReport::invalid_text`]), NaN or infinite numbers and every other malformed input is
 //! an error or a counted drop, never a panic. A file with no playable note is an error.
 //!
-//! Not handled: the Bestdori v1 JSON (`System`/`Note` elements), the BDON chart of BanG Dream! Our Notes (a board of 24 units with free
-//! positions and widths, the fiche is partial and defines no 7-lane reading), the hit offset, hi-speed.
+//! Not handled here: the Bestdori v1 JSON (`System`/`Note` elements), the hit offset, hi-speed. The BDON chart of BanG Dream! Our Notes (a
+//! board of 24 units with free positions and widths) is read on the 12 lanes of the Project SEKAI model: `sekai::BdonDecoder`.
 //!
 //! What the decoder dropped or repaired is in the [`BandoriReport`] of `decode_with_report`.
 

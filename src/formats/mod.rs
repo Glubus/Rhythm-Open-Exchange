@@ -89,7 +89,7 @@ pub use fnf_vslice::{FnfcPackage, VSliceDecoder, is_vslice_chart_name};
 pub use qua::{QuaDecoder, QuaEncoder};
 #[cfg(feature = "std")]
 pub use sekai::{
-    SNIFF_BYTES, SekaiReport, SusDecoder, UscDecoder, looks_like_sus, looks_like_usc,
+    BdonDecoder, SNIFF_BYTES, SekaiReport, SusDecoder, UscDecoder, looks_like_bdon, looks_like_sus, looks_like_usc,
 };
 #[cfg(feature = "std")]
 pub use sm_edit::EditDecoder;
