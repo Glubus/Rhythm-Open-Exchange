@@ -108,7 +108,7 @@ fn add_section_notes(
     // `psych_v1`: lanes 0-3 are the player's, 4-7 the opponent's, `mustHitSection` only moves the camera
     // (Psych Engine `PlayState.generateSong`: `gottaHitNote = noteData < 4`).
     let must_hit = absolute_lanes || section.must_hit_section;
-    for fnf_note in &section.section_notes {
+    for fnf_note in section.section_notes.iter().filter(|note| note.is_note()) {
         if let Some(col) = resolve_column(fnf_note.lane(), must_hit, side) {
             #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
             let time_us = (fnf_note.time_ms() * 1000.0) as i64;
@@ -181,6 +181,34 @@ mod tests {
             columns(&data, FnfSide::Player),
             vec![(100_000, 0), (200_000, 1)]
         );
+    }
+
+    /// What real charts carry (the game's v0.2.x files, Psych, Kade, Troll Engine): a note type after the duration, an event
+    /// in the notes (lane -1), `null`/`false`/text in fields the chart does not need, NUL padding after the object. The
+    /// notes are read and the rest is ignored.
+    #[rstest]
+    fn engine_extras_and_padding_are_ignored() {
+        let mut data = br#"{"song":{"song":"t","bpm":120,"speed":null,"needsVoices":"yes","notes":[
+            {"mustHitSection":true,"bpm":false,"lengthInSteps":null,"sectionNotes":[[0,0,0,"Hurt Note"],[100,-1,"Hey!","",""],[200,1,50.5,"No Animation"],["x",2,0]]}]}}"#
+            .to_vec();
+        data.extend([0u8; 64]);
+        assert_eq!(columns(&data, FnfSide::Player), vec![(0, 0), (200_000, 1)]);
+        let chart = FnfDecoder::decode(&data).expect("decode failed");
+        assert_eq!(chart.notes[1].duration_us(), 50_500);
+    }
+
+    /// The game writes `changeBPM`: a section that sets it changes the tempo from its start.
+    #[rstest]
+    fn change_bpm_as_the_game_writes_it_adds_a_timing_point() {
+        let data = br#"{"song":{"song":"t","bpm":120,"notes":[
+            {"mustHitSection":true,"sectionNotes":[[0,0,0]]},
+            {"mustHitSection":true,"changeBPM":true,"bpm":180,"sectionNotes":[[2000,1,0]]}]}}"#;
+        let chart = FnfDecoder::decode(data).expect("decode failed");
+        let bpms: Vec<f32> = chart.timing_points.iter().filter_map(|point| match point {
+            TimingPoint::Bpm { bpm, .. } => Some(*bpm),
+            _ => None,
+        }).collect();
+        assert_eq!(bpms, [120.0, 180.0]);
     }
 
     #[rstest]

@@ -18,11 +18,15 @@ impl QuaMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Beats per measure of a timing point. Quaver writes its two named values (`Quadruple`, `Triple`) by name and any other
+/// count as a plain number (`Signature: 5`; maps edited by tools carry numbers such as `0` or `99999` too): a number is
+/// read as that many beats, and one that is no usable count (0, or more than 255) as the default four.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimeSignature {
     #[default]
     Quadruple,
     Triple,
+    Beats(u8),
 }
 
 impl TimeSignature {
@@ -31,7 +35,39 @@ impl TimeSignature {
         match self {
             Self::Quadruple => 4,
             Self::Triple => 3,
+            Self::Beats(beats) => *beats,
         }
+    }
+}
+
+impl Serialize for TimeSignature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Quadruple => serializer.serialize_str("Quadruple"),
+            Self::Triple => serializer.serialize_str("Triple"),
+            Self::Beats(beats) => serializer.serialize_u8(*beats),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TimeSignature {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Number(i64),
+            Name(String),
+        }
+        Ok(match Raw::deserialize(deserializer)? {
+            Raw::Name(name) if name == "Quadruple" => Self::Quadruple,
+            Raw::Name(name) if name == "Triple" => Self::Triple,
+            Raw::Name(name) => {
+                return Err(serde::de::Error::unknown_variant(&name, &["Quadruple", "Triple"]));
+            }
+            Raw::Number(4) => Self::Quadruple,
+            Raw::Number(3) => Self::Triple,
+            Raw::Number(beats) => u8::try_from(beats).ok().filter(|beats| *beats > 0).map_or(Self::Quadruple, Self::Beats),
+        })
     }
 }
 

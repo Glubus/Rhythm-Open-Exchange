@@ -30,9 +30,8 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 /// Whether `name` (a file name) is one a Bestdori chart is listed under: `<name>.bestdori`, `<name>.bestdori.json`, or the name the site's API
-/// gives a chart, `<difficulty>.json` (`easy`, `normal`, `hard`, `expert`, `special`) or `<id>.<difficulty>.json`, any case. Any other `.json`
-/// (a legacy FNF chart, a `package.json`, a `.jrox`) is not one. The name is half of the rule: a Bestdori chart is also read by its content,
-/// see [`looks_like_bestdori`].
+/// gives a chart, `<difficulty>.json` (`easy`, `normal`, `hard`, `expert`, `special`) or `<id>.<difficulty>.json`, any case. The content decides
+/// ([`looks_like_bestdori`]): a `.json` of any other name that is a Bestdori chart is read as one too (`detect_content`).
 #[must_use]
 pub fn is_bestdori_chart_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
@@ -122,8 +121,8 @@ pub fn looks_like_simulator(head: &[u8]) -> bool {
         && lines.all(is_note_line)
 }
 
-/// Whether the file at `path` is a BanG Dream chart: a `.txt` that [`looks_like_simulator`], or a file with a Bestdori name
-/// ([`is_bestdori_chart_name`]) that [`looks_like_bestdori`]. Reads the first bytes of the file; `false` when it can not be read.
+/// Whether the file at `path` is a BanG Dream chart: a `.txt` that [`looks_like_simulator`], or a `.json` (any name) or a file with a Bestdori
+/// name ([`is_bestdori_chart_name`]) that [`looks_like_bestdori`]. Reads the first bytes of the file; `false` when it can not be read.
 #[must_use]
 pub fn is_bandori_chart_file(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
@@ -134,7 +133,9 @@ pub fn is_bandori_chart_file(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
     {
         looks_like_simulator
-    } else if is_bestdori_chart_name(name) {
+    } else if is_bestdori_chart_name(name)
+        || path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+    {
         looks_like_bestdori
     } else {
         return false;

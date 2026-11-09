@@ -91,9 +91,10 @@ pub struct McNote {
     pub vol: Option<f32>,
 }
 
-/// Scroll velocity change.
+/// An effect: a scroll velocity change, or another change (a time signature) with no `scroll`.
 #[derive(Debug, Deserialize)]
 pub struct McEffect {
     pub beat: Beat,
-    pub scroll: f64,
+    #[serde(default)]
+    pub scroll: Option<f64>,
 }

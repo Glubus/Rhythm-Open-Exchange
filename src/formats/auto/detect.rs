@@ -117,10 +117,10 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
     }
 }
 
-/// Whether `path` is a file `detect_content` may tell by its content: a `.txt`, or a name a Bestdori chart is listed under.
+/// Whether `path` is a file `detect_content` may tell by its content: a `.txt`, or a `.json` (a Bestdori chart is saved under any name).
 pub(super) fn is_content_candidate(path: &Path) -> bool {
     path.extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt") || ext.eq_ignore_ascii_case("json"))
         || path
             .file_name()
             .and_then(|n| n.to_str())
@@ -128,9 +128,9 @@ pub(super) fn is_content_candidate(path: &Path) -> bool {
 }
 
 /// The formats `detect` does not claim because their extension is generic, told by the first bytes of the file `head` (or all of it): a
-/// BanG! Simulator score for a `.txt` ([`crate::formats::looks_like_simulator`]), a Bestdori chart for a file with a Bestdori name
-/// ([`crate::formats::is_bestdori_chart_name`]) whose content is one ([`crate::formats::looks_like_bestdori`]). `None` for anything else,
-/// an ordinary `.txt` or `.json` included.
+/// BanG! Simulator score for a `.txt` ([`crate::formats::looks_like_simulator`]), a Bestdori chart for a `.json` or a `.bestdori` whose content
+/// is one ([`crate::formats::looks_like_bestdori`]: a JSON array of Bestdori notes; an FNF chart, a V-Slice file or a `.jrox` is an object).
+/// `None` for anything else, an ordinary `.txt` or `.json` included.
 #[must_use]
 pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
     if path
@@ -140,10 +140,9 @@ pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
         return crate::formats::bandori::looks_like_simulator(head)
             .then_some(DetectedFormat::BangSimulator);
     }
-    let name = path.file_name().and_then(|n| n.to_str())?;
-    (crate::formats::bandori::is_bestdori_chart_name(name)
-        && crate::formats::bandori::looks_like_bestdori(head))
-    .then_some(DetectedFormat::Bestdori)
+    is_content_candidate(path)
+        .then(|| crate::formats::bandori::looks_like_bestdori(head))
+        .and_then(|bestdori| bestdori.then_some(DetectedFormat::Bestdori))
 }
 
 #[cfg(test)]

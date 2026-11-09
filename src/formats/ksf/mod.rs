@@ -15,9 +15,9 @@
 //!   20, 14, 8, 4, 4, 10 when `#DIFFICULTY` is absent) and `halfdouble` (`pump-halfdouble`, the
 //!   middle six of the ten columns) / `double`, `nightmare`, `freestyle`, `db`, `nm`, `fs` or
 //!   `#PLAYER` containing `double` (`pump-double`) / `_1` / `_2` (`pump-couple`) / else
-//!   `pump-single`. Only `pump-single` (5 columns: down-left, up-left, center, up-right,
-//!   down-right) and `pump-halfdouble` (6) are played, as in the `.sm` reader; `pump-double` and
-//!   `pump-couple` (10 columns) are named in [`crate::formats::sm::types::SmFile::skipped`]. The file name
+//!   `pump-single`. `pump-single` (5 columns: down-left, up-left, center, up-right,
+//!   down-right), `pump-halfdouble` (6) and `pump-double` (10, the two pads) are played, as in the `.sm` reader;
+//!   `pump-couple` (10 columns, two players) is named in [`crate::formats::sm::types::SmFile::skipped`]. The file name
 //!   is the chart's `description` (an `Edit` is listed by it).
 //! - **Rows**: `#STEP` rows of 13 characters, one per `1/#TICKCOUNT` beat (4 when absent; 0 or less
 //!   refuses the chart), up to the row of thirteen `2`s; the rows after it are not read. `|` rows do not take a

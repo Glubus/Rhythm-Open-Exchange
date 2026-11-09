@@ -94,15 +94,6 @@ impl Default for SmChart {
 }
 
 impl SmChart {
-    #[must_use]
-    pub fn column_count_from_stepstype(stepstype: &str) -> u8 {
-        match stepstype.trim().to_ascii_lowercase().as_str() {
-            "dance-double" | "pump-double" | "dance-couple" => 8,
-            "dance-solo" | "pump-halfdouble" => 6,
-            _ => 4,
-        }
-    }
-
     /// The name the chart is listed under: its difficulty, or for an `Edit` its description
     /// (Edit charts are told apart by it).
     #[must_use]

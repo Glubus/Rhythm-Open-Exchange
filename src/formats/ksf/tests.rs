@@ -222,27 +222,21 @@ fn the_file_name_gives_the_step_type_the_difficulty_and_the_default_meter() {
 }
 
 #[test]
-fn doubles_and_couples_have_ten_columns_and_are_skipped_with_a_message() {
-    let data = ksf("#BPM:120;\n#TICKCOUNT:4;", &[row("1")]);
-    for (name, stepstype) in [
-        ("Double.ksf", "pump-double"),
-        ("nightmare.ksf", "pump-double"),
-        ("freestyle.ksf", "pump-double"),
-        ("crazy_2.ksf", "pump-couple"),
-    ] {
-        let parsed = parse_detailed(&data, &named(name)).expect("parses");
-        assert!(parsed.file.charts.is_empty(), "{name}");
-        assert!(
-            parsed.file.skipped[0].contains(stepstype),
-            "{name}: {:?}",
-            parsed.file.skipped
-        );
-        assert!(KsfDecoder::decode_named(&data, name).is_err());
+fn doubles_play_on_ten_columns_and_couples_are_skipped_with_a_message() {
+    // A row of 13 cells: a double reads the ten pads, a tap on the first and on the last.
+    let data = ksf("#BPM:120;\n#TICKCOUNT:4;", &[row("1000000001")]);
+    for name in ["Double.ksf", "nightmare.ksf", "freestyle.ksf"] {
+        let chart = KsfDecoder::decode_named(&data, name).expect(name);
+        assert_eq!(chart.key_count, 10, "{name}");
+        assert_eq!(chart.notes.iter().map(|note| note.column).collect::<Vec<_>>(), [0, 9], "{name}");
     }
+    let parsed = parse_detailed(&data, &named("crazy_2.ksf")).expect("parses");
+    assert!(parsed.file.charts.is_empty());
+    assert!(parsed.file.skipped[0].contains("pump-couple"), "{:?}", parsed.file.skipped);
+    assert!(KsfDecoder::decode_named(&data, "crazy_2.ksf").is_err());
     // `#PLAYER` containing `double` makes a double of any name.
     let player = ksf("#BPM:120;\n#PLAYER:DOUBLE;", &[row("1")]);
-    let parsed = parse_detailed(&player, &named("x.ksf")).expect("parses");
-    assert!(parsed.file.skipped[0].contains("pump-double"));
+    assert_eq!(KsfDecoder::decode_named(&player, "x.ksf").expect("double").key_count, 10);
 }
 
 #[test]
@@ -429,7 +423,7 @@ fn the_auto_decoders_route_ksf_files_by_their_names() {
         auto_decode_bytes(&crazy, &data).expect("bytes").key_count,
         5
     );
-    assert!(auto_decode(&double).is_err(), "pump-double has 10 columns");
+    assert_eq!(auto_decode(&double).expect("double").key_count, 10, "pump-double has 10 columns");
     assert!(auto_decode_all(&crazy).expect("all").is_none());
     std::fs::remove_dir_all(&dir).ok();
 }

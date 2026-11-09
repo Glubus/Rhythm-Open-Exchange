@@ -918,20 +918,19 @@ fn auto_decode_routes_a_bandori_chart_by_name_and_content() {
     let readme = write("readme.txt", b"Read me\n");
     let plain = write("plain.json", &chart);
 
-    let decoded = [&named, &by_extension, &by_difficulty, &by_id, &text]
+    let decoded = [&named, &by_extension, &by_difficulty, &by_id, &text, &plain]
         .map(|path| auto_decode(path).unwrap());
     let titles: Vec<&str> = decoded
         .iter()
         .map(|chart| chart.metadata.title.as_str())
         .collect();
-    assert_eq!(titles, ["Song", "other", "expert", "12.special", "hbd"]);
+    assert_eq!(titles, ["Song", "other", "expert", "12.special", "hbd", "plain"], "a Bestdori chart is told by its content, whatever its name");
     assert!(decoded.iter().all(|chart| chart.key_count == 7));
     assert_eq!(notes_of(&decoded[0]), [(500_000, 2, 0)]);
     assert_eq!(notes_of(&decoded[4]), [(500_000, 2, 0)]);
     // Any other `.json` or `.txt` is read, or refused, as before.
     assert!(auto_decode(&object).is_err());
     assert!(auto_decode(&readme).is_err());
-    assert!(auto_decode(&plain).is_err(), "a name no Bestdori chart has");
     // One chart per file.
     assert_eq!(
         auto_decode_variant(&named, 0).unwrap().notes,
@@ -983,7 +982,8 @@ fn auto_decode_routes_a_bandori_chart_by_name_and_content() {
         detect_content(Path::new("expert.json"), &chart),
         Some(DetectedFormat::Bestdori)
     );
-    assert_eq!(detect_content(Path::new("a.json"), &chart), None);
+    assert_eq!(detect_content(Path::new("a.json"), &chart), Some(DetectedFormat::Bestdori));
+    assert_eq!(detect_content(Path::new("a.json"), b"{\"song\": {}}"), None);
     assert_eq!(detect_content(Path::new("a.txt"), b"Read me"), None);
     assert_eq!(detect_content(Path::new("a.sus"), score.as_bytes()), None);
 }

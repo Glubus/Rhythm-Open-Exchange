@@ -250,7 +250,7 @@ fn step_types_map_to_key_counts_and_the_others_are_skipped_with_a_reason() {
         block("dance-solo", 6),
         block("kb7-single", 7),
         block("dance-double", 8),
-        block("pump-double", 10),
+        block("pump-couple", 10),
         block("dance-routine", 8),
         block("dance-single", 5)
     );
@@ -264,7 +264,7 @@ fn step_types_map_to_key_counts_and_the_others_are_skipped_with_a_reason() {
     assert_eq!(file.skipped.len(), 3);
     assert!(
         file.skipped[0].starts_with("chart 6")
-            && file.skipped[0].contains("unsupported step type `pump-double`")
+            && file.skipped[0].contains("unsupported step type `pump-couple`")
     );
     assert!(file.skipped[1].contains("dance-routine"));
     assert!(
@@ -275,11 +275,19 @@ fn step_types_map_to_key_counts_and_the_others_are_skipped_with_a_reason() {
 }
 
 #[test]
+fn a_pump_double_plays_on_its_ten_columns() {
+    let text = HEADER.to_owned() + &chart_block("pump-double", "Hard", "", "1000000001");
+    let chart = SscDecoder::decode(text.as_bytes()).unwrap();
+    assert_eq!(chart.key_count, 10);
+    assert_eq!(chart.notes.iter().map(|note| note.column).collect::<Vec<_>>(), [0, 9]);
+}
+
+#[test]
 fn a_file_with_nothing_playable_names_what_was_skipped() {
-    let text = HEADER.to_owned() + &chart_block("pump-double", "Easy", "", &"0".repeat(10));
+    let text = HEADER.to_owned() + &chart_block("pump-couple", "Easy", "", &"0".repeat(10));
     let error = SscDecoder::decode(text.as_bytes()).unwrap_err().to_string();
     assert!(
-        error.contains("No playable chart") && error.contains("pump-double"),
+        error.contains("No playable chart") && error.contains("pump-couple"),
         "{error}"
     );
 }
@@ -402,7 +410,7 @@ fn files_are_read_by_extension_and_variant() {
     let dir = std::env::temp_dir().join(format!("rox-ssc-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let text = HEADER.to_owned()
-        + &chart_block("pump-double", "Easy", "", &"0".repeat(10))
+        + &chart_block("pump-couple", "Easy", "", &"0".repeat(10))
         + &chart_block("dance-single", "Easy", "", FOUR)
         + &chart_block("dance-double", "Hard", "", "10000001");
     let path = dir.join("song.SSC");

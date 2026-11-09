@@ -23,7 +23,7 @@ use crate::formats::DtxDecoder;
 use crate::formats::KshDecoder;
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The two BanG Dream formats are told by content (a `.txt` that is a
-/// BanG! Simulator score, a Bestdori chart under one of its names): any other `.txt` or `.json` is read, or refused, as before.
+/// BanG! Simulator score, a `.json` that is a Bestdori chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
 ///
 /// # Errors
 ///

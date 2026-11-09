@@ -25,6 +25,18 @@ pub fn from_qua(qua: &QuaChart) -> RoxChart {
     chart
         .timing_points
         .sort_by_key(rox::model::TimingPoint::time_us);
+    // Quaver times the notes before the first timing point with that point's BPM, so a map whose timing starts after its first
+    // note plays: the first BPM point moves to the first note, as the osu! decoder does with `re_arrange_bpm`.
+    let first_note = chart.notes.iter().map(|note| note.time_us).min();
+    if let (Some(first_note), Some(TimingPoint::Bpm { time_us, .. })) = (
+        first_note,
+        chart
+            .timing_points
+            .iter_mut()
+            .find(|point| matches!(point, TimingPoint::Bpm { .. })),
+    ) {
+        *time_us = (*time_us).min(first_note);
+    }
     chart
 }
 
@@ -150,5 +162,33 @@ mod tests {
         let chart2 = QuaDecoder::decode(&encoded).expect("decode 2 failed");
         assert_eq!(chart1.key_count, chart2.key_count);
         assert_eq!(chart1.notes.len(), chart2.notes.len());
+    }
+
+    fn chart(signature: &str, first_note_ms: i64) -> String {
+        format!(
+            "AudioFile: audio.mp3\nMode: Keys4\nTitle: T\nArtist: A\nCreator: C\nDifficultyName: D\nTimingPoints:\n- StartTime: 1000\n  Bpm: 120\n  Signature: {signature}\nHitObjects:\n- StartTime: {first_note_ms}\n  Lane: 1\n- StartTime: 2000\n  Lane: 2\n"
+        )
+    }
+
+    /// Real maps write the signature by name or as a number (`1`, `0`, `99999` were seen in files of Quaver.API and of
+    /// players): every one decodes, a usable number as that many beats, the others as four.
+    #[rstest]
+    #[case("Quadruple", 4)]
+    #[case("Triple", 3)]
+    #[case("5", 5)]
+    #[case("1", 1)]
+    #[case("0", 4)]
+    #[case("99999", 4)]
+    fn signatures_by_name_or_number_decode(#[case] signature: &str, #[case] beats: u8) {
+        let chart = QuaDecoder::decode(chart(signature, 1000).as_bytes()).expect("decode failed");
+        assert!(matches!(chart.timing_points[0], TimingPoint::Bpm { signature, .. } if signature == beats), "{:?}", chart.timing_points);
+    }
+
+    /// A first note before the first timing point is timed with that point, as Quaver plays it: the point moves to the note.
+    #[test]
+    fn a_note_before_the_first_timing_point_takes_its_bpm() {
+        let chart = QuaDecoder::decode(chart("Quadruple", 500).as_bytes()).expect("decode failed");
+        assert_eq!(chart.timing_points[0].time_us(), 500_000);
+        assert_eq!(chart.notes[0].time_us, 500_000);
     }
 }

@@ -6,7 +6,7 @@
 //! lacks it, is the file's.
 //!
 //! Supported: `dance-single` (4 columns), `dance-solo` (6), `dance-double` (8), `pump-single` (5),
-//! `pump-halfdouble` (6) and `kb7-single` (7); other step types are skipped with a message in
+//! `pump-halfdouble` (6), `pump-double` (10) and `kb7-single` (7); other step types are skipped with a message in
 //! [`SmFile::skipped`]. Notes: `1` tap, `2` hold head, `3` hold/roll tail, `4` roll head, `M`
 //! mine, `L` lift (a tap), `F` fake and `K` keysound (not played). Stops, delays and BPM changes
 //! move the notes in time; warped notes and notes inside `#FAKES` (and the holds starting there)
@@ -41,6 +41,7 @@ pub fn columns_of(stepstype: &str) -> Option<u8> {
         "dance-solo" | "pump-halfdouble" => Some(6),
         "kb7-single" => Some(7),
         "dance-double" => Some(8),
+        "pump-double" => Some(10),
         _ => None,
     }
 }

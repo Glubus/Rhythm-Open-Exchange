@@ -98,14 +98,16 @@ fn build_timing_points(mc: &McChart, timeline: &BeatTimeline, chart: &mut RoxCha
         });
     }
 
+    // An effect also carries other changes than the scroll speed (a time signature, `{"beat":…,"sign":4}`): only scroll speeds are kept.
     for effect in &mc.effect {
+        let Some(scroll) = effect.scroll else { continue };
         #[allow(clippy::cast_possible_truncation)] // ms→µs: safe for any realistic timestamp
         let time_us = (timeline.ms_at_beat(beat_to_f64(&effect.beat)) * 1000.0) as i64;
         #[allow(clippy::cast_possible_truncation)]
         // f64→f32: precision loss acceptable for SV values
         chart
             .timing_points
-            .push(TimingPoint::sv(time_us, effect.scroll as f32));
+            .push(TimingPoint::sv(time_us, scroll as f32));
     }
     chart.timing_points.sort_by_key(TimingPoint::time_us);
 }
@@ -178,6 +180,7 @@ impl BeatTimeline {
 
 impl Decoder for McDecoder {
     fn decode_inner(data: &[u8]) -> RoxResult<RoxChart> {
+        let data = data.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(data);
         let mc: McChart = serde_json::from_slice(data)
             .map_err(|e| RoxError::InvalidFormat(format!("Malody JSON: {e}")))?;
         Self::from_mc(&mc)
@@ -228,5 +231,16 @@ mod tests {
         }"#;
         let chart = <McDecoder as Decoder>::decode_inner(json.as_bytes()).unwrap();
         assert!(chart.timing_points.iter().any(TimingPoint::is_sv));
+    }
+
+    /// Real charts carry effects with no scroll speed (a time signature) and a UTF-8 BOM: both are read.
+    #[test]
+    fn sign_only_effects_and_a_bom_are_read() {
+        let json = "\u{feff}{\"meta\":{\"mode\":0,\"song\":{\"title\":\"T\",\"artist\":\"A\"},\"mode_ext\":{\"column\":4}},\
+            \"time\":[{\"beat\":[0,0,1],\"bpm\":120}],\"effect\":[{\"beat\":[6,0,1],\"sign\":4.0},{\"beat\":[1,0,1],\"scroll\":1.5}],\
+            \"note\":[{\"beat\":[0,0,1],\"column\":0}]}";
+        let chart = <McDecoder as Decoder>::decode_inner(json.as_bytes()).unwrap();
+        assert_eq!(chart.timing_points.iter().filter(|point| point.is_sv()).count(), 1);
+        assert_eq!(chart.notes.len(), 1);
     }
 }

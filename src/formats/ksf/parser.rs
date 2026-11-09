@@ -359,9 +359,10 @@ fn read_chart(
     let columns: usize = match class.stepstype {
         "pump-single" => 5,
         "pump-halfdouble" => 6,
+        "pump-double" => 10,
         other => {
             return Err(format!(
-                "unsupported step type `{other}` (10 columns; ROX plays 4 to 7)"
+                "unsupported step type `{other}` (two players on 10 columns)"
             ));
         }
     };
