@@ -240,7 +240,6 @@ fn slot_after(item: &Item) -> Pos {
     }
 }
 
-#[allow(clippy::too_many_lines)] // one pass: text, tempo, objects, layout, audio, notes
 fn convert(data: &[u8], dialect: Dialect) -> RoxResult<(RoxChart, BmsReport, AudioPlan)> {
     let text = source::decode(data);
     let mut file = parser::parse(&text.text);
@@ -252,102 +251,117 @@ fn convert(data: &[u8], dialect: Dialect) -> RoxResult<(RoxChart, BmsReport, Aud
         unsafe_names,
         ..BmsReport::default()
     };
-
-    // Channels
-    let mut lanes: HashMap<(Kind, Lane), Vec<Item>> = HashMap::new();
-    let mut bgm = Vec::new();
-    let (mut ch03, mut ch08, mut ch09) = (Vec::new(), Vec::new(), Vec::new());
-    for line in &file.lines {
-        let items = line.objs.iter().map(|obj| Item {
-            pos: Pos {
-                measure: line.measure,
-                frac: obj.frac,
-            },
-            unit: obj.unit,
-            pair: obj.pair,
-        });
-        match &line.channel {
-            b"01" => bgm.extend(items),
-            b"03" => ch03.extend(items),
-            b"08" => ch08.extend(items),
-            b"09" => ch09.extend(items),
-            channel => {
-                if let Some(key) = classify(*channel) {
-                    lanes.entry(key).or_default().extend(items);
-                }
-            }
-        }
-    }
-
-    // Time
+    let channels = Channels::read(&file);
     let beats = Beats::new(&file.measure_len);
-    let initial_bpm = file
-        .headers
-        .get("BPM")
-        .and_then(|v| v.split_ascii_whitespace().next())
-        .and_then(|v| v.parse::<f64>().ok())
-        .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .unwrap_or(130.0);
-    let timeline = Timeline::new(
-        initial_bpm,
-        &tempo_changes(&file, &beats, ch03, ch08, ch09, &mut report),
-    );
+    let changes = tempo_changes(&file, &beats, channels.ch03, channels.ch08, channels.ch09, &mut report);
+    let mut clock = Clock { timeline: Timeline::new(initial_bpm(&file), &changes), beats, shift_us: 0 };
 
-    // Objects
-    let drafts = drafts(&file, lanes, &mut report);
+    let drafts = drafts(&file, channels.lanes, &mut report);
     if drafts.iter().all(|d| d.mine) {
-        return Err(RoxError::InvalidFormat(
-            "BMS file with no playable object (channels 11-19, 21-29, 51-69)".into(),
-        ));
+        return Err(RoxError::InvalidFormat("BMS file with no playable object (channels 11-19, 21-29, 51-69)".into()));
     }
     let layout = Layout::detect(dialect, &drafts);
     report.layout.clone_from(&layout.description);
 
     // Audio: the one background sound of the file, when there is exactly one.
-    let bgm_all: Vec<Item> = bgm.clone();
-    let bgm: Vec<Item> = bgm
-        .into_iter()
-        .filter(|item| {
-            file.wav
-                .get(&item.id())
-                .is_some_and(|name| !name.is_empty())
-        })
-        .collect();
-    let single_audio = (bgm.len() == 1).then(|| bgm[0]);
-    report.single_audio = single_audio.is_some();
-    report.bgm_objects_skipped = if single_audio.is_some() { 0 } else { bgm.len() };
-    let to_us = |seconds: f64| -> i64 {
-        #[allow(clippy::cast_possible_truncation)] // seconds to µs, any real chart fits
-        let us = (seconds * 1_000_000.0).round() as i64;
-        us
+    let named: Vec<Item> = channels.bgm.iter().copied().filter(|item| sound_of(&file, item.id()).is_some()).collect();
+    let single_audio = match named[..] {
+        [only] => Some(only),
+        _ => None,
     };
-    let shift_us = single_audio.map_or(0, |item| {
-        -to_us(timeline.seconds(beats.beat(item.pos.measure, item.pos.frac)))
-    });
+    report.single_audio = single_audio.is_some();
+    report.bgm_objects_skipped = if single_audio.is_some() { 0 } else { named.len() };
+    clock.shift_us = single_audio.map_or(0, |item| -clock.us(item.pos));
 
     let mut rox = RoxChart::new(layout.key_count);
     rox.metadata = metadata(&file, single_audio.as_ref());
-    for point in timeline.bpm_points() {
+    for point in clock.timeline.bpm_points() {
         #[allow(clippy::cast_possible_truncation)] // a BPM fits f32
-        rox.timing_points.push(TimingPoint::bpm(
-            to_us(point.seconds) + shift_us,
-            point.bpm as f32,
-        ));
+        rox.timing_points.push(TimingPoint::bpm(to_us(point.seconds) + clock.shift_us, point.bpm as f32));
     }
+    add_notes(&mut rox, &file, &drafts, &layout, &clock, &mut report);
+    let plan = audio_plan(&file, &channels.bgm, &drafts, &clock);
+    Ok((rox, report, plan))
+}
 
-    // Notes, sorted, with the overlaps of a column removed.
+/// The objects of the file by channel: playable lanes, background sounds (`01`) and the tempo channels.
+struct Channels {
+    lanes: HashMap<(Kind, Lane), Vec<Item>>,
+    bgm: Vec<Item>,
+    ch03: Vec<Item>,
+    ch08: Vec<Item>,
+    ch09: Vec<Item>,
+}
+
+impl Channels {
+    fn read(file: &BmsFile) -> Self {
+        let mut channels = Self { lanes: HashMap::new(), bgm: Vec::new(), ch03: Vec::new(), ch08: Vec::new(), ch09: Vec::new() };
+        for line in &file.lines {
+            let items =
+                line.objs.iter().map(|obj| Item { pos: Pos { measure: line.measure, frac: obj.frac }, unit: obj.unit, pair: obj.pair });
+            match &line.channel {
+                b"01" => channels.bgm.extend(items),
+                b"03" => channels.ch03.extend(items),
+                b"08" => channels.ch08.extend(items),
+                b"09" => channels.ch09.extend(items),
+                channel => {
+                    if let Some(key) = classify(*channel) {
+                        channels.lanes.entry(key).or_default().extend(items);
+                    }
+                }
+            }
+        }
+        channels
+    }
+}
+
+/// `#BPM`, or 130 when absent or not a positive number.
+fn initial_bpm(file: &BmsFile) -> f64 {
+    file.headers
+        .get("BPM")
+        .and_then(|v| v.split_ascii_whitespace().next())
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
+        .unwrap_or(130.0)
+}
+
+/// The `#WAVxx` name of a sound id, unless undefined or refused.
+fn sound_of(file: &BmsFile, id: u16) -> Option<&String> {
+    file.wav.get(&id).filter(|name| !name.is_empty())
+}
+
+fn to_us(seconds: f64) -> i64 {
+    #[allow(clippy::cast_possible_truncation)] // seconds to µs, any real chart fits
+    let us = (seconds * 1_000_000.0).round() as i64;
+    us
+}
+
+/// Positions to chart time; `shift_us` puts the single audio at 0.
+struct Clock {
+    timeline: Timeline,
+    beats: Beats,
+    shift_us: i64,
+}
+
+impl Clock {
+    fn us(&self, pos: Pos) -> i64 {
+        to_us(self.timeline.seconds(self.beats.beat(pos.measure, pos.frac))) + self.shift_us
+    }
+}
+
+/// Places the drafts on their columns, drops overlapping notes (counted) and gives each kept note its keysound.
+fn add_notes(rox: &mut RoxChart, file: &BmsFile, drafts: &[Draft], layout: &Layout, clock: &Clock, report: &mut BmsReport) {
     let mut built: Vec<(Note, Option<u16>)> = Vec::with_capacity(drafts.len());
-    for draft in &drafts {
+    for draft in drafts {
         let Some(column) = layout.column(draft.lane) else {
             report.notes_outside_layout += 1;
             continue;
         };
-        let time = |pos: Pos| to_us(timeline.seconds(beats.beat(pos.measure, pos.frac))) + shift_us;
-        let start = time(draft.pos);
+        let start = clock.us(draft.pos);
         let note = if draft.mine {
             Note::mine(start, column)
         } else {
-            match draft.end.map(time) {
+            match draft.end.map(|end| clock.us(end)) {
                 Some(end) if end > start => Note::hold(start, end - start, column),
                 _ => Note::tap(start, column),
             }
@@ -355,19 +369,17 @@ fn convert(data: &[u8], dialect: Dialect) -> RoxResult<(RoxChart, BmsReport, Aud
         built.push((note, (!draft.mine).then_some(draft.id)));
     }
     built.sort_by_key(|(note, _)| (note.time_us, kind_rank(note), note.column));
-    let mut last_end = vec![i64::MIN; usize::from(layout.key_count)];
-    let mut last_start = vec![i64::MIN; usize::from(layout.key_count)];
+    let mut last = vec![(i64::MIN, i64::MIN); usize::from(layout.key_count)];
     let mut sounds: HashMap<u16, u16> = HashMap::new();
     for (mut note, id) in built {
-        let column = usize::from(note.column);
-        if note.time_us < last_end[column] || note.time_us == last_start[column] {
+        let (start, end) = &mut last[usize::from(note.column)];
+        if note.time_us < *end || note.time_us == *start {
             report.overlapping_notes_dropped += 1;
             continue;
         }
-        last_end[column] = note.end_time_us();
-        last_start[column] = note.time_us;
+        (*start, *end) = (note.time_us, note.end_time_us());
         if let Some(id) = id
-            && let Some(name) = file.wav.get(&id).filter(|name| !name.is_empty())
+            && let Some(name) = sound_of(file, id)
         {
             let index = *sounds.entry(id).or_insert_with(|| {
                 rox.hitsounds.push(Hitsound::new(name.as_str()));
@@ -377,33 +389,16 @@ fn convert(data: &[u8], dialect: Dialect) -> RoxResult<(RoxChart, BmsReport, Aud
         }
         rox.notes.push(note);
     }
-    let plan = audio_plan(&file, &bgm_all, &drafts, &timeline, &beats, shift_us, &to_us);
-    Ok((rox, report, plan))
 }
 
 /// Background sounds and the keysound of every playable object, at chart time.
-fn audio_plan(
-    file: &BmsFile,
-    bgm: &[Item],
-    drafts: &[Draft],
-    timeline: &Timeline,
-    beats: &Beats,
-    shift_us: i64,
-    to_us: &dyn Fn(f64) -> i64,
-) -> AudioPlan {
-    let at = |pos: Pos| to_us(timeline.seconds(beats.beat(pos.measure, pos.frac))) + shift_us;
-    let sound = |id: u16| file.wav.get(&id).filter(|name| !name.is_empty());
-    let mut events = Vec::new();
-    for item in bgm {
-        if let Some(name) = sound(item.id()) {
-            events.push(SoundEvent::whole(at(item.pos), name.as_str()));
-        }
-    }
-    for draft in drafts.iter().filter(|d| !d.mine) {
-        if let Some(name) = sound(draft.id) {
-            events.push(SoundEvent::whole(at(draft.pos), name.as_str()));
-        }
-    }
+fn audio_plan(file: &BmsFile, bgm: &[Item], drafts: &[Draft], clock: &Clock) -> AudioPlan {
+    let background = bgm.iter().map(|item| (item.pos, item.id()));
+    let keysounds = drafts.iter().filter(|d| !d.mine).map(|draft| (draft.pos, draft.id));
+    let events = background
+        .chain(keysounds)
+        .filter_map(|(pos, id)| sound_of(file, id).map(|name| SoundEvent::whole(clock.us(pos), name.as_str())))
+        .collect();
     AudioPlan::new(events)
 }
 
@@ -621,90 +616,75 @@ impl Layout {
             }
             used[usize::from(draft.lane.side)][usize::from(draft.lane.slot)] = true;
         }
-        let mut columns = [[None; 9]; 2];
-        if dialect == Dialect::Pms {
-            let bme_type = !used[1].iter().any(|u| *u) && used[0][5..9].iter().any(|u| *u);
-            let buttons: [Lane; 9] = if bme_type {
-                [0, 1, 2, 3, 4, 5, 6, 7, 8].map(|slot| Lane { side: 0, slot })
-            } else {
-                [
-                    (0, 0),
-                    (0, 1),
-                    (0, 2),
-                    (0, 3),
-                    (0, 4),
-                    (1, 1),
-                    (1, 2),
-                    (1, 3),
-                    (1, 4),
-                ]
-                .map(|(side, slot)| Lane { side, slot })
-            };
-            for (button, lane) in buttons.iter().enumerate() {
-                columns[usize::from(lane.side)][usize::from(lane.slot)] =
-                    Some(u8::try_from(button).unwrap_or(0));
-            }
-            return Self {
-                columns,
-                key_count: 9,
-                description: format!(
-                    "PMS 9 buttons ({})",
-                    if bme_type { "BME-type" } else { "standard" }
-                ),
-            };
+        match dialect {
+            Dialect::Pms => Self::pms(&used),
+            Dialect::Bms => Self::beat(&used),
         }
-        let sides: Vec<usize> = (0..2).filter(|s| used[*s].iter().any(|u| *u)).collect();
-        let keys7 = sides.iter().any(|s| used[*s][5] || used[*s][6]);
-        let n: u8 = if keys7 { 7 } else { 5 };
-        let double = sides.len() == 2;
-        let scratch = |side: usize| used[side][usize::from(SCRATCH)];
-        let mut next = 0u8;
-        let mut assign = |side: usize, slot: usize, columns: &mut [[Option<u8>; 9]; 2]| {
-            columns[side][slot] = Some(next);
-            next += 1;
+    }
+
+    fn pms(used: &[[bool; 9]; 2]) -> Self {
+        let bme_type = !used[1].iter().any(|u| *u) && used[0][5..9].iter().any(|u| *u);
+        let buttons: [(u8, u8); 9] = if bme_type {
+            [0, 1, 2, 3, 4, 5, 6, 7, 8].map(|slot| (0, slot))
+        } else {
+            [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)]
         };
-        if double {
+        let mut columns = Columns::default();
+        for (side, slot) in buttons {
+            columns.assign(usize::from(side), usize::from(slot));
+        }
+        let kind = if bme_type { "BME-type" } else { "standard" };
+        columns.layout(format!("PMS 9 buttons ({kind})"))
+    }
+
+    fn beat(used: &[[bool; 9]; 2]) -> Self {
+        let sides: Vec<usize> = (0..2).filter(|s| used[*s].iter().any(|u| *u)).collect();
+        let n: u8 = if sides.iter().any(|s| used[*s][5] || used[*s][6]) { 7 } else { 5 };
+        let scratch = |side: usize| used[side][usize::from(SCRATCH)];
+        let mut columns = Columns::default();
+        let keys = |columns: &mut Columns, side| (0..n).for_each(|key| columns.assign(side, usize::from(key)));
+        if sides.len() == 2 {
             let both = scratch(0) || scratch(1);
             if both {
-                assign(0, usize::from(SCRATCH), &mut columns);
+                columns.assign(0, usize::from(SCRATCH));
             }
-            for key in 0..n {
-                assign(0, usize::from(key), &mut columns);
-            }
-            for key in 0..n {
-                assign(1, usize::from(key), &mut columns);
-            }
+            keys(&mut columns, 0);
+            keys(&mut columns, 1);
             if both {
-                assign(1, usize::from(SCRATCH), &mut columns);
+                columns.assign(1, usize::from(SCRATCH));
             }
-            let key_count = next;
-            return Self {
-                columns,
-                key_count,
-                description: format!(
-                    "2P {n}K{} (double, {key_count} columns)",
-                    if both { "+scratch" } else { "" }
-                ),
-            };
+            let plus = if both { "+scratch" } else { "" };
+            let key_count = columns.next;
+            return columns.layout(format!("2P {n}K{plus} (double, {key_count} columns)"));
         }
         // `sides` is never empty here: the caller refuses a file with no playable object.
         let side = sides.first().copied().unwrap_or(0);
         let has_scratch = scratch(side);
         if has_scratch {
-            assign(side, usize::from(SCRATCH), &mut columns);
+            columns.assign(side, usize::from(SCRATCH));
         }
-        for key in 0..n {
-            assign(side, usize::from(key), &mut columns);
-        }
-        Self {
-            columns,
-            key_count: next,
-            description: format!(
-                "{}P {n}K{} ({next} columns)",
-                side + 1,
-                if has_scratch { "+scratch" } else { "" }
-            ),
-        }
+        keys(&mut columns, side);
+        let plus = if has_scratch { "+scratch" } else { "" };
+        let key_count = columns.next;
+        columns.layout(format!("{}P {n}K{plus} ({key_count} columns)", side + 1))
+    }
+}
+
+/// Columns given left to right to lanes `(side, slot)`.
+#[derive(Default)]
+struct Columns {
+    columns: [[Option<u8>; 9]; 2],
+    next: u8,
+}
+
+impl Columns {
+    fn assign(&mut self, side: usize, slot: usize) {
+        self.columns[side][slot] = Some(self.next);
+        self.next += 1;
+    }
+
+    fn layout(self, description: String) -> Layout {
+        Layout { columns: self.columns, key_count: self.next, description }
     }
 }
 

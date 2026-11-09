@@ -100,6 +100,10 @@ struct Flags {
 }
 
 impl Flags {
+    const NONE: Self = Self { flick: false, directional: false, skill: false, charge: false };
+    const FLICK: Self = Self { flick: true, ..Self::NONE };
+    const SKILL: Self = Self { skill: true, ..Self::NONE };
+
     fn count(self, report: &mut BandoriReport) {
         report.flicks += usize::from(self.flick);
         report.directional_flicks += usize::from(self.directional);
@@ -108,71 +112,40 @@ impl Flags {
     }
 }
 
+/// The four type numbers of each chain's end: plain, flick, skill (`Bang info.txt`; 73/74/76 for the numbered slides).
+const ENDS: [(Family, [u32; 3]); 4] = [
+    (Family::A, [5, 12, 34]),
+    (Family::B, [8, 13, 36]),
+    (Family::Long, [25, 26, 32]),
+    (Family::Numbered, [73, 74, 76]),
+];
+
 /// The meaning of a note type of the notes (`Bang info.txt`, versions 1.30 and 2.00) and of the numbered slides of `BanGConverter`
 /// (71 to 77); `None` for a type that is none of them.
 fn kind_of(kind: u32) -> Option<Kind> {
-    let flags = Flags::default();
-    Some(match kind {
-        0 => Kind::MusicStart,
-        20 => Kind::Bpm,
-        1 => Kind::Tap(flags),
-        2 => Kind::Tap(Flags {
-            flick: true,
-            ..flags
-        }),
-        10 => Kind::Tap(Flags {
-            charge: true,
-            ..flags
-        }),
-        11 => Kind::Tap(Flags {
-            skill: true,
-            ..flags
-        }),
-        51..=57 | 61..=67 => Kind::Tap(Flags {
-            directional: true,
-            ..flags
-        }),
-        3 | 33 => Kind::Start(Family::A, kind == 33),
-        6 | 35 => Kind::Start(Family::B, kind == 35),
-        21 | 31 => Kind::Start(Family::Long, kind == 31),
-        71 | 75 => Kind::Start(Family::Numbered, kind == 75),
-        4 | 41 => Kind::Among(Family::A),
-        7 | 42 => Kind::Among(Family::B),
-        72 | 77 => Kind::Among(Family::Numbered),
-        5 | 12 | 34 => Kind::End(
-            Family::A,
-            Flags {
-                flick: kind == 12,
-                skill: kind == 34,
-                ..flags
-            },
-        ),
-        8 | 13 | 36 => Kind::End(
-            Family::B,
-            Flags {
-                flick: kind == 13,
-                skill: kind == 36,
-                ..flags
-            },
-        ),
-        25 | 26 | 32 => Kind::End(
-            Family::Long,
-            Flags {
-                flick: kind == 26,
-                skill: kind == 32,
-                ..flags
-            },
-        ),
-        73 | 74 | 76 => Kind::End(
-            Family::Numbered,
-            Flags {
-                flick: kind == 74,
-                skill: kind == 76,
-                ..flags
-            },
-        ),
-        _ => return None,
-    })
+    let tap = |flags| Some(Kind::Tap(flags));
+    match kind {
+        0 => Some(Kind::MusicStart),
+        20 => Some(Kind::Bpm),
+        1 => tap(Flags::NONE),
+        2 => tap(Flags::FLICK),
+        10 => tap(Flags { charge: true, ..Flags::NONE }),
+        11 => tap(Flags::SKILL),
+        51..=57 | 61..=67 => tap(Flags { directional: true, ..Flags::NONE }),
+        3 | 33 => Some(Kind::Start(Family::A, kind == 33)),
+        6 | 35 => Some(Kind::Start(Family::B, kind == 35)),
+        21 | 31 => Some(Kind::Start(Family::Long, kind == 31)),
+        71 | 75 => Some(Kind::Start(Family::Numbered, kind == 75)),
+        4 | 41 => Some(Kind::Among(Family::A)),
+        7 | 42 => Some(Kind::Among(Family::B)),
+        72 | 77 => Some(Kind::Among(Family::Numbered)),
+        _ => end_of(kind),
+    }
+}
+
+fn end_of(kind: u32) -> Option<Kind> {
+    let (family, [_, flick, skill]) = ENDS.into_iter().find(|(_, types)| types.contains(&kind))?;
+    Some(Kind::End(family, Flags { flick: kind == flick, skill: kind == skill, ..Flags::NONE }))
 }
 
 /// A parsed `beat/type/lane` line (`beat/type/number/lane` for the numbered slides).
@@ -193,10 +166,7 @@ fn float(field: &str) -> Option<f64> {
 /// Reads a note line; `None` once counted (a type unknown to this decoder, or a line that is not `beat/type/lane`).
 fn read_line(line: &str, report: &mut BandoriReport) -> Option<Line> {
     let fields: Vec<&str> = line.split('/').collect();
-    let kind = fields
-        .get(1)
-        .and_then(|field| field.trim().parse::<u32>().ok());
-    let Some(kind) = kind else {
+    let Some(kind) = fields.get(1).and_then(|field| field.trim().parse::<u32>().ok()) else {
         report.invalid_notes += 1;
         return None;
     };
@@ -204,29 +174,20 @@ fn read_line(line: &str, report: &mut BandoriReport) -> Option<Line> {
         report.unknown_types += 1;
         return None;
     };
-    let numbered = matches!(kind, 71..=77);
-    let read = if numbered && fields.len() == 4 {
-        float(fields[0])
-            .zip(float(fields[3]))
-            .zip(fields[2].trim().parse::<u32>().ok())
-            .map(|((beat, value), number)| (beat, value, number))
-    } else if !numbered && fields.len() == 3 {
-        float(fields[0])
-            .zip(float(fields[2]))
-            .map(|(beat, value)| (beat, value, 0))
-    } else {
-        None
-    };
-    let Some((beat, value, number)) = read else {
+    let Some((beat, value, number)) = line_fields(&fields, matches!(kind, 71..=77)) else {
         report.invalid_notes += 1;
         return None;
     };
-    Some(Line {
-        beat,
-        kind: parsed,
-        value,
-        number,
-    })
+    Some(Line { beat, kind: parsed, value, number })
+}
+
+/// `(beat, value, number)` of `beat/type/value`, or of `beat/type/number/value` for a numbered slide.
+fn line_fields(fields: &[&str], numbered: bool) -> Option<(f64, f64, u32)> {
+    match (numbered, fields) {
+        (true, [beat, _, number, value]) => Some((float(beat)?, float(value)?, number.trim().parse().ok()?)),
+        (false, [beat, _, value]) => Some((float(beat)?, float(value)?, 0)),
+        _ => None,
+    }
 }
 
 /// A slide or long note being read: from its start to the joint just read.
@@ -253,137 +214,119 @@ fn key_of(family: Family, line: &Line, report: &mut BandoriReport) -> Option<Key
 
 fn parse(data: &[u8], title: &str, report: &mut BandoriReport) -> RoxResult<Score> {
     if data.len() > MAX_FILE_SIZE {
-        return Err(invalid(&format!(
-            "file too large: {} bytes (max {MAX_FILE_SIZE})",
-            data.len()
-        )));
+        return Err(invalid(&format!("file too large: {} bytes (max {MAX_FILE_SIZE})", data.len())));
     }
     let data = data.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(data);
     let text = String::from_utf8_lossy(data);
     report.invalid_text = matches!(text, std::borrow::Cow::Owned(_));
     let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
-    let offset = lines
-        .next()
-        .and_then(float)
-        .ok_or_else(|| invalid("the first line is not a number (the note offset)"))?;
-    report.note_offset = Some(offset);
-    let song_bpm = lines
-        .next()
-        .and_then(float)
-        .filter(|&bpm| valid_bpm(bpm))
-        .ok_or_else(|| invalid("the second line is not a valid BPM"))?;
+    let song_bpm = read_header(&mut lines, report)?;
+    let body = read_body(lines, song_bpm, report)?;
+    Ok(Score {
+        metadata: Metadata { title: title.into(), ..Metadata::default() },
+        start_beat: body.start_beat.unwrap_or(0.0),
+        bpm: body.bpm,
+        notes: notes_of(&body.notes, report),
+    })
+}
 
-    let mut bpm = vec![BpmChange {
-        beat: 0.0,
-        bpm: song_bpm,
-    }];
-    let mut start_beat = None;
-    let mut found = Vec::new();
+/// The two header lines: the note offset (kept in the report) and the song's BPM, returned.
+fn read_header<'a>(lines: &mut impl Iterator<Item = &'a str>, report: &mut BandoriReport) -> RoxResult<f64> {
+    let offset = lines.next().and_then(float).ok_or_else(|| invalid("the first line is not a number (the note offset)"))?;
+    report.note_offset = Some(offset);
+    lines.next().and_then(float).filter(|&bpm| valid_bpm(bpm)).ok_or_else(|| invalid("the second line is not a valid BPM"))
+}
+
+/// The lines after the header, sorted out: the music start, the BPM changes, and the notes in beat order.
+struct Body {
+    start_beat: Option<f64>,
+    bpm: Vec<BpmChange>,
+    notes: Vec<Line>,
+}
+
+fn read_body<'a>(lines: impl Iterator<Item = &'a str>, song_bpm: f64, report: &mut BandoriReport) -> RoxResult<Body> {
+    let mut body = Body { start_beat: None, bpm: vec![BpmChange { beat: 0.0, bpm: song_bpm }], notes: Vec::new() };
     for (count, line) in lines.enumerate() {
         if count >= MAX_OBJECTS {
             return Err(invalid(&format!("more than {MAX_OBJECTS} lines")));
         }
-        let Some(read) = read_line(line, report) else {
-            continue;
-        };
+        let Some(read) = read_line(line, report) else { continue };
         match read.kind {
-            Kind::MusicStart if start_beat.is_none() => start_beat = Some(read.beat),
+            Kind::MusicStart if body.start_beat.is_none() => body.start_beat = Some(read.beat),
             Kind::MusicStart => report.extra_music_starts += 1,
-            Kind::Bpm if valid_bpm(read.value) => bpm.push(BpmChange {
-                beat: read.beat,
-                bpm: read.value,
-            }),
+            Kind::Bpm if valid_bpm(read.value) => body.bpm.push(BpmChange { beat: read.beat, bpm: read.value }),
             Kind::Bpm => report.invalid_bpm += 1,
-            _ => found.push(read),
+            _ => body.notes.push(read),
         }
     }
     // The notes are read in beat order; at one beat, in file order ("notes at the same time should be sequentially ordered").
-    found.sort_by(|a, b| a.beat.total_cmp(&b.beat));
-    let notes = notes_of(&found, report);
-    Ok(Score {
-        metadata: Metadata {
-            title: title.into(),
-            ..Metadata::default()
-        },
-        start_beat: start_beat.unwrap_or(0.0),
-        bpm,
-        notes,
-    })
+    body.notes.sort_by(|a, b| a.beat.total_cmp(&b.beat));
+    Ok(body)
 }
 
 /// Taps, and one hold for each slide and long note.
 fn notes_of(lines: &[Line], report: &mut BandoriReport) -> Vec<ScoreNote> {
-    let mut notes = Vec::new();
-    let mut open: HashMap<Key, Open> = HashMap::new();
+    let mut chains = Chains { notes: Vec::new(), open: HashMap::new(), report };
     for line in lines {
         match line.kind {
-            Kind::Tap(flags) => {
-                if let Some(column) = column_of(line.value, FIRST_LANE, report) {
-                    flags.count(report);
-                    notes.push(ScoreNote {
-                        beat: line.beat,
-                        end_beat: None,
-                        column,
-                    });
-                }
-            }
-            Kind::Start(family, skill) => {
-                let Some(key) = key_of(family, line, report) else {
-                    continue;
-                };
-                // The lane of a long note was counted by `key_of`; the other families count it here.
-                let column = if family == Family::Long {
-                    u8::try_from(key.1).ok()
-                } else {
-                    column_of(line.value, FIRST_LANE, report)
-                };
-                report.skill_flags += usize::from(skill);
-                let started = Open {
-                    beat: line.beat,
-                    column,
-                    lane: line.value,
-                    joints: 0,
-                    lane_changed: false,
-                };
-                if open.insert(key, started).is_some() {
-                    report.unterminated_slides += 1;
-                }
-            }
-            Kind::Among(family) => {
-                match key_of(family, line, report).and_then(|key| open.get_mut(&key)) {
-                    Some(slide) => {
-                        slide.joints += 1;
-                        slide.lane_changed |= (line.value - slide.lane).abs() > SAME_LANE;
-                    }
-                    None => report.slide_points_without_start += 1,
-                }
-            }
-            Kind::End(family, flags) => {
-                let Some(key) = key_of(family, line, report) else {
-                    continue;
-                };
-                let Some(slide) = open.remove(&key) else {
-                    report.slide_points_without_start += 1;
-                    continue;
-                };
-                flags.count(report);
-                let Some(column) = slide.column else {
-                    continue;
-                };
-                report.slide_joints_dropped += slide.joints;
-                report.slides_with_lane_changes += usize::from(
-                    slide.lane_changed
-                        || (family != Family::Long && (line.value - slide.lane).abs() > SAME_LANE),
-                );
-                notes.push(ScoreNote {
-                    beat: slide.beat,
-                    end_beat: Some(line.beat),
-                    column,
-                });
-            }
+            Kind::Tap(flags) => chains.tap(line, flags),
+            Kind::Start(family, skill) => chains.start(family, skill, line),
+            Kind::Among(family) => chains.joint(family, line),
+            Kind::End(family, flags) => chains.end(family, flags, line),
             Kind::MusicStart | Kind::Bpm => {}
         }
     }
-    report.unterminated_slides += open.len();
-    notes
+    chains.report.unterminated_slides += chains.open.len();
+    chains.notes
+}
+
+/// The notes read so far and the slides and long notes still open.
+struct Chains<'r> {
+    notes: Vec<ScoreNote>,
+    open: HashMap<Key, Open>,
+    report: &'r mut BandoriReport,
+}
+
+impl Chains<'_> {
+    fn tap(&mut self, line: &Line, flags: Flags) {
+        if let Some(column) = column_of(line.value, FIRST_LANE, self.report) {
+            flags.count(self.report);
+            self.notes.push(ScoreNote { beat: line.beat, end_beat: None, column });
+        }
+    }
+
+    fn start(&mut self, family: Family, skill: bool, line: &Line) {
+        let Some(key) = key_of(family, line, self.report) else { return };
+        // The lane of a long note was counted by `key_of`; the other families count it here.
+        let column = if family == Family::Long { u8::try_from(key.1).ok() } else { column_of(line.value, FIRST_LANE, self.report) };
+        self.report.skill_flags += usize::from(skill);
+        let started = Open { beat: line.beat, column, lane: line.value, joints: 0, lane_changed: false };
+        if self.open.insert(key, started).is_some() {
+            self.report.unterminated_slides += 1;
+        }
+    }
+
+    fn joint(&mut self, family: Family, line: &Line) {
+        match key_of(family, line, self.report).and_then(|key| self.open.get_mut(&key)) {
+            Some(slide) => {
+                slide.joints += 1;
+                slide.lane_changed |= (line.value - slide.lane).abs() > SAME_LANE;
+            }
+            None => self.report.slide_points_without_start += 1,
+        }
+    }
+
+    fn end(&mut self, family: Family, flags: Flags, line: &Line) {
+        let Some(key) = key_of(family, line, self.report) else { return };
+        let Some(slide) = self.open.remove(&key) else {
+            self.report.slide_points_without_start += 1;
+            return;
+        };
+        flags.count(self.report);
+        let Some(column) = slide.column else { return };
+        self.report.slide_joints_dropped += slide.joints;
+        let moved = family != Family::Long && (line.value - slide.lane).abs() > SAME_LANE;
+        self.report.slides_with_lane_changes += usize::from(slide.lane_changed || moved);
+        self.notes.push(ScoreNote { beat: slide.beat, end_beat: Some(line.beat), column });
+    }
 }

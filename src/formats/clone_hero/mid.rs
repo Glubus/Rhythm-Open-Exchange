@@ -14,8 +14,8 @@ use rox::model::{RoxChart, TimingPoint};
 
 use super::chart::{SongSection, last_of_tick, quarter_beats};
 use super::decoder::{
-    Built, ChartContext, ChartReport, Converted, Difficulty, Instrument, Variant, audio_shift,
-    metadata, nth, plan_events, settle_notes, variants_of,
+    Built, ChartContext, ChartReport, Converted, Difficulty, Instrument, Variant, audio_shift, built, metadata, nth,
+    plan_events, settle_notes, variants_of,
 };
 use super::ini::SongIni;
 use super::plan::Listing;
@@ -25,8 +25,6 @@ use super::smf::{self, Event, Events, Smf};
 pub struct MidDecoder;
 crate::impl_format!(MidDecoder, ["mid"]);
 
-/// Columns of a decoded chart: the frets 0..=4.
-const KEYS: u8 = 5;
 /// Notes and markers kept per instrument track before the track is refused (a real track holds a few thousand).
 const MAX_KEPT: usize = 1_000_000;
 /// Tempo and time-signature events of the first track kept before the file is refused.
@@ -339,110 +337,116 @@ const PS_OPEN: u8 = 0x01;
 const PS_TAP: u8 = 0x04;
 
 fn read_instrument(track: &[u8]) -> RoxResult<RawTrack> {
-    let mut raw = RawTrack {
-        diffs: Default::default(),
-        unpaired: 0,
-        off_sync: 0,
+    let mut reader = TrackReader {
+        raw: RawTrack { diffs: Default::default(), unpaired: 0, off_sync: 0 },
+        sounding: vec![None; 16 * 128],
+        phrases: Vec::new(),
+        enhanced_opens: false,
+        kept: 0,
     };
-    // Start tick of the sounding notes, by channel and key.
-    let mut sounding: Vec<Option<u64>> = vec![None; 16 * 128];
-    // Phrases between their start and end SysEx: (difficulty byte, modifier, start tick).
-    let mut phrases: Vec<(u8, u8, u64)> = Vec::new();
-    let mut enhanced_opens = false;
-    let mut kept = 0usize;
     for item in Events::new(track) {
         let (tick, event) = item.map_err(|m| invalid(&format!("instrument track: {m}")))?;
         match event {
-            Event::NoteOn { channel, key } => {
-                if classify(key).is_none() {
-                    continue;
-                }
-                let slot = &mut sounding[usize::from(channel) * 128 + usize::from(key)];
-                if slot.is_some() {
-                    raw.unpaired += 1;
-                } else {
-                    *slot = Some(tick);
-                }
-            }
-            Event::NoteOff { channel, key } => {
-                let Some(kind) = classify(key) else { continue };
-                let Some(start) = sounding[usize::from(channel) * 128 + usize::from(key)].take()
-                else {
-                    raw.unpaired += 1;
-                    continue;
-                };
-                kept += 1;
-                if kept > MAX_KEPT {
-                    return Err(invalid("too many notes in an instrument track"));
-                }
-                match kind {
-                    Key::Fret(d, fret) => raw.diffs[d].frets.push((start, fret, tick - start)),
-                    Key::Open(d) if enhanced_opens => raw.diffs[d].opens += 1,
-                    Key::Open(_) => {}
-                    Key::Force(d) => raw.diffs[d].forced += 1,
-                    Key::Tap => {
-                        for diff in &mut raw.diffs {
-                            diff.taps += 1;
-                        }
-                    }
-                }
-            }
-            Event::Text(text) => {
-                if normalized(text) == "ENHANCED_OPENS" {
-                    enhanced_opens = true;
-                }
-            }
-            Event::SysEx(data) => {
-                let &[b'P', b'S', 0, 0, difficulty, modifier, value, _] = data else {
-                    continue;
-                };
-                if modifier != PS_OPEN && modifier != PS_TAP {
-                    continue;
-                }
-                if difficulty > 3 && difficulty != 0xFF {
-                    continue;
-                }
-                let same = |p: &(u8, u8, u64)| p.0 == difficulty && p.1 == modifier;
-                match value {
-                    1 if phrases.iter().any(same) => raw.unpaired += 1,
-                    1 => {
-                        kept += 1;
-                        if kept > MAX_KEPT {
-                            return Err(invalid("too many notes in an instrument track"));
-                        }
-                        phrases.push((difficulty, modifier, tick));
-                    }
-                    0 => {
-                        let Some(at) = phrases.iter().position(same) else {
-                            raw.unpaired += 1;
-                            continue;
-                        };
-                        let (_, _, start) = phrases.swap_remove(at);
-                        // The last tick of a phrase is not part of it (a phrase of no length holds its start tick).
-                        let last = if tick > start { tick - 1 } else { start };
-                        for (d, diff) in raw.diffs.iter_mut().enumerate() {
-                            // Difficulty byte 0 easy .. 3 expert; the index counts expert first.
-                            if difficulty != 0xFF && usize::from(3 - difficulty) != d {
-                                continue;
-                            }
-                            if modifier == PS_OPEN {
-                                diff.open_ranges.push((start, last));
-                            } else {
-                                diff.taps += 1;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Event::Tempo(_) | Event::TimeSignature { .. } | Event::MalformedSync => {
-                raw.off_sync += 1;
-            }
+            Event::NoteOn { channel, key } => reader.note_on(channel, key, tick),
+            Event::NoteOff { channel, key } => reader.note_off(channel, key, tick)?,
+            Event::Text(text) => reader.enhanced_opens |= normalized(text) == "ENHANCED_OPENS",
+            Event::SysEx(data) => reader.sysex(data, tick)?,
+            Event::Tempo(_) | Event::TimeSignature { .. } | Event::MalformedSync => reader.raw.off_sync += 1,
             _ => {}
         }
     }
-    raw.unpaired += sounding.iter().flatten().count() + phrases.len();
+    let mut raw = reader.raw;
+    raw.unpaired += reader.sounding.iter().flatten().count() + reader.phrases.len();
     Ok(raw)
+}
+
+/// The events of an instrument track read so far.
+struct TrackReader {
+    raw: RawTrack,
+    /// Start tick of the sounding notes, by channel and key.
+    sounding: Vec<Option<u64>>,
+    /// Phrases between their start and end `SysEx`: (difficulty byte, modifier, start tick).
+    phrases: Vec<(u8, u8, u64)>,
+    enhanced_opens: bool,
+    kept: usize,
+}
+
+impl TrackReader {
+    fn keep(&mut self) -> RoxResult<()> {
+        self.kept += 1;
+        if self.kept > MAX_KEPT {
+            return Err(invalid("too many notes in an instrument track"));
+        }
+        Ok(())
+    }
+
+    fn note_on(&mut self, channel: u8, key: u8, tick: u64) {
+        if classify(key).is_none() {
+            return;
+        }
+        let slot = &mut self.sounding[usize::from(channel) * 128 + usize::from(key)];
+        if slot.is_some() {
+            self.raw.unpaired += 1;
+        } else {
+            *slot = Some(tick);
+        }
+    }
+
+    fn note_off(&mut self, channel: u8, key: u8, tick: u64) -> RoxResult<()> {
+        let Some(kind) = classify(key) else { return Ok(()) };
+        let Some(start) = self.sounding[usize::from(channel) * 128 + usize::from(key)].take() else {
+            self.raw.unpaired += 1;
+            return Ok(());
+        };
+        self.keep()?;
+        let diffs = &mut self.raw.diffs;
+        match kind {
+            Key::Fret(d, fret) => diffs[d].frets.push((start, fret, tick - start)),
+            Key::Open(d) if self.enhanced_opens => diffs[d].opens += 1,
+            Key::Open(_) => {}
+            Key::Force(d) => diffs[d].forced += 1,
+            Key::Tap => diffs.iter_mut().for_each(|diff| diff.taps += 1),
+        }
+        Ok(())
+    }
+
+    /// A Phase Shift modifier: the start (`value` 1) or end (0) of an open or tap phrase.
+    fn sysex(&mut self, data: &[u8], tick: u64) -> RoxResult<()> {
+        let &[b'P', b'S', 0, 0, difficulty, modifier, value, _] = data else { return Ok(()) };
+        if modifier != PS_OPEN && modifier != PS_TAP || difficulty > 3 && difficulty != 0xFF {
+            return Ok(());
+        }
+        let open = self.phrases.iter().position(|p| p.0 == difficulty && p.1 == modifier);
+        match (value, open) {
+            (1, Some(_)) | (0, None) => self.raw.unpaired += 1,
+            (1, None) => {
+                self.keep()?;
+                self.phrases.push((difficulty, modifier, tick));
+            }
+            (0, Some(at)) => {
+                let (_, _, start) = self.phrases.swap_remove(at);
+                self.close_phrase(difficulty, modifier, start, tick);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn close_phrase(&mut self, difficulty: u8, modifier: u8, start: u64, tick: u64) {
+        // The last tick of a phrase is not part of it (a phrase of no length holds its start tick).
+        let last = if tick > start { tick - 1 } else { start };
+        for (d, diff) in self.raw.diffs.iter_mut().enumerate() {
+            // Difficulty byte 0 easy .. 3 expert; the index counts expert first.
+            if difficulty != 0xFF && usize::from(3 - difficulty) != d {
+                continue;
+            }
+            if modifier == PS_OPEN {
+                diff.open_ranges.push((start, last));
+            } else {
+                diff.taps += 1;
+            }
+        }
+    }
 }
 
 /// Removes the notes inside the open phrases; returns how many.
@@ -469,11 +473,7 @@ fn drop_open_phrase_notes(frets: &mut Vec<(u64, u8, u64)>, ranges: &mut [(u64, u
 
 /// Parses a `.mid` and converts every 5-lane track and difficulty that has a note on the five frets.
 pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted> {
-    let Smf {
-        format,
-        ticks_per_quarter,
-        tracks,
-    } = smf::parse(data).map_err(|m| invalid(&m))?;
+    let Smf { format, ticks_per_quarter, tracks } = smf::parse(data).map_err(|m| invalid(&m))?;
     let Some(&sync_track) = tracks.first() else {
         return Err(invalid("no track"));
     };
@@ -492,82 +492,84 @@ pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted
     let (shift_us, source) = audio_shift(&song, ini, &mut shared);
     shared.shift_us = shift_us;
     shared.shift_source = source;
-    let cutoff = sustain_cutoff(ini, ticks_per_quarter);
-    let timing = timing_points(&tempo, &sync.signatures, shift_us);
 
     // In a type 1 file the first track is the tempo track alone; a type 0 file has no other.
-    let first_instrument = usize::from(format == 1);
-    let mut slots: [Option<(Vec<u8>, RawTrack)>; 5] = Default::default();
-    let mut unsupported: Vec<String> = Vec::new();
-    let mut duplicates = 0usize;
-    for &chunk in &tracks[first_instrument..] {
-        let Some(name) = track_name(chunk) else {
-            continue;
-        };
-        let Some(instrument) = instrument_of(name) else {
-            if looks_like_instrument(name) {
-                unsupported.push(String::from_utf8_lossy(name).into_owned());
-            }
-            continue;
-        };
-        let slot = Instrument::ALL
-            .iter()
-            .position(|&i| i == instrument)
-            .unwrap_or(0);
-        if slots[slot].is_some() && name != GUITAR_NAME {
-            duplicates += 1;
-            continue;
-        }
-        if slots[slot].is_some() {
-            duplicates += 1;
-        }
-        slots[slot] = Some((name.to_vec(), read_instrument(chunk)?));
-    }
-
+    let picked = pick_tracks(&tracks[usize::from(format == 1)..])?;
+    shared.duplicate_tracks_ignored = picked.duplicates;
+    shared.unsupported_tracks = picked.unsupported;
+    let song_charts = SongCharts {
+        song: &song,
+        ini,
+        tempo: &tempo,
+        timing: timing_points(&tempo, &sync.signatures, shift_us),
+        cutoff: sustain_cutoff(ini, ticks_per_quarter),
+        shift_us,
+    };
     let mut built = Vec::new();
-    for (instrument, slot) in Instrument::ALL.into_iter().zip(slots) {
-        let Some((name, mut raw)) = slot else {
-            continue;
-        };
+    for (instrument, slot) in Instrument::ALL.into_iter().zip(picked.slots) {
+        let Some((name, mut raw)) = slot else { continue };
         let name = String::from_utf8_lossy(&name).into_owned();
-        for (d, difficulty) in Difficulty::ALL.into_iter().enumerate() {
-            let diff = &mut raw.diffs[d];
+        for (difficulty, diff) in Difficulty::ALL.into_iter().zip(&mut raw.diffs) {
             let mut report = shared.clone();
             report.section = format!("{name} {}", difficulty.section_prefix());
-            report.forced_flags = diff.forced;
-            report.tap_flags = diff.taps;
-            report.open_notes_dropped = diff.opens;
             report.unpaired_midi_events = raw.unpaired;
             report.sync_events_off_first_track = raw.off_sync;
-            report.duplicate_tracks_ignored = duplicates;
-            report.open_notes_dropped +=
-                drop_open_phrase_notes(&mut diff.frets, &mut diff.open_ranges);
-            let events = std::mem::take(&mut diff.frets);
-            let notes = settle_notes(events, cutoff, |tick| tempo.us(tick), shift_us, &mut report);
-            if notes.is_empty() {
-                continue;
-            }
-            let holds = notes.iter().filter(|n| n.is_hold()).count();
-            let mut chart = RoxChart::new(KEYS);
-            chart.metadata = metadata(&song, ini, instrument, difficulty);
-            chart.timing_points.clone_from(&timing);
-            chart.notes = notes;
-            built.push(Built {
-                chart,
-                report,
-                instrument,
-                difficulty,
-                holds,
-            });
+            built.extend(song_charts.build(instrument, difficulty, diff, report));
         }
     }
-    for track in &mut built {
-        track.report.unsupported_tracks.clone_from(&unsupported);
+    Ok(Converted { song, tracks: built })
+}
+
+/// The instrument tracks of the file, one per instrument: a later track of the same instrument is ignored, except that a later
+/// `PART GUITAR` replaces an earlier guitar track (both counted).
+struct Picked {
+    slots: [Option<(Vec<u8>, RawTrack)>; 5],
+    unsupported: Vec<String>,
+    duplicates: usize,
+}
+
+fn pick_tracks(tracks: &[&[u8]]) -> RoxResult<Picked> {
+    let mut picked = Picked { slots: Default::default(), unsupported: Vec::new(), duplicates: 0 };
+    for &chunk in tracks {
+        let Some(name) = track_name(chunk) else { continue };
+        let Some(instrument) = instrument_of(name) else {
+            if looks_like_instrument(name) {
+                picked.unsupported.push(String::from_utf8_lossy(name).into_owned());
+            }
+            continue;
+        };
+        let slot = Instrument::ALL.iter().position(|&i| i == instrument).unwrap_or(0);
+        if picked.slots[slot].is_some() {
+            picked.duplicates += 1;
+            if name != GUITAR_NAME {
+                continue;
+            }
+        }
+        picked.slots[slot] = Some((name.to_vec(), read_instrument(chunk)?));
     }
-    Ok(Converted {
-        song,
-        tracks: built,
-    })
+    Ok(picked)
+}
+
+/// What every chart of the file shares.
+struct SongCharts<'a> {
+    song: &'a SongSection,
+    ini: Option<&'a SongIni>,
+    tempo: &'a MidiTempo,
+    timing: Vec<TimingPoint>,
+    cutoff: u64,
+    shift_us: i64,
+}
+
+impl SongCharts<'_> {
+    /// The chart of one difficulty; `None` when it has no note.
+    fn build(&self, instrument: Instrument, difficulty: Difficulty, diff: &mut DiffNotes, mut report: ChartReport) -> Option<Built> {
+        report.forced_flags = diff.forced;
+        report.tap_flags = diff.taps;
+        report.open_notes_dropped = diff.opens + drop_open_phrase_notes(&mut diff.frets, &mut diff.open_ranges);
+        let events = std::mem::take(&mut diff.frets);
+        let notes = settle_notes(events, self.cutoff, |tick| self.tempo.us(tick), self.shift_us, &mut report);
+        built(notes, || metadata(self.song, self.ini, instrument, difficulty), &self.timing, report, instrument, difficulty)
+    }
 }
 
 /// The sustain cutoff, in ticks: the `song.ini` `sustain_cutoff_threshold` when it is given and not negative (a value of

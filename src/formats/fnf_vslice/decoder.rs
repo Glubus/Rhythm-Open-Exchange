@@ -8,7 +8,7 @@ use rox::error::RoxResult;
 use rox::model::{Metadata, Note, RoxChart};
 
 use super::audio::{self, Stems};
-use super::data::{Loaded, bad, load, ms_to_us};
+use super::data::{Loaded, NoteData, bad, load, ms_to_us};
 
 /// Columns of a V-Slice chart: the player's four arrows.
 const KEYS: u8 = 4;
@@ -262,85 +262,54 @@ fn title_case(id: &str) -> String {
 }
 
 fn build(loaded: &Loaded, id: &str) -> RoxResult<Built> {
-    let source = loaded
-        .chart
-        .notes
-        .get(id)
-        .ok_or_else(|| bad(format!("no difficulty {id:?}")))?;
+    let source = loaded.chart.notes.get(id).ok_or_else(|| bad(format!("no difficulty {id:?}")))?;
+    let tempo = &loaded.tempo;
     let mut report = VSliceReport {
         difficulty: id.to_string(),
-        scroll_speed: loaded
-            .chart
-            .scroll_speed
-            .get(id)
-            .or_else(|| loaded.chart.scroll_speed.get("default"))
-            .copied(),
+        scroll_speed: loaded.chart.scroll_speed.get(id).or_else(|| loaded.chart.scroll_speed.get("default")).copied(),
         events_ignored: loaded.chart.events.len(),
-        unsorted_time_changes: loaded.tempo.unsorted_time_changes,
-        negative_time_changes_clamped: loaded.tempo.negative_time_changes_clamped,
-        same_time_changes_replaced: loaded.tempo.same_time_changes_replaced,
-        repeated_time_changes: loaded.tempo.repeated_time_changes,
-        non_quarter_denominators: loaded.tempo.non_quarter_denominators,
+        unsorted_time_changes: tempo.unsorted_time_changes,
+        negative_time_changes_clamped: tempo.negative_time_changes_clamped,
+        same_time_changes_replaced: tempo.same_time_changes_replaced,
+        repeated_time_changes: tempo.repeated_time_changes,
+        non_quarter_denominators: tempo.non_quarter_denominators,
         ..VSliceReport::default()
     };
-
-    let mut notes: Vec<Note> = Vec::with_capacity(source.len());
-    for raw in source {
-        let Ok(column) = u8::try_from(raw.d) else {
-            report.invalid_data_notes += usize::from(raw.d < 0);
-            report.other_strumline_notes += usize::from(raw.d >= 0);
-            continue;
-        };
-        if column >= KEYS {
-            report.other_strumline_notes += 1;
-            continue;
-        }
-        let (Some(time_us), Some(length_us)) = (ms_to_us(raw.t), ms_to_us(raw.l.max(0.0))) else {
-            report.notes_out_of_range += 1;
-            continue;
-        };
-        if time_us < 0 {
-            report.notes_before_zero += 1;
-            continue;
-        }
-        if let Some(kind) = raw.k.as_deref().filter(|k| !k.is_empty()) {
-            *report.note_kinds.entry(kind.to_string()).or_default() += 1;
-        }
-        if raw.l > 0.0 && length_us == 0 {
-            report.empty_holds_as_taps += 1;
-        }
-        notes.push(if length_us > 0 {
-            Note::hold(time_us, length_us, column)
-        } else {
-            Note::tap(time_us, column)
-        });
-    }
-    notes.sort_by_key(|note| (note.time_us, u8::from(!note.is_hold()), note.column));
-    let mut last_end = [i64::MIN; KEYS as usize];
-    let mut last_start = [i64::MIN; KEYS as usize];
-    let mut kept = Vec::with_capacity(notes.len());
-    let mut holds = 0usize;
-    for note in notes {
-        let column = usize::from(note.column);
-        if note.time_us < last_end[column] || note.time_us == last_start[column] {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        last_end[column] = note.end_time_us();
-        last_start[column] = note.time_us;
-        holds += usize::from(note.is_hold());
-        kept.push(note);
-    }
-
     let mut chart = RoxChart::new(KEYS);
     chart.metadata = metadata(loaded, id);
     chart.timing_points.clone_from(&loaded.timing);
-    chart.notes = kept;
-    Ok(Built {
-        chart,
-        report,
-        holds,
-    })
+    chart.notes = source.iter().filter_map(|raw| note_of(raw, &mut report)).collect();
+    report.overlapping_notes_dropped = chart.drop_overlapping_notes();
+    let holds = chart.notes.iter().filter(|note| note.is_hold()).count();
+    Ok(Built { chart, report, holds })
+}
+
+/// A note of the player's strumline; `None` (counted) for the other strumline, a bad lane or a time out of range or before 0.
+fn note_of(raw: &NoteData, report: &mut VSliceReport) -> Option<Note> {
+    let Ok(column) = u8::try_from(raw.d) else {
+        report.invalid_data_notes += usize::from(raw.d < 0);
+        report.other_strumline_notes += usize::from(raw.d >= 0);
+        return None;
+    };
+    if column >= KEYS {
+        report.other_strumline_notes += 1;
+        return None;
+    }
+    let (Some(time_us), Some(length_us)) = (ms_to_us(raw.t), ms_to_us(raw.l.max(0.0))) else {
+        report.notes_out_of_range += 1;
+        return None;
+    };
+    if time_us < 0 {
+        report.notes_before_zero += 1;
+        return None;
+    }
+    if let Some(kind) = raw.k.as_deref().filter(|k| !k.is_empty()) {
+        *report.note_kinds.entry(kind.to_string()).or_default() += 1;
+    }
+    if raw.l > 0.0 && length_us == 0 {
+        report.empty_holds_as_taps += 1;
+    }
+    Some(if length_us > 0 { Note::hold(time_us, length_us, column) } else { Note::tap(time_us, column) })
 }
 
 fn metadata(loaded: &Loaded, id: &str) -> Metadata {

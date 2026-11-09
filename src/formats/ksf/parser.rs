@@ -292,22 +292,22 @@ struct Ignored {
     open_holds: usize,
 }
 
-#[allow(clippy::too_many_lines)] // one pass over the tags, then one over the rows, as the loader
-fn read_chart(
-    tags: &[Tag],
-    rows: &[String],
-    mut kiu_compliant: bool,
-    context: &KsfContext<'_>,
-    warnings: &mut Vec<String>,
-) -> Result<(SmChart, i64), String> {
+/// The tags of a chart that set its timing, level and side.
+struct Header {
+    segments: Segments,
+    start_time_cs: f32,
+    tick_count: Option<i32>,
+    meter: Option<u32>,
+    player_is_double: bool,
+}
+
+/// One pass over the tags, as the loader: BPM, start time, tick count, level; with KIU tags, the two `BUNKI` tempo changes.
+fn read_header(tags: &[Tag], mut kiu_compliant: bool) -> Result<Header, String> {
     let (mut gap1, mut gap2) = (0.0_f32, 0.0_f32);
     let (mut bpm1, mut bpm2, mut bpm3) = (-1.0_f32, -1.0_f32, -1.0_f32);
     let (mut pos2, mut pos3) = (-1.0_f32, -1.0_f32);
-    let mut start_time_cs = 0.0_f32;
-    let mut tick_count: Option<i32> = None;
-    let mut meter: Option<u32> = None;
-    let mut player_is_double = false;
-    let mut segments = Segments::default();
+    let mut header =
+        Header { segments: Segments::default(), start_time_cs: 0.0, tick_count: None, meter: None, player_is_double: false };
     for tag in tags {
         let name = tag.name.as_str();
         if name == "TITLE" || name.ends_with("INTRO") || name.ends_with("FILE") {
@@ -317,15 +317,15 @@ fn read_chart(
         match name {
             "BPM" => {
                 bpm1 = string_to_float(value);
-                segments.set_bpm(0, bpm1);
+                header.segments.set_bpm(0, bpm1);
             }
             "BPM2" if kiu_compliant => bpm2 = string_to_float(value),
             "BPM3" if kiu_compliant => bpm3 = string_to_float(value),
             "BUNKI" if kiu_compliant => pos2 = string_to_float(value) / 100.0,
             "BUNKI2" if kiu_compliant => pos3 = string_to_float(value) / 100.0,
             "STARTTIME" => {
-                start_time_cs = string_to_float(value);
-                gap1 = -start_time_cs / 100.0;
+                header.start_time_cs = string_to_float(value);
+                gap1 = -header.start_time_cs / 100.0;
             }
             "STARTTIME2" if kiu_compliant => gap2 = -string_to_float(value) / 100.0,
             "STARTTIME3" => kiu_compliant = true,
@@ -334,147 +334,173 @@ fn read_chart(
                 if ticks <= 0 {
                     return Err(format!("invalid tick count {ticks}"));
                 }
-                tick_count = Some(ticks);
+                header.tick_count = Some(ticks);
             }
-            "DIFFICULTY" => meter = Some(u32::try_from(string_to_int(value).max(1)).unwrap_or(1)),
-            "PLAYER" => player_is_double |= value.to_lowercase().contains("double"),
+            "DIFFICULTY" => header.meter = Some(u32::try_from(string_to_int(value).max(1)).unwrap_or(1)),
+            "PLAYER" => header.player_is_double |= value.to_lowercase().contains("double"),
             _ => {}
         }
     }
-    let mut ticks = tick_count.unwrap_or_else(|| {
+    if kiu_compliant {
+        if bpm2 > 0.0 && pos2 > 0.0 {
+            header.segments.add_bunki(bpm1, bpm2, gap1, pos2);
+        }
+        if bpm3 > 0.0 && pos3 > 0.0 {
+            header.segments.add_bunki(bpm2, bpm3, gap2, pos3);
+        }
+    }
+    Ok(header)
+}
+
+/// The columns a step type plays and how many leading cells of a row it skips: `halfdouble` is the middle six columns of the ten.
+fn columns_of(stepstype: &str) -> Result<(usize, usize), String> {
+    match stepstype {
+        "pump-single" => Ok((5, 0)),
+        "pump-halfdouble" => Ok((6, 2)),
+        "pump-double" => Ok((10, 0)),
+        other => Err(format!("unsupported step type `{other}` (two players on 10 columns)")),
+    }
+}
+
+fn read_chart(
+    tags: &[Tag],
+    rows: &[String],
+    kiu_compliant: bool,
+    context: &KsfContext<'_>,
+    warnings: &mut Vec<String>,
+) -> Result<(SmChart, i64), String> {
+    let header = read_header(tags, kiu_compliant)?;
+    let ticks = header.tick_count.unwrap_or_else(|| {
         warnings.push("no #TICKCOUNT: 4 assumed".to_string());
         4
     });
-    if kiu_compliant {
-        if bpm2 > 0.0 && pos2 > 0.0 {
-            segments.add_bunki(bpm1, bpm2, gap1, pos2);
-        }
-        if bpm3 > 0.0 && pos3 > 0.0 {
-            segments.add_bunki(bpm2, bpm3, gap2, pos3);
-        }
-    }
-
     let name = base_name(context.file_name);
-    let class = classify(&name, player_is_double);
-    let columns: usize = match class.stepstype {
-        "pump-single" => 5,
-        "pump-halfdouble" => 6,
-        "pump-double" => 10,
-        other => {
-            return Err(format!(
-                "unsupported step type `{other}` (two players on 10 columns)"
-            ));
-        }
-    };
-    // `halfdouble` is the middle six columns of the ten.
-    let skip = if class.stepstype == "pump-halfdouble" {
-        2
-    } else {
-        0
-    };
+    let class = classify(&name, header.player_is_double);
+    let (columns, skip) = columns_of(class.stepstype)?;
 
-    let mut notes: Vec<(i64, usize, SmNoteType)> = Vec::new();
-    let mut ignored = Ignored::default();
-    let mut hold_start: Vec<Option<i64>> = vec![None; columns];
-    let (mut current, mut previous) = (0.0_f64, 0.0_f64);
-    let row_of = |beat: f64| {
-        #[allow(clippy::cast_possible_truncation)] // a chart is far shorter than f32's range
-        beat_to_row(beat as f32)
+    let mut steps = Steps {
+        notes: Vec::new(),
+        ignored: Ignored::default(),
+        hold_start: vec![None; columns],
+        segments: header.segments,
+        ticks,
+        current: 0.0,
+        previous: 0.0,
     };
-    for row in rows {
-        if row == END_ROW {
-            for (column, start) in hold_start.iter_mut().enumerate() {
-                if let Some(start) = start.take() {
-                    close_hold(&mut notes, column, start, row_of(previous));
-                }
-            }
-            break;
-        }
-        if row.starts_with('|') {
-            direct_move_row(
-                row,
-                &mut ticks,
-                row_of(current),
-                &mut segments,
-                &mut ignored,
-            )?;
-            continue;
-        }
-        let cells = row.as_bytes().get(skip..).unwrap_or_default();
-        if cells.len() < columns {
-            return Err(format!(
-                "row `{row}` has {} columns, expected {}",
-                cells.len() + skip,
-                columns + skip
-            ));
-        }
-        let row_now = row_of(current);
-        for (column, &cell) in cells[..columns].iter().enumerate() {
-            if cell == b'4' {
-                // The head is the first `4`; the middle is ignored.
-                hold_start[column].get_or_insert(row_now);
-                continue;
-            }
-            if let Some(start) = hold_start[column].take() {
-                close_hold(&mut notes, column, start, row_of(previous));
-            }
-            match cell {
-                // A fake is never judged.
-                b'0' | b'F' | b'f' => {}
-                b'1' => notes.push((row_now, column, SmNoteType::Tap)),
-                b'M' | b'm' => notes.push((row_now, column, SmNoteType::Mine)),
-                b'L' | b'l' => notes.push((row_now, column, SmNoteType::Lift)),
-                _ => ignored.invalid_cells += 1,
-            }
-        }
-        previous = current;
-        current = previous + 1.0 / f64::from(ticks);
-    }
-    ignored.open_holds = hold_start.iter().flatten().count();
-    for (count, what) in [
-        (ignored.invalid_cells, "invalid step characters: ignored"),
-        (
-            ignored.open_holds,
-            "holds never closed by the end row: removed",
-        ),
-        (
-            ignored.direct_move_rows,
-            "Direct Move rows (|M |C |S |F |X) with no effect on time: ignored",
-        ),
-    ] {
-        if count > 0 {
-            warnings.push(format!("{count} {what}"));
-        }
-    }
+    steps.read(rows, columns, skip)?;
+    steps.ignored.warn(warnings);
 
-    let bpm_entries: Vec<(f64, f64)> = segments
-        .bpms
-        .iter()
-        .map(|&(row, bpm)| (row_to_beat(row), f64::from(bpm)))
-        .collect();
-    let delay_entries: Vec<(f64, f64)> = segments
-        .delays
-        .iter()
-        .map(|&(row, delay)| (row_to_beat(row), f64::from(delay)))
-        .collect();
-    let (bpm_list, timing) = SongTiming::new(bpm_entries, Vec::new(), delay_entries)
-        .timing_for(&[])
-        .map_err(|reason| format!("{}: {reason}", class.stepstype))?;
+    let (bpm_list, timing) =
+        steps.segments.timing().timing_for(&[]).map_err(|reason| format!("{}: {reason}", class.stepstype))?;
     let chart = SmChart {
         stepstype: class.stepstype.to_string(),
         difficulty: class.difficulty.to_string(),
-        meter: meter.unwrap_or(class.default_meter),
-        #[allow(clippy::cast_possible_truncation)] // 5 or 6
+        meter: header.meter.unwrap_or(class.default_meter),
+        #[allow(clippy::cast_possible_truncation)] // 5, 6 or 10
         column_count: columns as u8,
-        notes: place(&notes, &timing),
+        notes: place(&steps.notes, &timing),
         description: name,
         credit: None,
         bpms: Some(bpm_points(&bpm_list, &timing)),
         offset_us: None,
     };
     #[allow(clippy::cast_possible_truncation)] // centiseconds to µs of a sane start time
-    let offset_us = (-f64::from(start_time_cs) * 10_000.0).round() as i64;
+    let offset_us = (-f64::from(header.start_time_cs) * 10_000.0).round() as i64;
     Ok((chart, offset_us))
+}
+
+impl Segments {
+    fn timing(&self) -> SongTiming {
+        let by_beat = |entries: &[(i64, f32)]| entries.iter().map(|&(row, value)| (row_to_beat(row), f64::from(value))).collect();
+        SongTiming::new(by_beat(&self.bpms), Vec::new(), by_beat(&self.delays))
+    }
+}
+
+impl Ignored {
+    fn warn(&self, warnings: &mut Vec<String>) {
+        for (count, what) in [
+            (self.invalid_cells, "invalid step characters: ignored"),
+            (self.open_holds, "holds never closed by the end row: removed"),
+            (self.direct_move_rows, "Direct Move rows (|M |C |S |F |X) with no effect on time: ignored"),
+        ] {
+            if count > 0 {
+                warnings.push(format!("{count} {what}"));
+            }
+        }
+    }
+}
+
+/// The rows read so far: notes by row, the hold open on each column, and the timing the Direct Move rows change.
+struct Steps {
+    notes: Vec<(i64, usize, SmNoteType)>,
+    ignored: Ignored,
+    hold_start: Vec<Option<i64>>,
+    segments: Segments,
+    ticks: i32,
+    /// The beat of the row being read and of the row before it.
+    current: f64,
+    previous: f64,
+}
+
+fn row_of(beat: f64) -> i64 {
+    #[allow(clippy::cast_possible_truncation)] // a chart is far shorter than f32's range
+    beat_to_row(beat as f32)
+}
+
+impl Steps {
+    fn read(&mut self, rows: &[String], columns: usize, skip: usize) -> Result<(), String> {
+        for row in rows {
+            if row == END_ROW {
+                self.close_all();
+                break;
+            }
+            if row.starts_with('|') {
+                direct_move_row(row, &mut self.ticks, row_of(self.current), &mut self.segments, &mut self.ignored)?;
+                continue;
+            }
+            let cells = row.as_bytes().get(skip..).unwrap_or_default();
+            if cells.len() < columns {
+                return Err(format!("row `{row}` has {} columns, expected {}", cells.len() + skip, columns + skip));
+            }
+            self.step_row(&cells[..columns]);
+            self.previous = self.current;
+            self.current = self.previous + 1.0 / f64::from(self.ticks);
+        }
+        self.ignored.open_holds = self.hold_start.iter().flatten().count();
+        Ok(())
+    }
+
+    /// The end row closes every hold at the row before it.
+    fn close_all(&mut self) {
+        let end = row_of(self.previous);
+        for (column, start) in self.hold_start.iter_mut().enumerate() {
+            if let Some(start) = start.take() {
+                close_hold(&mut self.notes, column, start, end);
+            }
+        }
+    }
+
+    fn step_row(&mut self, cells: &[u8]) {
+        let row_now = row_of(self.current);
+        for (column, &cell) in cells.iter().enumerate() {
+            if cell == b'4' {
+                // The head is the first `4`; the middle is ignored.
+                self.hold_start[column].get_or_insert(row_now);
+                continue;
+            }
+            if let Some(start) = self.hold_start[column].take() {
+                close_hold(&mut self.notes, column, start, row_of(self.previous));
+            }
+            match cell {
+                // A fake is never judged.
+                b'0' | b'F' | b'f' => {}
+                b'1' => self.notes.push((row_now, column, SmNoteType::Tap)),
+                b'M' | b'm' => self.notes.push((row_now, column, SmNoteType::Mine)),
+                b'L' | b'l' => self.notes.push((row_now, column, SmNoteType::Lift)),
+                _ => self.ignored.invalid_cells += 1,
+            }
+        }
+    }
 }
 
 /// A hold from `start` to `end`; a hold of a single row is a tap.

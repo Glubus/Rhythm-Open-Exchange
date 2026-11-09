@@ -272,97 +272,73 @@ fn xor_groups(bytes: &mut [u8], mask: [u8; 4]) {
     }
 }
 
-fn parse_omc(
-    data: &[u8],
-    scrambled: bool,
-    report: &mut OjmReport,
-) -> RoxResult<BTreeMap<u32, OjmSample>> {
+fn parse_omc(data: &[u8], scrambled: bool, report: &mut OjmReport) -> RoxResult<BTreeMap<u32, OjmSample>> {
     if data.len() < OMC_HEADER {
-        return Err(RoxError::InvalidFormat(
-            "omc/ojm: header is cut short".into(),
-        ));
+        return Err(RoxError::InvalidFormat("omc/ojm: header is cut short".into()));
     }
-    let ogg_start = i32_at(data, 12)
-        .and_then(|v| usize::try_from(v).ok())
-        .unwrap_or(0);
-    let file_size = i32_at(data, 16)
-        .and_then(|v| usize::try_from(v).ok())
-        .map_or(data.len(), |size| size.min(data.len()));
+    let ogg_start = i32_at(data, 12).and_then(|v| usize::try_from(v).ok()).unwrap_or(0);
+    let file_size = i32_at(data, 16).and_then(|v| usize::try_from(v).ok()).map_or(data.len(), |size| size.min(data.len()));
     let mut samples = BTreeMap::new();
-    let mut at = OMC_HEADER;
-    let mut id = 0u32;
-    let mut acc = AccXor::new();
     // The sections are walked like the `Open2Jam` parser does: the WAV section runs while the offset is before
     // `ogg_start` (the counts of the header are not used), the Ogg section from where it stopped to the file size.
-    while at < ogg_start {
-        if file_size.saturating_sub(at) < OMC_WAV_HEADER {
-            report.truncated = true;
-            return Ok(samples);
+    let mut at = OMC_HEADER;
+    let mut acc = AccXor::new();
+    for id in 0u32.. {
+        if at >= ogg_start {
+            break;
         }
-        let header = &data[at..at + OMC_WAV_HEADER];
-        let size = i32_at(header, 52).and_then(|s| usize::try_from(s).ok());
-        let Some(size) = size.filter(|&s| s <= file_size - at - OMC_WAV_HEADER) else {
+        let Some((header, payload)) = entry(&data[..file_size], &mut at, OMC_WAV_HEADER, 52) else {
             report.truncated = true;
             return Ok(samples);
         };
-        at += OMC_WAV_HEADER + size;
-        if size == 0 {
-            id += 1;
-            continue;
+        if !payload.is_empty() {
+            insert(&mut samples, wav_sample(id, header, payload, scrambled.then_some(&mut acc)), report);
         }
-        let mut pcm = data[at - size..at].to_vec();
-        if scrambled {
-            pcm = rearrange(&pcm);
-            acc.decode(&mut pcm);
-        }
-        let fmt = WavFormat {
-            audio_format: u16_at(header, 32).unwrap_or(0),
-            channels: u16_at(header, 34).unwrap_or(0),
-            sample_rate: i32_at(header, 36).unwrap_or(0).cast_unsigned(),
-            byte_rate: i32_at(header, 40).unwrap_or(0).cast_unsigned(),
-            block_align: u16_at(header, 44).unwrap_or(0),
-            bits_per_sample: u16_at(header, 46).unwrap_or(0),
-        };
-        insert(
-            &mut samples,
-            OjmSample {
-                id,
-                format: SampleFormat::Wav,
-                name: name_of(&header[..32]),
-                data: wav_file(fmt, &pcm),
-            },
-            report,
-        );
-        id += 1;
     }
-    let mut id = OGG_BASE;
-    while at < file_size {
-        if file_size - at < OMC_OGG_HEADER {
-            report.truncated = true;
+    for id in OGG_BASE.. {
+        if at >= file_size {
             break;
         }
-        let header = &data[at..at + OMC_OGG_HEADER];
-        let size = i32_at(header, 32).and_then(|s| usize::try_from(s).ok());
-        let Some(size) = size.filter(|&s| s <= file_size - at - OMC_OGG_HEADER) else {
+        let Some((header, payload)) = entry(&data[..file_size], &mut at, OMC_OGG_HEADER, 32) else {
             report.truncated = true;
             break;
         };
-        at += OMC_OGG_HEADER + size;
-        if size > 0 {
-            insert(
-                &mut samples,
-                OjmSample {
-                    id,
-                    format: SampleFormat::Ogg,
-                    name: name_of(&header[..32]),
-                    data: data[at - size..at].to_vec(),
-                },
-                report,
-            );
+        if !payload.is_empty() {
+            let sample = OjmSample { id, format: SampleFormat::Ogg, name: name_of(&header[..32]), data: payload.to_vec() };
+            insert(&mut samples, sample, report);
         }
-        id += 1;
     }
     Ok(samples)
+}
+
+/// The entry at `*at` of an OMC section: a header of `header_len` bytes whose i32 at `size_at` is the size of the payload that
+/// follows; moves `at` past it. `None` when the header or the payload runs past the end.
+fn entry<'a>(data: &'a [u8], at: &mut usize, header_len: usize, size_at: usize) -> Option<(&'a [u8], &'a [u8])> {
+    let header = data.get(*at..at.checked_add(header_len)?)?;
+    let size = i32_at(header, size_at).and_then(|s| usize::try_from(s).ok())?;
+    let start = *at + header_len;
+    let payload = data.get(start..start.checked_add(size)?)?;
+    *at = start + size;
+    Some((header, payload))
+}
+
+/// A WAV sample of an OMC: its PCM unscrambled when `acc` is given (the XOR key runs on from one sample to the next), wrapped in
+/// a RIFF header built from the entry's format fields.
+fn wav_sample(id: u32, header: &[u8], payload: &[u8], acc: Option<&mut AccXor>) -> OjmSample {
+    let mut pcm = payload.to_vec();
+    if let Some(acc) = acc {
+        pcm = rearrange(&pcm);
+        acc.decode(&mut pcm);
+    }
+    let fmt = WavFormat {
+        audio_format: u16_at(header, 32).unwrap_or(0),
+        channels: u16_at(header, 34).unwrap_or(0),
+        sample_rate: i32_at(header, 36).unwrap_or(0).cast_unsigned(),
+        byte_rate: i32_at(header, 40).unwrap_or(0).cast_unsigned(),
+        block_align: u16_at(header, 44).unwrap_or(0),
+        bits_per_sample: u16_at(header, 46).unwrap_or(0),
+    };
+    OjmSample { id, format: SampleFormat::Wav, name: name_of(&header[..32]), data: wav_file(fmt, &pcm) }
 }
 
 /// Undoes the block shuffle of one OMC chunk: the chunk is cut in 17 blocks of `len / 17` bytes, block `b` of the

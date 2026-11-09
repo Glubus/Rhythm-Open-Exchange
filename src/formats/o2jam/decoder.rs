@@ -304,13 +304,30 @@ fn volume_percent(volume_pan: u8) -> Option<u8> {
     }
 }
 
-#[allow(clippy::too_many_lines)] // one pass: tempo, long notes, sounds
 fn convert(header: &OjnHeader, data: &[u8], source_index: usize) -> RoxResult<Built> {
-    let mut report = OjnReport {
-        source_index,
-        header_note_count: header.note_count[source_index],
-        ..OjnReport::default()
-    };
+    let mut report = OjnReport { source_index, header_note_count: header.note_count[source_index], ..OjnReport::default() };
+    let events = read_events(header, data, source_index, &mut report);
+    let beats = measure_lengths(&events, &mut report);
+    let tempo = tempo_of(&events, &beats, header, &mut report)?;
+    let ojm = safe_name(&header.ojm_file, &mut report.unsafe_names);
+    report.ojm_file.clone_from(&ojm);
+    let mut reader = NoteReader { ojm, sounds: Vec::new(), drafts: Vec::new(), open: [None; 7] };
+    for event in &events {
+        reader.event(event, &beats, &tempo, &mut report);
+    }
+    report.unclosed_holds_as_taps = reader.open.iter().flatten().count();
+
+    let mut chart = RoxChart::new(KEYS);
+    chart.metadata = metadata(header, source_index);
+    chart.timing_points = timing_points(&tempo);
+    chart.notes = notes_of(&reader.drafts, &mut report);
+    report.overlapping_notes_dropped = chart.drop_overlapping_notes();
+    let holds = chart.notes.iter().filter(|note| note.is_hold()).count();
+    Ok(Built { chart, report, plan: AudioPlan::new(reader.sounds), source_index, level: header.level[source_index], holds })
+}
+
+/// The events of a difficulty's section in position order, those beyond [`MAX_MEASURE`] counted and dropped.
+fn read_events(header: &OjnHeader, data: &[u8], source_index: usize, report: &mut OjnReport) -> Vec<RawEvent> {
     let (mut events, scan) = scan_section(header.section(data, source_index));
     report.truncated_section = scan.truncated;
     report.negative_measures = scan.negative_measures;
@@ -318,10 +335,13 @@ fn convert(header: &OjnHeader, data: &[u8], source_index: usize) -> RoxResult<Bu
     events.retain(|event| event.measure <= MAX_MEASURE);
     report.events_out_of_range += before - events.len();
     events.sort_by(position_order);
+    events
+}
 
-    // Measure lengths: the last value of a measure wins.
+/// Measure lengths: the last value of a measure wins; a value that is not a positive number is counted and ignored.
+fn measure_lengths(events: &[RawEvent], report: &mut OjnReport) -> Beats {
     let mut lengths: BTreeMap<u32, f64> = BTreeMap::new();
-    for event in &events {
+    for event in events {
         if let Slot::MeasureFraction(value) = event.slot {
             if value.is_finite() && value > 0.0 {
                 lengths.insert(event.measure, f64::from(value));
@@ -330,12 +350,13 @@ fn convert(header: &OjnHeader, data: &[u8], source_index: usize) -> RoxResult<Bu
             }
         }
     }
-    let beats = Beats::new(&lengths);
+    Beats::new(&lengths)
+}
 
-    // Tempo: the BPM events by beat; consecutive equal values are dropped; the header BPM is the one at beat 0 unless
-    // an event sits there.
+/// Tempo: the BPM events by beat; consecutive equal values are dropped; the header BPM is the one at beat 0 unless an event sits there.
+fn tempo_of(events: &[RawEvent], beats: &Beats, header: &OjnHeader, report: &mut OjnReport) -> RoxResult<Tempo> {
     let mut changes: Vec<(f64, f64)> = Vec::new();
-    for event in &events {
+    for event in events {
         if let Slot::Bpm(value) = event.slot {
             if value.is_finite() && value > 0.0 {
                 changes.push((beats.beat(event), f64::from(value)));
@@ -350,162 +371,116 @@ fn convert(header: &OjnHeader, data: &[u8], source_index: usize) -> RoxResult<Bu
         header_bpm
     } else {
         report.header_bpm_unusable = true;
-        changes
-            .first()
-            .map(|change| change.1)
-            .ok_or_else(|| RoxError::InvalidFormat("ojn: no usable BPM".into()))?
+        changes.first().map(|change| change.1).ok_or_else(|| RoxError::InvalidFormat("ojn: no usable BPM".into()))?
     };
     let mut current = initial;
     changes.retain(|&(_, bpm)| {
         let repeated = (bpm - current).abs() < f64::EPSILON;
-        if repeated {
-            report.repeated_bpm_events += 1;
-        }
+        report.repeated_bpm_events += usize::from(repeated);
         current = bpm;
         !repeated
     });
-    let tempo = Tempo::new(initial, &changes);
+    Ok(Tempo::new(initial, &changes))
+}
 
-    // One pass over the notes in position order.
-    let ojm = safe_name(&header.ojm_file, &mut report.unsafe_names);
-    report.ojm_file.clone_from(&ojm);
-    let mut sounds: Vec<SoundEvent> = Vec::new();
-    let mut drafts: Vec<Draft> = Vec::new();
-    let mut open: [Option<usize>; 7] = [None; 7];
-    for event in &events {
-        let Slot::Note {
-            lane,
-            value,
-            volume_pan,
-            note_type,
-        } = event.slot
-        else {
-            continue;
-        };
-        if lane != 0 {
-            report.lane_events += 1;
-        }
+/// The note events read in position order: the sounds of the plan, the playable notes, and the long note open on each lane.
+struct NoteReader {
+    ojm: Option<String>,
+    sounds: Vec<SoundEvent>,
+    drafts: Vec<Draft>,
+    open: [Option<usize>; 7],
+}
+
+impl NoteReader {
+    fn event(&mut self, event: &RawEvent, beats: &Beats, tempo: &Tempo, report: &mut OjnReport) {
+        let Slot::Note { lane, value, volume_pan, note_type } = event.slot else { return };
+        report.lane_events += usize::from(lane != 0);
         let Ok(reference) = u32::try_from(value - 1) else {
             report.negative_sample_values += 1;
-            continue;
+            return;
+        };
+        let Some(time) = tempo.micros(beats.beat(event)) else {
+            report.events_out_of_range += 1;
+            return;
         };
         // Bit 2 of the type: the sample is one of the Ogg ones (ids from 1000).
         let id = reference + if note_type % 8 > 3 { 1000 } else { 0 };
         let kind = note_type % 4;
-        let Some(time) = tempo.micros(beats.beat(event)) else {
-            report.events_out_of_range += 1;
-            continue;
-        };
-        let push_sound = |sounds: &mut Vec<SoundEvent>| {
-            if let Some(file) = &ojm {
-                let mut event = SoundEvent::in_container(time, file.as_str(), id);
-                event.volume = volume_percent(volume_pan);
-                sounds.push(event);
-            }
-        };
         if lane == 0 {
             // Background sound. A long-note tail there is not a sound (`Open2Jam` removes it).
             if kind == 3 {
                 report.background_hold_ends_removed += 1;
             } else {
-                push_sound(&mut sounds);
+                self.sound(time, id, volume_pan);
             }
-            continue;
+            return;
         }
         let column = lane - 1;
-        let slot = &mut open[usize::from(column)];
-        match kind {
-            0 | 1 => {
-                if kind == 1 {
-                    report.type_one_notes += 1;
-                }
-                push_sound(&mut sounds);
-                if slot.is_some() {
-                    report.notes_inside_holds_to_bgm += 1;
-                } else {
-                    drafts.push(Draft {
-                        start: time,
-                        end: None,
-                        column,
-                    });
-                }
-            }
-            2 => {
-                push_sound(&mut sounds);
-                if slot.is_some() {
-                    report.notes_inside_holds_to_bgm += 1;
-                } else {
-                    *slot = Some(drafts.len());
-                    drafts.push(Draft {
-                        start: time,
-                        end: None,
-                        column,
-                    });
-                }
-            }
-            _ => {
-                if let Some(head) = slot.take() {
-                    drafts[head].end = Some(time);
-                } else {
-                    report.stray_hold_ends += 1;
-                }
-            }
+        if kind == 3 {
+            self.hold_end(column, time, report);
+        } else {
+            report.type_one_notes += usize::from(kind == 1);
+            self.sound(time, id, volume_pan);
+            self.note(column, time, kind == 2, report);
         }
     }
-    report.unclosed_holds_as_taps = open.iter().flatten().count();
 
-    let mut notes: Vec<Note> = Vec::with_capacity(drafts.len());
-    let mut holds = 0usize;
-    for draft in &drafts {
-        match draft.end {
-            Some(end) if end > draft.start => {
-                notes.push(Note::hold(draft.start, end - draft.start, draft.column));
-            }
+    fn sound(&mut self, time: i64, id: u32, volume_pan: u8) {
+        if let Some(file) = &self.ojm {
+            let mut event = SoundEvent::in_container(time, file.as_str(), id);
+            event.volume = volume_percent(volume_pan);
+            self.sounds.push(event);
+        }
+    }
+
+    /// A tap, or a long note's head (`opens`); a note inside an open long note of its lane only keeps its sound.
+    fn note(&mut self, column: u8, time: i64, opens: bool, report: &mut OjnReport) {
+        let slot = &mut self.open[usize::from(column)];
+        if slot.is_some() {
+            report.notes_inside_holds_to_bgm += 1;
+            return;
+        }
+        if opens {
+            *slot = Some(self.drafts.len());
+        }
+        self.drafts.push(Draft { start: time, end: None, column });
+    }
+
+    fn hold_end(&mut self, column: u8, time: i64, report: &mut OjnReport) {
+        match self.open[usize::from(column)].take() {
+            Some(head) => self.drafts[head].end = Some(time),
+            None => report.stray_hold_ends += 1,
+        }
+    }
+}
+
+/// Taps and long notes; a long note that ends at or before its start is a tap (counted).
+fn notes_of(drafts: &[Draft], report: &mut OjnReport) -> Vec<Note> {
+    drafts
+        .iter()
+        .map(|draft| match draft.end {
+            Some(end) if end > draft.start => Note::hold(draft.start, end - draft.start, draft.column),
             Some(_) => {
                 report.empty_holds_as_taps += 1;
-                notes.push(Note::tap(draft.start, draft.column));
+                Note::tap(draft.start, draft.column)
             }
-            None => notes.push(Note::tap(draft.start, draft.column)),
-        }
-    }
-    notes.sort_by_key(|note| (note.time_us, u8::from(!note.is_hold()), note.column));
-    let mut last_end = [i64::MIN; 7];
-    let mut last_start = [i64::MIN; 7];
-    let mut kept = Vec::with_capacity(notes.len());
-    for note in notes {
-        let column = usize::from(note.column);
-        if note.time_us < last_end[column] || note.time_us == last_start[column] {
-            report.overlapping_notes_dropped += 1;
-            continue;
-        }
-        last_end[column] = note.end_time_us();
-        last_start[column] = note.time_us;
-        holds += usize::from(note.is_hold());
-        kept.push(note);
-    }
+            None => Note::tap(draft.start, draft.column),
+        })
+        .collect()
+}
 
-    let mut chart = RoxChart::new(KEYS);
-    chart.metadata = metadata(header, source_index);
+/// One BPM point per tempo change.
+fn timing_points(tempo: &Tempo) -> Vec<TimingPoint> {
+    let mut points = Vec::new();
     let mut last_bpm = f64::NAN;
     for &(_, seconds, bpm) in &tempo.anchors {
         if bpm.to_bits() != last_bpm.to_bits() {
             #[allow(clippy::cast_possible_truncation)] // a BPM fits f32; seconds are bounded
-            chart.timing_points.push(TimingPoint::bpm(
-                (seconds * 1_000_000.0).round() as i64,
-                bpm as f32,
-            ));
+            points.push(TimingPoint::bpm((seconds * 1_000_000.0).round() as i64, bpm as f32));
             last_bpm = bpm;
         }
     }
-    chart.notes = kept;
-    Ok(Built {
-        chart,
-        report,
-        plan: AudioPlan::new(sounds),
-        source_index,
-        level: header.level[source_index],
-        holds,
-    })
+    points
 }
 
 fn metadata(header: &OjnHeader, source_index: usize) -> Metadata {

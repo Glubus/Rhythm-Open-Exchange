@@ -74,71 +74,54 @@ fn invalid(reason: &str) -> RoxError {
 
 fn parse(data: &[u8], title: &str, report: &mut SekaiReport) -> RoxResult<Score> {
     if data.len() > MAX_FILE_SIZE {
-        return Err(invalid(&format!(
-            "file too large: {} bytes (max {MAX_FILE_SIZE})",
-            data.len()
-        )));
+        return Err(invalid(&format!("file too large: {} bytes (max {MAX_FILE_SIZE})", data.len())));
     }
     let data = data.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(data);
     let root: Value = serde_json::from_slice(data).map_err(|e| invalid(&e.to_string()))?;
-    let root = root
-        .as_object()
-        .ok_or_else(|| invalid("the root is not an object"))?;
+    let root = root.as_object().ok_or_else(|| invalid("the root is not an object"))?;
     // The editors' wrapper `{"usc": {...}, "version": 1|2}` (`rg_converters`) or the bare `{offset, objects}` of the engine.
     let chart = match root.get("usc") {
         Some(Value::Object(inner)) => inner,
         _ => root,
     };
-    let objects = chart
-        .get("objects")
-        .and_then(Value::as_array)
-        .ok_or_else(|| invalid("no `objects` array"))?;
+    let objects = chart.get("objects").and_then(Value::as_array).ok_or_else(|| invalid("no `objects` array"))?;
     if objects.len() > MAX_OBJECTS {
         return Err(invalid(&format!("more than {MAX_OBJECTS} objects")));
     }
-    let shift = match chart.get("offset") {
+    let shift_seconds = match chart.get("offset") {
         None | Some(Value::Null) => 0.0,
-        Some(value) => value
-            .as_f64()
-            .filter(|offset| offset.is_finite())
-            .ok_or_else(|| invalid("`offset` is not a number"))?,
-    };
-
-    let mut bpm = Vec::new();
-    let mut notes = Vec::new();
-    for object in objects {
-        let Some(object) = object.as_object() else {
-            report.unsupported_objects += 1;
-            continue;
-        };
-        match object.get("type").and_then(Value::as_str) {
-            Some("bpm") => match (number(object, "beat"), number(object, "bpm")) {
-                (Some(beat), Some(value)) if valid_bpm(value) => bpm.push(BpmChange {
-                    beat,
-                    bpm: value,
-                    signature: SIGNATURE,
-                }),
-                _ => report.invalid_bpm += 1,
-            },
-            Some("timeScale" | "timeScaleGroup") => report.time_scale_changes += 1,
-            Some("single") => single(object, &mut notes, report),
-            Some("slide") => slide(object, &mut notes, report),
-            Some("damage") => report.damage_notes += 1,
-            Some("guide") => report.guides += 1,
-            Some("skill") => report.skill_markers += 1,
-            Some("feverChance" | "feverStart") => report.fever_markers += 1,
-            _ => report.unsupported_objects += 1,
+        Some(value) => {
+            value.as_f64().filter(|offset| offset.is_finite()).ok_or_else(|| invalid("`offset` is not a number"))?
         }
+    };
+    let metadata = Metadata { title: title.into(), ..Metadata::default() };
+    let mut score = Score { metadata, shift_seconds, bpm: Vec::new(), notes: Vec::new() };
+    for object in objects {
+        read_object(object, &mut score, report);
     }
-    Ok(Score {
-        metadata: Metadata {
-            title: title.into(),
-            ..Metadata::default()
+    Ok(score)
+}
+
+/// An object of the `objects` array: a BPM change or a note; the other kinds are counted.
+fn read_object(object: &Value, score: &mut Score, report: &mut SekaiReport) {
+    let Some(object) = object.as_object() else {
+        report.unsupported_objects += 1;
+        return;
+    };
+    match object.get("type").and_then(Value::as_str) {
+        Some("bpm") => match (number(object, "beat"), number(object, "bpm")) {
+            (Some(beat), Some(bpm)) if valid_bpm(bpm) => score.bpm.push(BpmChange { beat, bpm, signature: SIGNATURE }),
+            _ => report.invalid_bpm += 1,
         },
-        shift_seconds: shift,
-        bpm,
-        notes,
-    })
+        Some("timeScale" | "timeScaleGroup") => report.time_scale_changes += 1,
+        Some("single") => single(object, &mut score.notes, report),
+        Some("slide") => slide(object, &mut score.notes, report),
+        Some("damage") => report.damage_notes += 1,
+        Some("guide") => report.guides += 1,
+        Some("skill") => report.skill_markers += 1,
+        Some("feverChance" | "feverStart") => report.fever_markers += 1,
+        _ => report.unsupported_objects += 1,
+    }
 }
 
 /// A finite number field.

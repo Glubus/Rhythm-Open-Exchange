@@ -253,168 +253,205 @@ struct Draft {
     channel: usize,
 }
 
-#[allow(clippy::too_many_lines)] // one pass: JSON, tempo, layout, audio, notes
 fn convert(data: &[u8]) -> RoxResult<(RoxChart, BmsonReport, AudioPlan)> {
-    let file: Bmson = serde_json::from_slice(data)
-        .map_err(|e| RoxError::InvalidFormat(format!("bmson JSON: {e}")))?;
-    match file.version.as_deref() {
-        Some(v) if v.trim().starts_with("1.") => {}
-        Some(v) => {
-            return Err(RoxError::InvalidFormat(format!(
-                "bmson version {v:?} is not supported (1.x only)"
-            )));
-        }
-        None => {
-            return Err(RoxError::InvalidFormat(
-                "bmson without `version` (legacy 0.2x) is not supported".into(),
-            ));
-        }
-    }
-    let info = file
-        .info
-        .ok_or_else(|| RoxError::InvalidFormat("bmson without `info`".into()))?;
+    let file: Bmson = serde_json::from_slice(data).map_err(|e| RoxError::InvalidFormat(format!("bmson JSON: {e}")))?;
+    check_version(file.version.as_deref())?;
+    let info = file.info.as_ref().ok_or_else(|| RoxError::InvalidFormat("bmson without `info`".into()))?;
     let init_bpm = info
         .init_bpm
         .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .ok_or_else(|| {
-            RoxError::InvalidFormat("bmson `info.init_bpm` is missing or not positive".into())
-        })?;
+        .ok_or_else(|| RoxError::InvalidFormat("bmson `info.init_bpm` is missing or not positive".into()))?;
     let mut report = BmsonReport::default();
-    let parsed_mode = Mode::parse(info.mode_hint.as_deref().unwrap_or("beat-7k"));
+    let hint = info.mode_hint.as_deref().unwrap_or("beat-7k");
+    let parsed_mode = Mode::parse(hint);
     report.unknown_mode_hint = parsed_mode.is_none();
-    let mode = parsed_mode.unwrap_or(Mode::Beat {
-        keys: 7,
-        double: false,
-    });
+    let mode = parsed_mode.unwrap_or(Mode::Beat { keys: 7, double: false });
+    let mut clock = Clock::new(&file, info, init_bpm, &mut report);
 
-    // Pulses: 0 and null are 240, negative is absolute.
-    let resolution = match info.resolution.map(i64::unsigned_abs) {
-        None | Some(0) => 240.0,
-        #[allow(clippy::cast_precision_loss)] // a resolution is small
-        Some(r) => r as f64,
-    };
-    #[allow(clippy::cast_precision_loss)] // pulses of any real chart fit f64 exactly
-    let beat = |y: i64| y as f64 / resolution;
+    let lanes = Lanes::read(&file.sound_channels, &mut report);
+    let scratch = lanes.drafts.iter().any(|d| mode.is_scratch(d.x));
+    let key_count = mode.count(scratch);
+    report.layout = format!("{hint} ({key_count} columns)");
+    let single = lanes.single_audio(&file.sound_channels, &mut report);
+    clock.shift_us = single.as_ref().map_or(0, |&(_, y)| -clock.unshifted_us(y));
 
+    let mut rox = RoxChart::new(key_count);
+    rox.metadata = metadata(info, single.map(|(name, _)| name), &mut report.unsafe_names);
+    rox.timing_points = clock.bpm_points();
+    add_notes(&mut rox, &lanes.drafts, &file.sound_channels, &clock, |x| mode.column(x, scratch), &mut report);
+    if rox.notes.is_empty() {
+        return Err(RoxError::InvalidFormat("bmson file with no playable note".into()));
+    }
+    let plan = slice_plan(&file.sound_channels, &clock, &mut 0); // the names were counted above
+    Ok((rox, report, plan))
+}
+
+fn check_version(version: Option<&str>) -> RoxResult<()> {
+    match version {
+        Some(v) if v.trim().starts_with("1.") => Ok(()),
+        Some(v) => Err(RoxError::InvalidFormat(format!("bmson version {v:?} is not supported (1.x only)"))),
+        None => Err(RoxError::InvalidFormat("bmson without `version` (legacy 0.2x) is not supported".into())),
+    }
+}
+
+fn to_us(seconds: f64) -> i64 {
+    #[allow(clippy::cast_possible_truncation)] // seconds to µs
+    let us = (seconds * 1_000_000.0).round() as i64;
+    us
+}
+
+/// Pulses to chart time: the timeline with stops, the tempo alone (slice lengths), and the shift that puts the single audio at 0.
+struct Clock {
+    resolution: f64,
+    timeline: Timeline,
+    tempo_only: Timeline,
+    shift_us: i64,
+}
+
+impl Clock {
+    fn new(file: &Bmson, info: &Info, init_bpm: f64, report: &mut BmsonReport) -> Self {
+        // Pulses: 0 and null are 240, negative is absolute.
+        let resolution = match info.resolution.map(i64::unsigned_abs) {
+            None | Some(0) => 240.0,
+            #[allow(clippy::cast_precision_loss)] // a resolution is small
+            Some(r) => r as f64,
+        };
+        let changes = tempo_changes(file, resolution, report);
+        let no_stops: Vec<(f64, Change)> = changes.iter().copied().filter(|(_, c)| matches!(c, Change::Bpm(_))).collect();
+        Self {
+            resolution,
+            timeline: Timeline::new(init_bpm, &changes),
+            tempo_only: Timeline::new(init_bpm, &no_stops),
+            shift_us: 0,
+        }
+    }
+
+    fn beat(&self, y: i64) -> f64 {
+        beat_of(y, self.resolution)
+    }
+
+    fn unshifted_us(&self, y: i64) -> i64 {
+        to_us(self.timeline.seconds(self.beat(y)))
+    }
+
+    fn us(&self, y: i64) -> i64 {
+        self.unshifted_us(y) + self.shift_us
+    }
+
+    /// The length of the music from `y` to `next`, stops not counted.
+    fn tempo_len_us(&self, y: i64, next: i64) -> i64 {
+        to_us(self.tempo_only.seconds(self.beat(next))) - to_us(self.tempo_only.seconds(self.beat(y)))
+    }
+
+    fn bpm_points(&self) -> Vec<TimingPoint> {
+        #[allow(clippy::cast_possible_truncation)] // a BPM fits f32
+        let point = |seconds, bpm: f64| TimingPoint::bpm(to_us(seconds) + self.shift_us, bpm as f32);
+        self.timeline.bpm_points().into_iter().map(|p| point(p.seconds, p.bpm)).collect()
+    }
+}
+
+#[allow(clippy::cast_precision_loss)] // pulses of any real chart fit f64 exactly
+fn beat_of(y: i64, resolution: f64) -> f64 {
+    y as f64 / resolution
+}
+
+/// The BPM and stop events by beat; at one beat a BPM change comes before a stop. STOP pulses become 1/48-beat units.
+fn tempo_changes(file: &Bmson, resolution: f64, report: &mut BmsonReport) -> Vec<(f64, Change)> {
     let mut changes: Vec<(f64, u8, Change)> = Vec::new();
     for event in &file.bpm_events {
         if event.y >= 0 && event.bpm.is_finite() && event.bpm > 0.0 {
-            changes.push((beat(event.y), 0, Change::Bpm(event.bpm)));
+            changes.push((beat_of(event.y, resolution), 0, Change::Bpm(event.bpm)));
         } else {
             report.ignored_bpm_events += 1;
         }
     }
-    for event in &file.stop_events {
-        if event.y >= 0 && event.duration > 0 {
-            #[allow(clippy::cast_precision_loss)]
-            changes.push((
-                beat(event.y),
-                1,
-                Change::Stop(event.duration as f64 / resolution * 48.0),
-            ));
-        }
+    for event in file.stop_events.iter().filter(|event| event.y >= 0 && event.duration > 0) {
+        #[allow(clippy::cast_precision_loss)]
+        changes.push((beat_of(event.y, resolution), 1, Change::Stop(event.duration as f64 / resolution * 48.0)));
     }
     changes.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-    let changes: Vec<(f64, Change)> = changes.into_iter().map(|(b, _, c)| (b, c)).collect();
-    let timeline = Timeline::new(init_bpm, &changes);
+    changes.into_iter().map(|(b, _, c)| (b, c)).collect()
+}
 
-    // Notes: playable drafts and background notes.
-    let mut drafts: Vec<Draft> = Vec::new();
-    let mut bgm: Vec<(usize, i64)> = Vec::new();
-    let mut playable_channels = vec![false; file.sound_channels.len()];
-    for (index, channel) in file.sound_channels.iter().enumerate() {
-        for note in &channel.notes {
-            #[allow(clippy::cast_possible_truncation)]
-            // a lane is small, a float lane is rounded down
-            let x = note
-                .x
-                .as_ref()
-                .and_then(|x| x.as_i64().or_else(|| x.as_f64().map(|f| f as i64)))
-                .unwrap_or(0);
-            if note.y < 0 {
-                report.notes_outside_layout += 1;
-            } else if x <= 0 {
-                bgm.push((index, note.y));
-            } else {
-                playable_channels[index] = true;
-                drafts.push(Draft {
-                    y: note.y,
-                    end: note.y.saturating_add(note.l.max(0)),
-                    x,
-                    channel: index,
-                });
+/// The notes of every channel: playable drafts, background notes `(channel, pulse)`, and which channels hold a playable note.
+struct Lanes {
+    drafts: Vec<Draft>,
+    bgm: Vec<(usize, i64)>,
+    playable_channels: Vec<bool>,
+}
+
+impl Lanes {
+    fn read(channels: &[SoundChannel], report: &mut BmsonReport) -> Self {
+        let mut lanes = Self { drafts: Vec::new(), bgm: Vec::new(), playable_channels: vec![false; channels.len()] };
+        for (index, channel) in channels.iter().enumerate() {
+            for note in &channel.notes {
+                let x = lane_of(note);
+                if note.y < 0 {
+                    report.notes_outside_layout += 1;
+                } else if x <= 0 {
+                    lanes.bgm.push((index, note.y));
+                } else {
+                    lanes.playable_channels[index] = true;
+                    lanes.drafts.push(Draft { y: note.y, end: note.y.saturating_add(note.l.max(0)), x, channel: index });
+                }
             }
         }
-    }
-    // A background note at the pulse of a playable note of its channel is dropped (the spec: the slice is shared).
-    let covered: std::collections::HashSet<(usize, i64)> =
-        drafts.iter().map(|d| (d.channel, d.y)).collect();
-    bgm.retain(|key| !covered.contains(key));
-
-    let scratch = drafts.iter().any(|d| mode.is_scratch(d.x));
-    let key_count = mode.count(scratch);
-    report.layout = format!(
-        "{} ({key_count} columns)",
-        info.mode_hint.as_deref().unwrap_or("beat-7k")
-    );
-
-    // Audio: exactly one background note, alone in its channel.
-    let single = (bgm.len() == 1
-        && !playable_channels[bgm[0].0]
-        && file.sound_channels[bgm[0].0].notes.len() == 1)
-        .then(|| bgm[0]);
-    let audio = single.and_then(|(channel, _)| {
-        safe_name(&file.sound_channels[channel].name, &mut report.unsafe_names)
-    });
-    let single = single.filter(|_| audio.is_some());
-    report.single_audio = single.is_some();
-    report.bgm_notes_skipped = if single.is_some() { 0 } else { bgm.len() };
-    let to_us = |seconds: f64| -> i64 {
-        #[allow(clippy::cast_possible_truncation)] // seconds to µs
-        let us = (seconds * 1_000_000.0).round() as i64;
-        us
-    };
-    let shift_us = single.map_or(0, |(_, y)| -to_us(timeline.seconds(beat(y))));
-
-    let mut rox = RoxChart::new(key_count);
-    rox.metadata = metadata(&info, audio, &mut report.unsafe_names);
-    for point in timeline.bpm_points() {
-        #[allow(clippy::cast_possible_truncation)] // a BPM fits f32
-        rox.timing_points.push(TimingPoint::bpm(
-            to_us(point.seconds) + shift_us,
-            point.bpm as f32,
-        ));
+        // A background note at the pulse of a playable note of its channel is dropped (the spec: the slice is shared).
+        let covered: std::collections::HashSet<(usize, i64)> = lanes.drafts.iter().map(|d| (d.channel, d.y)).collect();
+        lanes.bgm.retain(|key| !covered.contains(key));
+        lanes
     }
 
-    let time = |y: i64| to_us(timeline.seconds(beat(y))) + shift_us;
+    /// The chart's audio: exactly one background note, alone in its channel, with a safe name. Returns the name and its pulse.
+    fn single_audio(&self, channels: &[SoundChannel], report: &mut BmsonReport) -> Option<(String, i64)> {
+        let single = match self.bgm[..] {
+            [(channel, y)] if !self.playable_channels[channel] && channels[channel].notes.len() == 1 => {
+                safe_name(&channels[channel].name, &mut report.unsafe_names).map(|name| (name, y))
+            }
+            _ => None,
+        };
+        report.single_audio = single.is_some();
+        report.bgm_notes_skipped = if single.is_some() { 0 } else { self.bgm.len() };
+        single
+    }
+}
+
+/// The lane `x` of a note; 0 (background) when null, a float lane is rounded down.
+fn lane_of(note: &BmsonNote) -> i64 {
+    #[allow(clippy::cast_possible_truncation)] // a lane is small
+    note.x.as_ref().and_then(|x| x.as_i64().or_else(|| x.as_f64().map(|f| f as i64))).unwrap_or(0)
+}
+
+/// Places the drafts on their columns, drops overlapping notes (counted) and gives each kept note its channel's sound.
+fn add_notes(
+    rox: &mut RoxChart,
+    drafts: &[Draft],
+    channels: &[SoundChannel],
+    clock: &Clock,
+    column_of: impl Fn(i64) -> Option<u8>,
+    report: &mut BmsonReport,
+) {
     let mut built: Vec<(Note, usize)> = Vec::with_capacity(drafts.len());
-    for draft in &drafts {
-        let Some(column) = mode.column(draft.x, scratch) else {
+    for draft in drafts {
+        let Some(column) = column_of(draft.x) else {
             report.notes_outside_layout += 1;
             continue;
         };
-        let (start, end) = (time(draft.y), time(draft.end));
-        let note = if end > start {
-            Note::hold(start, end - start, column)
-        } else {
-            Note::tap(start, column)
-        };
+        let (start, end) = (clock.us(draft.y), clock.us(draft.end));
+        let note = if end > start { Note::hold(start, end - start, column) } else { Note::tap(start, column) };
         built.push((note, draft.channel));
     }
     built.sort_by_key(|(note, _)| (note.time_us, u8::from(!note.is_hold()), note.column));
-    let mut last_end = vec![i64::MIN; usize::from(key_count)];
-    let mut last_start = vec![i64::MIN; usize::from(key_count)];
+    let mut last = vec![(i64::MIN, i64::MIN); usize::from(rox.key_count)];
     let mut sounds: HashMap<String, u16> = HashMap::new();
     for (mut note, channel) in built {
-        let column = usize::from(note.column);
-        if note.time_us < last_end[column] || note.time_us == last_start[column] {
+        let (start, end) = &mut last[usize::from(note.column)];
+        if note.time_us < *end || note.time_us == *start {
             report.overlapping_notes_dropped += 1;
             continue;
         }
-        last_end[column] = note.end_time_us();
-        last_start[column] = note.time_us;
-        if let Some(name) = safe_name(&file.sound_channels[channel].name, &mut report.unsafe_names)
-        {
+        (*start, *end) = (note.time_us, note.end_time_us());
+        if let Some(name) = safe_name(&channels[channel].name, &mut report.unsafe_names) {
             let index = *sounds.entry(name.clone()).or_insert_with(|| {
                 rox.hitsounds.push(Hitsound::new(name));
                 u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
@@ -423,15 +460,6 @@ fn convert(data: &[u8]) -> RoxResult<(RoxChart, BmsonReport, AudioPlan)> {
         }
         rox.notes.push(note);
     }
-    if rox.notes.is_empty() {
-        return Err(RoxError::InvalidFormat(
-            "bmson file with no playable note".into(),
-        ));
-    }
-    let no_stops: Vec<(f64, Change)> = changes.iter().copied().filter(|(_, c)| matches!(c, Change::Bpm(_))).collect();
-    let tempo_only = Timeline::new(init_bpm, &no_stops);
-    let plan = slice_plan(&file.sound_channels, &|y| beat(y), &timeline, &tempo_only, shift_us, &to_us, &mut 0); // the names were counted above
-    Ok((rox, report, plan))
 }
 
 /// Slices every sound channel into [`SoundEvent`]s, as beatoraja's decoder does.
@@ -442,38 +470,19 @@ fn convert(data: &[u8]) -> RoxResult<(RoxChart, BmsonReport, AudioPlan)> {
 /// does not restart, and to the end of the file otherwise (and for the last pulse). Lengths are measured on the tempo
 /// only, stops not counted: the music pauses at a stop. The spec's example table gives the restart pulses a file offset
 /// that keeps growing; beatoraja and the spec's own text ("restart the audio") start them at 0, and so does this.
-fn slice_plan(
-    channels: &[SoundChannel],
-    beat: &dyn Fn(i64) -> f64,
-    timeline: &Timeline,
-    tempo_only: &Timeline,
-    shift_us: i64,
-    to_us: &dyn Fn(f64) -> i64,
-    refused: &mut usize,
-) -> AudioPlan {
+fn slice_plan(channels: &[SoundChannel], clock: &Clock, refused: &mut usize) -> AudioPlan {
     let mut events = Vec::new();
     for channel in channels {
         let Some(name) = safe_name(&channel.name, refused) else { continue };
-        // (pulse, restarts)
-        let mut pulses: Vec<(i64, bool)> = Vec::new();
-        let mut notes: Vec<&BmsonNote> = channel.notes.iter().filter(|n| n.y >= 0).collect();
-        notes.sort_by_key(|n| n.y);
-        for note in notes {
-            match pulses.last_mut() {
-                Some((y, restarts)) if *y == note.y => *restarts |= !note.c,
-                _ => pulses.push((note.y, !note.c)),
-            }
-        }
+        let pulses = pulses_of(channel);
         let mut start = 0_i64;
         for (index, &(y, restarts)) in pulses.iter().enumerate() {
             if restarts {
                 start = 0;
             }
-            let len = pulses.get(index + 1).filter(|(_, next_restarts)| !next_restarts).map(|&(next, _)| {
-                to_us(tempo_only.seconds(beat(next))) - to_us(tempo_only.seconds(beat(y)))
-            });
+            let len = pulses.get(index + 1).filter(|(_, next_restarts)| !next_restarts).map(|&(next, _)| clock.tempo_len_us(y, next));
             events.push(SoundEvent {
-                time_us: to_us(timeline.seconds(beat(y))) + shift_us,
+                time_us: clock.us(y),
                 file: name.as_str().into(),
                 from_us: start,
                 len_us: len,
@@ -485,6 +494,20 @@ fn slice_plan(
         }
     }
     AudioPlan::new(events)
+}
+
+/// The distinct pulses of a channel's notes in order, and whether each restarts the audio.
+fn pulses_of(channel: &SoundChannel) -> Vec<(i64, bool)> {
+    let mut notes: Vec<&BmsonNote> = channel.notes.iter().filter(|n| n.y >= 0).collect();
+    notes.sort_by_key(|n| n.y);
+    let mut pulses: Vec<(i64, bool)> = Vec::new();
+    for note in notes {
+        match pulses.last_mut() {
+            Some((y, restarts)) if *y == note.y => *restarts |= !note.c,
+            _ => pulses.push((note.y, !note.c)),
+        }
+    }
+    pulses
 }
 
 fn metadata(info: &Info, audio: Option<String>, refused: &mut usize) -> Metadata {

@@ -147,10 +147,10 @@ pub(crate) fn from_beatmap(beatmap: &super::types::OsuBeatmap) -> RoxChart {
     build_timing_points(beatmap, &mut chart);
     build_notes(beatmap, key_count, &mut chart);
     // A map without any BPM line plays in osu! at its default beat length of 1000 ms (60 BPM, `TimingControlPoint.DEFAULT`).
-    if let Some(first) = chart.notes.first().map(|note| note.time_us) {
-        if !chart.timing_points.iter().any(|point| matches!(point, TimingPoint::Bpm { .. })) {
-            chart.timing_points.insert(0, TimingPoint::Bpm { time_us: first.min(0), bpm: 60.0, signature: 4 });
-        }
+    if let Some(first) = chart.notes.first().map(|note| note.time_us)
+        && !chart.timing_points.iter().any(|point| matches!(point, TimingPoint::Bpm { .. }))
+    {
+        chart.timing_points.insert(0, TimingPoint::Bpm { time_us: first.min(0), bpm: 60.0, signature: 4 });
     }
     chart
 }

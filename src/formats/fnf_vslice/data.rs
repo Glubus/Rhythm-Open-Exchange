@@ -177,48 +177,9 @@ pub(super) fn load(chart: &[u8], metadata: &[u8]) -> RoxResult<Loaded> {
 /// an absent numerator is 4. At one time the last entry wins; an entry that changes neither the BPM nor the numerator is dropped.
 fn tempo_map(changes: &[TimeChange]) -> RoxResult<(Vec<TimingPoint>, TempoReport)> {
     let mut report = TempoReport::default();
-    if changes.is_empty() {
-        return Err(bad("timeChanges is empty (an entry at t = 0 is required)"));
-    }
-    let mut rows: Vec<(f64, &TimeChange)> = Vec::with_capacity(changes.len());
-    for change in changes {
-        if !change.t.is_finite() || change.t.abs() > MAX_MS {
-            return Err(bad(format!(
-                "time change at t = {} is out of range",
-                change.t
-            )));
-        }
-        let mut t = change.t;
-        if t < 0.0 {
-            t = 0.0;
-            report.negative_time_changes_clamped += 1;
-        }
-        rows.push((t, change));
-    }
-    report.unsorted_time_changes = rows.windows(2).any(|pair| pair[1].0 < pair[0].0);
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    if rows[0].0 != 0.0 {
-        return Err(bad(format!(
-            "the first time change is at t = {} ms, not 0",
-            rows[0].0
-        )));
-    }
-    // One entry per time: the last one wins (the sort is stable).
-    let mut kept: Vec<(f64, &TimeChange)> = Vec::with_capacity(rows.len());
-    for row in rows {
-        if kept
-            .last()
-            .is_some_and(|last| last.0.to_bits() == row.0.to_bits())
-        {
-            kept.pop();
-            report.same_time_changes_replaced += 1;
-        }
-        kept.push(row);
-    }
-
+    let kept = ordered_changes(changes, &mut report)?;
     let mut points: Vec<TimingPoint> = Vec::with_capacity(kept.len());
     let mut bpm = f64::NAN;
-    let mut previous: Option<(f32, u8)> = None;
     for (position, &(t, change)) in kept.iter().enumerate() {
         match change.bpm {
             Some(value) if value.is_finite() && value > 0.0 && value <= MAX_BPM => bpm = value,
@@ -233,22 +194,47 @@ fn tempo_map(changes: &[TimeChange]) -> RoxResult<(Vec<TimingPoint>, TempoReport
                 .filter(|n| *n > 0)
                 .ok_or_else(|| bad(format!("time change at t = {t} has numerator {n}")))?,
         };
-        if change.d.is_some_and(|d| d != 4) {
-            report.non_quarter_denominators += 1;
-        }
+        report.non_quarter_denominators += usize::from(change.d.is_some_and(|d| d != 4));
         #[allow(clippy::cast_possible_truncation)] // bounded by MAX_BPM
-        let as_f32 = bpm as f32;
-        if previous == Some((as_f32, signature)) {
+        let bpm = bpm as f32;
+        let repeated = matches!(points.last(),
+            Some(&TimingPoint::Bpm { bpm: last, signature: was, .. }) if (last, was) == (bpm, signature));
+        if repeated {
             report.repeated_time_changes += 1;
         } else {
             let time_us = ms_to_us(t).ok_or_else(|| bad("time change out of range"))?;
-            points.push(TimingPoint::Bpm {
-                time_us,
-                bpm: as_f32,
-                signature,
-            });
-            previous = Some((as_f32, signature));
+            points.push(TimingPoint::Bpm { time_us, bpm, signature });
         }
     }
     Ok((points, report))
+}
+
+/// The entries by time, a time before 0 read as 0; the first must be at 0; at one time the last entry wins (the sort is stable).
+fn ordered_changes<'a>(changes: &'a [TimeChange], report: &mut TempoReport) -> RoxResult<Vec<(f64, &'a TimeChange)>> {
+    if changes.is_empty() {
+        return Err(bad("timeChanges is empty (an entry at t = 0 is required)"));
+    }
+    let mut rows: Vec<(f64, &TimeChange)> = Vec::with_capacity(changes.len());
+    for change in changes {
+        if !change.t.is_finite() || change.t.abs() > MAX_MS {
+            return Err(bad(format!("time change at t = {} is out of range", change.t)));
+        }
+        let negative = change.t < 0.0;
+        report.negative_time_changes_clamped += usize::from(negative);
+        rows.push((if negative { 0.0 } else { change.t }, change));
+    }
+    report.unsorted_time_changes = rows.windows(2).any(|pair| pair[1].0 < pair[0].0);
+    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if rows[0].0 != 0.0 {
+        return Err(bad(format!("the first time change is at t = {} ms, not 0", rows[0].0)));
+    }
+    let mut kept: Vec<(f64, &TimeChange)> = Vec::with_capacity(rows.len());
+    for row in rows {
+        if kept.last().is_some_and(|last| last.0.to_bits() == row.0.to_bits()) {
+            kept.pop();
+            report.same_time_changes_replaced += 1;
+        }
+        kept.push(row);
+    }
+    Ok(kept)
 }

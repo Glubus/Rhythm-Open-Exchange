@@ -343,66 +343,57 @@ fn read_objects(
             report.unsupported_lines += 1;
             continue;
         }
-        let bytes = name.as_bytes();
-        if bytes.len() == 5 && name.starts_with("BPM") {
-            continue; // defined in pass 2
-        }
-        if bytes.len() == 5 && name.starts_with("TIL") {
-            report.time_scale_changes += line
-                .data
-                .split(',')
-                .filter(|s| !s.trim().is_empty())
-                .count();
-            continue;
-        }
-        if bytes.len() == 5 && name.starts_with("ATR") {
-            report.ignored_directives += 1;
+        if is_directive_line(line, report) {
             continue;
         }
         let Some(measure) = measure_number(name).map(|n| n + line.base) else {
             report.unsupported_lines += 1;
             continue;
         };
-        let into = |list: &mut Vec<Raw>, budget: &mut usize, report: &mut SekaiReport| {
-            read_notes(line, measure, grid, list, budget, report)
-        };
-        match (bytes.len(), bytes[3]) {
-            (5, b'0') if bytes[4] == b'2' => {} // measure length, read in pass 2
-            (5, b'0') if bytes[4] == b'8' => read_bpm_changes(
-                line,
-                measure,
-                grid,
-                definitions,
-                &mut found.bpm,
-                &mut budget,
-                report,
-            )?,
-            (5, b'1') => into(&mut found.taps, &mut budget, report)?,
-            (5, b'5') => into(&mut found.directionals, &mut budget, report)?,
-            (6, b'3') => {
-                let channel = bytes[5].to_ascii_lowercase();
-                into(
-                    found.slides.entry(channel).or_default(),
-                    &mut budget,
-                    report,
-                )?;
+        let bytes = name.as_bytes();
+        let channel = || bytes[5].to_ascii_lowercase();
+        let list = match (bytes.len(), bytes[3]) {
+            (5, b'0') if bytes[4] == b'2' => continue, // measure length, read in pass 2
+            (5, b'0') if bytes[4] == b'8' => {
+                read_bpm_changes(line, measure, grid, definitions, &mut found.bpm, &mut budget, report)?;
+                continue;
             }
-            (6, b'9') => {
-                let channel = bytes[5].to_ascii_lowercase();
-                into(
-                    found.guides.entry(channel).or_default(),
-                    &mut budget,
-                    report,
-                )?;
-            }
+            (5, b'1') => &mut found.taps,
+            (5, b'5') => &mut found.directionals,
+            (6, b'3') => found.slides.entry(channel()).or_default(),
+            (6, b'9') => found.guides.entry(channel()).or_default(),
             (6, b'2' | b'4') => {
-                let pairs = slots(line, measure, grid, &mut budget, report)?;
-                report.unsupported_notes += pairs.len();
+                report.unsupported_notes += slots(line, measure, grid, &mut budget, report)?.len();
+                continue;
             }
-            _ => report.unsupported_lines += 1,
-        }
+            _ => {
+                report.unsupported_lines += 1;
+                continue;
+            }
+        };
+        read_notes(line, measure, grid, list, &mut budget, report)?;
     }
     Ok(found)
+}
+
+/// The 5-character lines that are no objects: `#BPMzz` (defined in pass 2), `#TILzz` time scales and `#ATRzz` attributes (counted).
+fn is_directive_line(line: &DataLine<'_>, report: &mut SekaiReport) -> bool {
+    let name = line.header;
+    if name.len() != 5 {
+        return false;
+    }
+    match &name[..3] {
+        "BPM" => true,
+        "TIL" => {
+            report.time_scale_changes += line.data.split(',').filter(|s| !s.trim().is_empty()).count();
+            true
+        }
+        "ATR" => {
+            report.ignored_directives += 1;
+            true
+        }
+        _ => false,
+    }
 }
 
 /// The non-empty slots of a line. `budget` counts the objects still allowed in the file.
@@ -515,58 +506,31 @@ fn resolve(
     guides: BTreeMap<u8, Vec<Raw>>,
     report: &mut SekaiReport,
 ) -> Vec<ScoreNote> {
-    let place = |raw: &Raw| (raw.key, raw.x);
-    // `susToUSC`: only the slide kinds 1, 2, 3 and 5 keep a tap from being a note.
-    let slide_places: HashSet<(i64, u32)> = slides
-        .values()
-        .flatten()
-        .filter(|raw| matches!(raw.kind, 1 | 2 | 3 | 5))
-        .map(place)
-        .collect();
-    let guide_places: HashSet<(i64, u32)> = guides.values().flatten().map(place).collect();
-    let directional_places: HashSet<(i64, u32)> = directionals.iter().map(place).collect();
+    let places = Places {
+        // `susToUSC`: only the slide kinds 1, 2, 3 and 5 keep a tap from being a note.
+        slides: slides.values().flatten().filter(|raw| matches!(raw.kind, 1 | 2 | 3 | 5)).map(place).collect(),
+        guides: guides.values().flatten().map(place).collect(),
+        directionals: directionals.iter().map(place).collect(),
+    };
     let mut note_places: HashSet<(i64, u32)> = HashSet::new();
     let mut notes = Vec::new();
-
     for tap in taps {
-        let at = place(tap);
         match tap.kind {
             1 | 2 | 5 | 6 => {
-                note_places.insert(at);
-                if slide_places.contains(&at) {
-                    report.slide_modifiers += 1;
-                } else if tap.kind >= 5 {
-                    report.traces += 1;
-                } else if tap.x == FEVER_LANE && tap.width == 1 {
-                    report.fever_markers += 1;
-                } else if let Some(column) = stage_column(tap) {
-                    if tap.kind == 2 {
-                        report.critical_flags += 1;
-                    }
-                    if directional_places.contains(&at) {
-                        report.flicks += 1;
-                    }
-                    notes.push(ScoreNote {
-                        beat: tap.beat,
-                        end_beat: None,
-                        column,
-                    });
-                } else {
-                    report.notes_outside_lanes += 1;
-                }
+                note_places.insert(place(tap));
+                notes.extend(places.tap_note(tap, report));
             }
-            3 | 7 | 8 => overlay(&slide_places, &guide_places, at, report),
+            3 | 7 | 8 => places.overlay(place(tap), report),
             4 => report.skill_markers += 1,
             _ => report.unsupported_notes += 1,
         }
     }
     for directional in directionals {
         let at = place(directional);
-        if !note_places.contains(&at) || slide_places.contains(&at) {
-            overlay(&slide_places, &guide_places, at, report);
+        if !note_places.contains(&at) || places.slides.contains(&at) {
+            places.overlay(at, report);
         }
     }
-
     for points in slides.into_values() {
         for slide in channel_slides(points) {
             read_slide(&slide, &mut notes, report);
@@ -578,19 +542,47 @@ fn resolve(
     notes
 }
 
-/// An overlaid object that is not a note: a modifier of a slide or guide joint, or stray.
-fn overlay(
-    slides: &HashSet<(i64, u32)>,
-    guides: &HashSet<(i64, u32)>,
-    at: (i64, u32),
-    report: &mut SekaiReport,
-) {
-    if slides.contains(&at) {
-        report.slide_modifiers += 1;
-    } else if guides.contains(&at) {
-        report.guide_modifiers += 1;
-    } else {
-        report.stray_overlays += 1;
+/// Where an object is: its tick and leftmost lane.
+fn place(raw: &Raw) -> (i64, u32) {
+    (raw.key, raw.x)
+}
+
+/// The places of the slide joints, guide joints and directionals.
+struct Places {
+    slides: HashSet<(i64, u32)>,
+    guides: HashSet<(i64, u32)>,
+    directionals: HashSet<(i64, u32)>,
+}
+
+impl Places {
+    /// A tap of kind 1, 2, 5 or 6: a note when it is on the stage and no slide modifier, trace or fever marker (counted).
+    fn tap_note(&self, tap: &Raw, report: &mut SekaiReport) -> Option<ScoreNote> {
+        let at = place(tap);
+        if self.slides.contains(&at) {
+            report.slide_modifiers += 1;
+        } else if tap.kind >= 5 {
+            report.traces += 1;
+        } else if tap.x == FEVER_LANE && tap.width == 1 {
+            report.fever_markers += 1;
+        } else if let Some(column) = stage_column(tap) {
+            report.critical_flags += usize::from(tap.kind == 2);
+            report.flicks += usize::from(self.directionals.contains(&at));
+            return Some(ScoreNote { beat: tap.beat, end_beat: None, column });
+        } else {
+            report.notes_outside_lanes += 1;
+        }
+        None
+    }
+
+    /// An overlaid object that is not a note: a modifier of a slide or guide joint, or stray.
+    fn overlay(&self, at: (i64, u32), report: &mut SekaiReport) {
+        if self.slides.contains(&at) {
+            report.slide_modifiers += 1;
+        } else if self.guides.contains(&at) {
+            report.guide_modifiers += 1;
+        } else {
+            report.stray_overlays += 1;
+        }
     }
 }
 

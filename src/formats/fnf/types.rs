@@ -38,7 +38,7 @@ pub struct FnfSong {
     /// the lanes 0-3 to the player and 4-7 to the opponent whatever `mustHitSection` says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
-    /// Keys per side for engines with more lanes (NightmareVision's `keys`; 4 when absent or not a count from 1 to 9).
+    /// Keys per side for engines with more lanes (`NightmareVision`'s `keys`; 4 when absent or not a count from 1 to 9).
     #[serde(default, deserialize_with = "lenient_keys", skip_serializing_if = "Option::is_none")]
     pub keys: Option<u8>,
 }

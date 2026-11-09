@@ -314,39 +314,16 @@ fn is_192(chars: &[char], start: usize) -> bool {
     false
 }
 
+/// Beats per character: 1/8 of a measure of 4 beats.
+const EIGHTH: f64 = 4.0 / 8.0;
+
 /// The notes of one pad: `(column, row) -> is a hold head`. A later write on a cell replaces the
 /// earlier one, as `SetTapNote` does.
-fn read_pad(
-    steps: &str,
-    style: Style,
-    pad: u8,
-    cells: &mut BTreeMap<(u8, i64), bool>,
-    stats: &mut StepStats,
-) {
-    // Beats per character: 1/8 of a measure of 4 beats.
-    const EIGHTH: f64 = 4.0 / 8.0;
-    let chars: Vec<char> = steps
-        .chars()
-        .filter(|c| !matches!(c, '\n' | '\r' | '\t' | ' '))
-        .collect();
-    let mut place = |c: char, head: bool, row: i64, stats: &mut StepStats| {
-        let Some(panels) = panels_of(c) else {
-            stats.invalid_characters += 1;
-            return;
-        };
-        for panel in panels.into_iter().flatten() {
-            if let Some(column) = style.column(panel, pad) {
-                cells.insert((column, row), head);
-            } else {
-                stats.missing_panels += 1;
-            }
-        }
-    };
+fn read_pad(steps: &str, style: Style, pad: u8, cells: &mut BTreeMap<(u8, i64), bool>, stats: &mut StepStats) {
+    let chars: Vec<char> = steps.chars().filter(|c| !matches!(c, '\n' | '\r' | '\t' | ' ')).collect();
+    let mut reader = PadReader { chars: &chars, i: 0, style, pad, cells, stats };
     let (mut beat, mut step) = (0.0_f64, EIGHTH);
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        i += 1;
+    while let Some(c) = reader.next() {
         match c {
             '(' => step = 4.0 / 16.0,
             '[' => step = 4.0 / 24.0,
@@ -354,42 +331,70 @@ fn read_pad(
             '`' => step = 4.0 / 192.0,
             ')' | ']' | '}' | '\'' | '>' => step = EIGHTH,
             // A hold marker with no arrow before it.
-            '!' => stats.invalid_characters += 1,
+            '!' => reader.stats.invalid_characters += 1,
+            // Old files used `<..>` as the 1/192 marker.
+            '<' if is_192(&chars, reader.i) => step = 4.0 / 192.0,
             _ => {
-                let jump = c == '<';
-                if jump && is_192(&chars, i) {
-                    // Old files used `<..>` as the 1/192 marker.
-                    step = 4.0 / 192.0;
-                    continue;
-                }
                 #[allow(clippy::cast_possible_truncation)] // a beat is far below f32 range limits
                 let row = beat_to_row(beat as f32);
-                // Without `<`, the character just read is the (only) arrow of this slot.
-                let mut next = (!jump).then_some(c);
-                loop {
-                    let c = if let Some(c) = next.take() {
-                        c
-                    } else {
-                        let Some(&c) = chars.get(i) else { break };
-                        i += 1;
-                        c
-                    };
-                    if jump && c == '>' {
-                        break;
-                    }
-                    place(c, false, row, stats);
-                    if chars.get(i) == Some(&'!') {
-                        // `show!hold`: the hold starts on the panels of the character after `!`.
-                        i += 1;
-                        let hold = chars.get(i).copied().unwrap_or('\0');
-                        i += 1;
-                        place(hold, true, row, stats);
-                    }
-                    if !jump {
-                        break;
-                    }
+                if c == '<' {
+                    reader.jump(row);
+                } else {
+                    reader.arrow(c, row);
                 }
                 beat += step;
+            }
+        }
+    }
+}
+
+/// The characters of one pad's steps being read, and where their notes go.
+struct PadReader<'a> {
+    chars: &'a [char],
+    i: usize,
+    style: Style,
+    pad: u8,
+    cells: &'a mut BTreeMap<(u8, i64), bool>,
+    stats: &'a mut StepStats,
+}
+
+impl PadReader<'_> {
+    fn next(&mut self) -> Option<char> {
+        let c = self.chars.get(self.i).copied()?;
+        self.i += 1;
+        Some(c)
+    }
+
+    /// `<...>`: every arrow up to `>` sounds in the same slot.
+    fn jump(&mut self, row: i64) {
+        while let Some(c) = self.next() {
+            if c == '>' {
+                break;
+            }
+            self.arrow(c, row);
+        }
+    }
+
+    /// An arrow character, and the hold after it: `show!hold` starts a hold on the panels of the character after `!`.
+    fn arrow(&mut self, c: char, row: i64) {
+        self.place(c, false, row);
+        if self.chars.get(self.i) == Some(&'!') {
+            self.i += 1;
+            let hold = self.next().unwrap_or('\0');
+            self.place(hold, true, row);
+        }
+    }
+
+    fn place(&mut self, c: char, head: bool, row: i64) {
+        let Some(panels) = panels_of(c) else {
+            self.stats.invalid_characters += 1;
+            return;
+        };
+        for panel in panels.into_iter().flatten() {
+            if let Some(column) = self.style.column(panel, self.pad) {
+                self.cells.insert((column, row), head);
+            } else {
+                self.stats.missing_panels += 1;
             }
         }
     }

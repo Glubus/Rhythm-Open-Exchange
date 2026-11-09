@@ -349,170 +349,148 @@ fn drum_slot(drum: Pad) -> u8 {
     }
 }
 
-#[allow(clippy::too_many_lines)] // one pass: sounds, columns, holds, notes, plan
 fn convert(song: &Song, part: Part) -> Built {
-    let file = &song.file;
-    let mut report = DtxReport {
-        charset: song.charset,
-        part,
-        branches_skipped: file.report.branches_skipped,
-        invalid_data_lines: file.report.invalid_data_lines,
-        odd_data_lines: file.report.odd_data_lines,
-        ignored_bar_lengths: file.report.ignored_bar_lengths,
-        ignored_bpm_changes: song.ignored_bpm_changes,
-        hidden_chips: file.report.hidden_chips,
-        blank_hit_sounds: file.report.blank_hit_sounds,
-        wailing_chips: file.report.wailing_chips,
-        fill_in_chips: file.report.fill_in_chips,
-        visual_chips: file.report.visual_chips,
-        inert_chips: file.report.inert_chips,
-        unknown_chips: file.report.unknown_chips,
-        unsafe_names: file.report.unsafe_names,
-        dtxv_play_speed_ignored: file.report.dtxv_play_speed_ignored,
-        path_wav_ignored: file.report.path_wav_ignored,
-        ..DtxReport::default()
-    };
-
-    // Sort the chips: background sounds, the chips of this instrument, the hold markers.
-    let mut background: Vec<(Chip, &Sound)> = Vec::new();
-    let mut hits: Vec<Hit> = Vec::new();
-    let mut markers: Vec<Chip> = Vec::new();
-    for chip in &file.chips {
-        let hit = |what: u8| Hit {
-            chip: *chip,
-            pos: position(chip),
-            time_us: 0,
-            what,
-            sound: song.sound(chip),
-        };
-        match classify(chip.channel) {
-            Role::Background | Role::Effect => {
-                if let Some(sound) = song.sound(chip) {
-                    background.push((*chip, sound));
-                }
-            }
-            Role::Drum(drum) => {
-                if part == Part::Drums {
-                    match drum {
-                        Pad::HiHatOpen => report.hi_hat_open_notes += 1,
-                        Pad::LeftPedal | Pad::LeftBassDrum => report.left_pedal_notes_folded += 1,
-                        _ => {}
-                    }
-                    hits.push(hit(drum_slot(drum)));
-                } else {
-                    report.other_instrument_chips += 1;
-                }
-            }
-            Role::Fret { part: of, buttons } => {
-                if of == part {
-                    hits.push(hit(buttons));
-                } else {
-                    report.other_instrument_chips += 1;
-                }
-            }
-            Role::HoldMarker(of) if of == part => markers.push(*chip),
-            _ => {}
-        }
-    }
-    report.background_sounds = background.len();
+    let mut report = report_of(song, part);
+    let mut chips = PartChips::sort(song, part, &mut report);
 
     // The audio of the chart: the one background sound, when it is the only sound of the chart (see `mod.rs`).
-    let single =
-        (background.len() == 1 && hits.iter().all(|h| h.sound.is_none())).then(|| background[0]);
+    let single = match chips.background[..] {
+        [only] if chips.hits.iter().all(|h| h.sound.is_none()) => Some(only),
+        _ => None,
+    };
     report.single_audio = single.is_some();
     let shift_us = single.map_or(0, |(chip, _)| -to_us(song.seconds(&chip)));
-    for hit in &mut hits {
+    for hit in &mut chips.hits {
         hit.time_us = to_us(song.seconds(&hit.chip)) + shift_us;
     }
-    hits.sort_by(|a, b| a.pos.cmp(&b.pos).then(a.chip.channel.cmp(&b.chip.channel)));
+    chips.hits.sort_by(|a, b| a.pos.cmp(&b.pos).then(a.chip.channel.cmp(&b.chip.channel)));
 
-    // Columns.
-    let columns = Columns::new(part, &hits);
+    let columns = Columns::new(part, &chips.hits);
     report.layout.clone_from(&columns.description);
     let mut rox = RoxChart::new(columns.key_count);
     rox.metadata = metadata(song, part, single.map(|(_, sound)| sound));
     for point in song.timeline.bpm_points() {
         #[allow(clippy::cast_possible_truncation)] // a BPM fits f32
-        rox.timing_points.push(TimingPoint::bpm(
-            to_us(point.seconds) + shift_us,
-            point.bpm as f32,
-        ));
+        rox.timing_points.push(TimingPoint::bpm(to_us(point.seconds) + shift_us, point.bpm as f32));
     }
 
     // Holds (guitar and bass).
-    let ends = holds(song, &hits, &markers);
-    report.hold_markers_dropped = markers.len() - 2 * ends.len();
+    let ends = holds(song, &chips.hits, &chips.markers);
+    report.hold_markers_dropped = chips.markers.len() - 2 * ends.len();
+    let end_us = |index: usize| ends.get(&index).map(|end| to_us(song.timeline.seconds(*end)) + shift_us);
+    add_notes(&mut rox, &chips.hits, &columns, end_us, &mut report);
+    let holds = rox.notes.iter().filter(|note| note.is_hold()).count();
+    let plan = audio_plan(song, &chips, shift_us);
+    Built { chart: rox, report, plan, part, level: level_of(song, part), holds }
+}
 
-    // Notes, sorted, with the overlaps of a column removed.
+/// The report of an instrument, with what the parser counted for the whole file.
+fn report_of(song: &Song, part: Part) -> DtxReport {
+    let parsed = &song.file.report;
+    DtxReport {
+        charset: song.charset,
+        part,
+        branches_skipped: parsed.branches_skipped,
+        invalid_data_lines: parsed.invalid_data_lines,
+        odd_data_lines: parsed.odd_data_lines,
+        ignored_bar_lengths: parsed.ignored_bar_lengths,
+        ignored_bpm_changes: song.ignored_bpm_changes,
+        hidden_chips: parsed.hidden_chips,
+        blank_hit_sounds: parsed.blank_hit_sounds,
+        wailing_chips: parsed.wailing_chips,
+        fill_in_chips: parsed.fill_in_chips,
+        visual_chips: parsed.visual_chips,
+        inert_chips: parsed.inert_chips,
+        unknown_chips: parsed.unknown_chips,
+        unsafe_names: parsed.unsafe_names,
+        dtxv_play_speed_ignored: parsed.dtxv_play_speed_ignored,
+        path_wav_ignored: parsed.path_wav_ignored,
+        ..DtxReport::default()
+    }
+}
+
+/// The chips one instrument reads: background sounds, the instrument's own chips, its hold markers.
+struct PartChips<'a> {
+    background: Vec<(Chip, &'a Sound)>,
+    hits: Vec<Hit<'a>>,
+    markers: Vec<Chip>,
+}
+
+impl<'a> PartChips<'a> {
+    fn sort(song: &'a Song, part: Part, report: &mut DtxReport) -> Self {
+        let mut chips = Self { background: Vec::new(), hits: Vec::new(), markers: Vec::new() };
+        for chip in &song.file.chips {
+            let hit = |what: u8| Hit { chip: *chip, pos: position(chip), time_us: 0, what, sound: song.sound(chip) };
+            match classify(chip.channel) {
+                Role::Background | Role::Effect => chips.background.extend(song.sound(chip).map(|sound| (*chip, sound))),
+                Role::Drum(drum) if part == Part::Drums => {
+                    match drum {
+                        Pad::HiHatOpen => report.hi_hat_open_notes += 1,
+                        Pad::LeftPedal | Pad::LeftBassDrum => report.left_pedal_notes_folded += 1,
+                        _ => {}
+                    }
+                    chips.hits.push(hit(drum_slot(drum)));
+                }
+                Role::Fret { part: of, buttons } if of == part => chips.hits.push(hit(buttons)),
+                Role::Drum(_) | Role::Fret { .. } => report.other_instrument_chips += 1,
+                Role::HoldMarker(of) if of == part => chips.markers.push(*chip),
+                _ => {}
+            }
+        }
+        report.background_sounds = chips.background.len();
+        chips
+    }
+}
+
+/// One note per column a hit plays (a hold when `end_us` gives its end), sorted, the overlaps of a column dropped (counted);
+/// each kept note gets its chip's sound.
+fn add_notes(rox: &mut RoxChart, hits: &[Hit], columns: &Columns, end_us: impl Fn(usize) -> Option<i64>, report: &mut DtxReport) {
     let mut built: Vec<(Note, Option<&Sound>)> = Vec::with_capacity(hits.len());
     for (index, hit) in hits.iter().enumerate() {
-        let end = ends
-            .get(&index)
-            .map(|end| to_us(song.timeline.seconds(*end)) + shift_us);
+        let end = end_us(index);
         for column in columns.of(hit.what) {
             let note = match end {
-                Some(end) if end > hit.time_us => {
-                    Note::hold(hit.time_us, end.saturating_sub(hit.time_us), column)
-                }
+                Some(end) if end > hit.time_us => Note::hold(hit.time_us, end.saturating_sub(hit.time_us), column),
                 _ => Note::tap(hit.time_us, column),
             };
             built.push((note, hit.sound));
         }
     }
     built.sort_by_key(|(note, _)| (note.time_us, !note.is_hold(), note.column));
-    let mut last_end = vec![i64::MIN; usize::from(columns.key_count)];
-    let mut last_start = vec![i64::MIN; usize::from(columns.key_count)];
+    let mut last = vec![(i64::MIN, i64::MIN); usize::from(columns.key_count)];
     let mut sounds: HashMap<(&str, u8), u16> = HashMap::new();
-    let mut holds_built = 0;
     for (mut note, sound) in built {
-        let column = usize::from(note.column);
-        if note.time_us < last_end[column] || note.time_us == last_start[column] {
+        let (start, end) = &mut last[usize::from(note.column)];
+        if note.time_us < *end || note.time_us == *start {
             report.overlapping_notes_dropped += 1;
             continue;
         }
-        last_end[column] = note.end_time_us();
-        last_start[column] = note.time_us;
+        (*start, *end) = (note.time_us, note.end_time_us());
         if let Some(sound) = sound {
-            let index = *sounds
-                .entry((sound.name.as_str(), sound.volume))
-                .or_insert_with(|| {
-                    rox.hitsounds.push(if sound.volume == 100 {
-                        Hitsound::new(sound.name.as_str())
-                    } else {
-                        Hitsound::with_volume(sound.name.as_str(), sound.volume)
-                    });
-                    u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
+            let index = *sounds.entry((sound.name.as_str(), sound.volume)).or_insert_with(|| {
+                rox.hitsounds.push(if sound.volume == 100 {
+                    Hitsound::new(sound.name.as_str())
+                } else {
+                    Hitsound::with_volume(sound.name.as_str(), sound.volume)
                 });
+                u16::try_from(rox.hitsounds.len() - 1).unwrap_or(u16::MAX)
+            });
             note.hitsound_index = Some(index);
         }
-        holds_built += usize::from(note.is_hold());
         rox.notes.push(note);
     }
+}
 
-    // The audio plan.
-    let mut events = Vec::with_capacity(background.len() + hits.len());
+/// Every sound of the chart: the background ones, then each hit's.
+fn audio_plan(song: &Song, chips: &PartChips, shift_us: i64) -> AudioPlan {
     let event = |time_us: i64, sound: &Sound| {
         let mut event = SoundEvent::whole(time_us, sound.name.as_str());
         event.volume = (sound.volume != 100).then_some(sound.volume);
         event
     };
-    for (chip, sound) in &background {
-        events.push(event(to_us(song.seconds(chip)) + shift_us, sound));
-    }
-    for hit in &hits {
-        if let Some(sound) = hit.sound {
-            events.push(event(hit.time_us, sound));
-        }
-    }
-    let level = level_of(song, part);
-    Built {
-        chart: rox,
-        report,
-        plan: AudioPlan::new(events),
-        part,
-        level,
-        holds: holds_built,
-    }
+    let background = chips.background.iter().map(|(chip, sound)| event(to_us(song.seconds(chip)) + shift_us, sound));
+    let hits = chips.hits.iter().filter_map(|hit| hit.sound.map(|sound| event(hit.time_us, sound)));
+    AudioPlan::new(background.chain(hits).collect())
 }
 
 /// The holds of a guitar or bass chart, as `CDTX.cs` pairs them: a marker (channel `2C`/`2D`, its value is not read) is

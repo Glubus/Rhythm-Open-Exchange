@@ -138,67 +138,76 @@ pub(super) fn build_plan(
     refused: &mut usize,
 ) -> RoxResult<AudioPlan> {
     if variation != "default" && !component(variation) && !variation.is_empty() {
-        return Err(bad(format!(
-            "variation {variation:?} is not a file-name part"
-        )));
+        return Err(bad(format!("variation {variation:?} is not a file-name part")));
     }
     let suffix = suffix(variation);
     let characters = meta.play_data.as_ref().and_then(|p| p.characters.as_ref());
-    let inst_id = characters
-        .and_then(|c| c.instrumental.as_deref())
-        .unwrap_or("");
+    let inst_id = characters.and_then(|c| c.instrumental.as_deref()).unwrap_or("");
     let player = characters.and_then(|c| c.player.as_deref()).unwrap_or("");
     let opponent = characters.and_then(|c| c.opponent.as_deref()).unwrap_or("");
 
-    let offsets = StemOffsets {
-        offsets: meta.offsets.as_ref(),
-        inst_id,
-    };
+    let offsets = StemOffsets { offsets: meta.offsets.as_ref(), inst_id };
     let inst_start = offsets.instrumental_us()?;
+    let inst_name = instrumental_name(inst_id, refused)?;
+    let player_files = voice_files(characters.and_then(|c| c.player_vocals.as_deref()), player, &suffix, stems, refused);
+    let opponent_files = voice_files(characters.and_then(|c| c.opponent_vocals.as_deref()), opponent, &suffix, stems, refused);
 
-    // The instrumental is mandatory (`Inst.ogg`, or `Inst-<id>.ogg` for `characters.instrumental`).
-    if !inst_id.is_empty() && !component(inst_id) {
-        *refused += 1;
-        return Err(bad(format!(
-            "instrumental id {inst_id:?} is not a file-name part"
-        )));
+    let mut plan = Plan { events: Vec::new(), stems, refused };
+    plan.push(inst_start, &inst_name, false)?;
+    // Voices are shifted ON TOP of the instrumental: `vocals.time = position - instrumentalOffset` (PlayState.hx), then
+    // `voice.time -= voicesOffset` (VoicesGroup.hx): the stem starts at instrumental + vocal offset on the chart's axis.
+    let player_start = inst_start + offsets.vocals_us(player, "player vocals")?;
+    let opponent_start = inst_start + offsets.vocals_us(opponent, "opponent vocals")?;
+    for name in &player_files {
+        plan.push(player_start, name, true)?;
     }
-    let inst_name = if inst_id.is_empty() {
-        "Inst.ogg".to_string()
-    } else {
-        format!("Inst-{inst_id}.ogg")
-    };
-    let player_files = voice_files(
-        characters.and_then(|c| c.player_vocals.as_deref()),
-        player,
-        &suffix,
-        stems,
-        refused,
-    );
-    let opponent_files = voice_files(
-        characters.and_then(|c| c.opponent_vocals.as_deref()),
-        opponent,
-        &suffix,
-        stems,
-        refused,
-    );
-    let mut events: Vec<SoundEvent> = Vec::new();
-    let mut push = |time_us: i64, name: &str, optional: bool| -> RoxResult<()> {
-        let Some(file) = safe_name(name, refused) else {
-            return Ok(());
-        };
-        if events
-            .iter()
-            .any(|event| event.index.is_none() && event.file == file)
-        {
+    for name in &opponent_files {
+        plan.push(opponent_start, name, true)?;
+    }
+    // `Voices[-<variation>].ogg` is the game's last resort when no character vocals were found; only knowable with the files.
+    if let Some(stems) = stems
+        && player_files.is_empty()
+        && opponent_files.is_empty()
+    {
+        let legacy = format!("Voices{suffix}.ogg");
+        if (stems.lookup)(&legacy).is_some() {
+            plan.push(player_start, &legacy, true)?;
+        }
+    }
+    Ok(AudioPlan::new(plan.events))
+}
+
+/// The instrumental is mandatory: `Inst.ogg`, or `Inst-<id>.ogg` for `characters.instrumental`.
+fn instrumental_name(inst_id: &str, refused: &mut usize) -> RoxResult<String> {
+    if inst_id.is_empty() {
+        return Ok("Inst.ogg".to_string());
+    }
+    if !component(inst_id) {
+        *refused += 1;
+        return Err(bad(format!("instrumental id {inst_id:?} is not a file-name part")));
+    }
+    Ok(format!("Inst-{inst_id}.ogg"))
+}
+
+/// The events of the plan, each stem once.
+struct Plan<'a, 's> {
+    events: Vec<SoundEvent>,
+    stems: Option<&'a Stems<'s>>,
+    refused: &'a mut usize,
+}
+
+impl Plan<'_, '_> {
+    /// Adds the stem `name` at `time_us`; a stem already there is skipped; a missing optional stem of a package is skipped, a
+    /// missing instrumental is an error.
+    fn push(&mut self, time_us: i64, name: &str, optional: bool) -> RoxResult<()> {
+        let Some(file) = safe_name(name, self.refused) else { return Ok(()) };
+        if self.events.iter().any(|event| event.index.is_none() && event.file == file) {
             return Ok(());
         }
-        let event = match stems.and_then(|s| s.package.map(|package| (s, package))) {
+        let event = match self.stems.and_then(|s| s.package.map(|package| (s, package))) {
             Some((stems, package)) => match (stems.lookup)(&file) {
+                Some(index) if self.events.iter().any(|e| e.index == Some(index)) => return Ok(()),
                 Some(index) => {
-                    if events.iter().any(|e| e.index == Some(index)) {
-                        return Ok(());
-                    }
                     let mut event = SoundEvent::in_container(time_us, package, index);
                     event.optional = optional;
                     event
@@ -209,31 +218,7 @@ pub(super) fn build_plan(
             None if optional => SoundEvent::optional_whole(time_us, file),
             None => SoundEvent::whole(time_us, file),
         };
-        events.push(event);
+        self.events.push(event);
         Ok(())
-    };
-
-    push(inst_start, &inst_name, false)?;
-
-    // Voices are shifted ON TOP of the instrumental: `vocals.time = position - instrumentalOffset` (PlayState.hx), then
-    // `voice.time -= voicesOffset` (VoicesGroup.hx): the stem starts at instrumental + vocal offset on the chart's axis.
-    let player_start = inst_start + offsets.vocals_us(player, "player vocals")?;
-    let opponent_start = inst_start + offsets.vocals_us(opponent, "opponent vocals")?;
-    for name in &player_files {
-        push(player_start, name, true)?;
     }
-    for name in &opponent_files {
-        push(opponent_start, name, true)?;
-    }
-    // `Voices[-<variation>].ogg` is the game's last resort when no character vocals were found; only knowable with the files.
-    if let Some(stems) = stems
-        && player_files.is_empty()
-        && opponent_files.is_empty()
-    {
-        let legacy = format!("Voices{suffix}.ogg");
-        if (stems.lookup)(&legacy).is_some() {
-            push(player_start, &legacy, true)?;
-        }
-    }
-    Ok(AudioPlan::new(events))
 }

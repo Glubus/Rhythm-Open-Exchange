@@ -358,96 +358,15 @@ fn decode(data: &[u8], fallback_title: &str) -> RoxResult<(RoxChart, KshReport)>
         return Err(invalid("file too large"));
     }
     let (text, charset) = text_of(data);
-    let mut report = KshReport {
-        charset,
-        ..KshReport::default()
-    };
+    let mut report = KshReport { charset, ..KshReport::default() };
     let mut lines = lines_of(&text);
-
-    // Header: option lines up to the first bar line.
-    let mut header = Header::default();
-    let mut found_bar = false;
-    for (_, raw) in lines.by_ref() {
-        let line = raw.trim_ascii();
-        if line == "--" {
-            found_bar = true;
-            break;
-        }
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with("//") || line.starts_with(';') {
-            report.comments += 1;
-        } else if let Some((key, value)) = line.split_once('=').filter(|(key, _)| !key.is_empty()) {
-            if !HEADER_KEYS.contains(&key) {
-                report.unknown_options += 1;
-            }
-            header.options.push((key.to_owned(), value.to_owned()));
-        } else if line.starts_with("#define_") {
-            report.definitions += 1;
-        } else {
-            report.unknown_lines += 1;
-        }
-    }
-    if !found_bar {
-        return Err(invalid("no bar line `--`: not a K-Shoot MANIA chart"));
-    }
-
+    let header = read_header_lines(&mut lines, &mut report)?;
     let (metadata, offset_ms, mut walk) = read_header(&header, fallback_title, &mut report);
-
-    // Body: measures of chart lines, each ended by a bar line.
-    let mut measure: Vec<ChartLine> = Vec::new();
-    let mut pending: Vec<Timing> = Vec::new();
-    let mut total_lines = 0usize;
     #[allow(clippy::cast_precision_loss)] // |o| <= 1e9 ms
     {
         walk.now_us = offset_ms as f64 * 1000.0;
     }
-    for (number, raw) in lines {
-        let line = raw.trim_ascii();
-        if line.is_empty() {
-            continue;
-        }
-        if line == "--" {
-            report.measures += 1;
-            walk.measure(&measure, &mut report)?;
-            measure.clear();
-            continue;
-        }
-        if line.starts_with("//") || line.starts_with(';') {
-            report.comments += 1;
-        } else if line.starts_with('#') {
-            if line.starts_with("#define_") {
-                report.definitions += 1;
-            } else {
-                report.unknown_lines += 1;
-            }
-        } else if let Some((key, value)) = line.split_once('=') {
-            read_option(key, value, &mut pending, &mut report);
-        } else if is_chart_shaped(line.as_bytes()) {
-            total_lines += 1;
-            if total_lines > MAX_CHART_LINES {
-                return Err(invalid("too many chart lines"));
-            }
-            measure.push(chart_line(
-                line.as_bytes(),
-                std::mem::take(&mut pending),
-                &mut report,
-            ));
-        } else if line.contains('|') {
-            return Err(invalid(format!(
-                "line {number} is not a chart line (`bbbb|ff|ll`)"
-            )));
-        } else {
-            report.unknown_lines += 1;
-        }
-    }
-    if !measure.is_empty() {
-        report.unterminated_last_measure = true;
-        report.measures += 1;
-        walk.measure(&measure, &mut report)?;
-    }
-    report.chart_lines = total_lines;
+    read_body(lines, &mut walk, &mut report)?;
     walk.finish(&mut report);
 
     let mut chart = RoxChart::new(COLUMNS);
@@ -461,6 +380,77 @@ fn decode(data: &[u8], fallback_title: &str) -> RoxResult<(RoxChart, KshReport)>
     Ok((chart, report))
 }
 
+/// Whether a line is a comment (counted).
+fn is_comment(line: &str, report: &mut KshReport) -> bool {
+    let comment = line.starts_with("//") || line.starts_with(';');
+    report.comments += usize::from(comment);
+    comment
+}
+
+/// The header: option lines up to the first bar line (a file without one is not a chart).
+fn read_header_lines<'a>(lines: &mut impl Iterator<Item = (usize, &'a str)>, report: &mut KshReport) -> RoxResult<Header> {
+    let mut header = Header::default();
+    for (_, raw) in lines {
+        let line = raw.trim_ascii();
+        if line == "--" {
+            return Ok(header);
+        }
+        if line.is_empty() || is_comment(line, report) {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=').filter(|(key, _)| !key.is_empty()) {
+            report.unknown_options += usize::from(!HEADER_KEYS.contains(&key));
+            header.options.push((key.to_owned(), value.to_owned()));
+        } else if line.starts_with("#define_") {
+            report.definitions += 1;
+        } else {
+            report.unknown_lines += 1;
+        }
+    }
+    Err(invalid("no bar line `--`: not a K-Shoot MANIA chart"))
+}
+
+/// The body: measures of chart lines, each ended by a bar line, walked as they end (a last measure without one too).
+fn read_body<'a>(lines: impl Iterator<Item = (usize, &'a str)>, walk: &mut Walk, report: &mut KshReport) -> RoxResult<()> {
+    let mut measure: Vec<ChartLine> = Vec::new();
+    let mut pending: Vec<Timing> = Vec::new();
+    for (number, raw) in lines {
+        let line = raw.trim_ascii();
+        if line.is_empty() || is_comment(line, report) {
+            continue;
+        }
+        if line == "--" {
+            report.measures += 1;
+            walk.measure(&measure, report)?;
+            measure.clear();
+        } else if line.starts_with('#') {
+            if line.starts_with("#define_") {
+                report.definitions += 1;
+            } else {
+                report.unknown_lines += 1;
+            }
+        } else if let Some((key, value)) = line.split_once('=') {
+            read_option(key, value, &mut pending, report);
+        } else if is_chart_shaped(line.as_bytes()) {
+            report.chart_lines += 1;
+            if report.chart_lines > MAX_CHART_LINES {
+                return Err(invalid("too many chart lines"));
+            }
+            measure.push(chart_line(line.as_bytes(), std::mem::take(&mut pending), report));
+        } else if line.contains('|') {
+            return Err(invalid(format!("line {number} is not a chart line (`bbbb|ff|ll`)")));
+        } else {
+            report.unknown_lines += 1;
+        }
+    }
+    if !measure.is_empty() {
+        report.unterminated_last_measure = true;
+        report.measures += 1;
+        walk.measure(&measure, report)?;
+    }
+    Ok(())
+}
+
 /// The tempo the header gives: `t` (120 when absent), or the start of the range string a chart with tempo changes has.
 fn header_bpm(header: &Header, report: &mut KshReport) -> f64 {
     let Some(value) = header.get("t") else {
@@ -471,11 +461,7 @@ fn header_bpm(header: &Header, report: &mut KshReport) -> f64 {
     }
     let value = value.trim_ascii();
     // `180-220`: the tempos of the chart; the first `t=` of the body is the real one, the start of the range is the fallback.
-    let range_start = value
-        .char_indices()
-        .skip(1)
-        .find(|(_, c)| *c == '-')
-        .map(|(at, _)| &value[..at]);
+    let range_start = value.char_indices().skip(1).find(|(_, c)| *c == '-').map(|(at, _)| &value[..at]);
     if let Some(start) = range_start {
         report.header_bpm_range = true;
         if let Some(bpm) = bpm_of(start) {
@@ -486,33 +472,34 @@ fn header_bpm(header: &Header, report: &mut KshReport) -> f64 {
     DEFAULT_BPM
 }
 
-/// The metadata and the starting state of the walk from the header options.
-fn read_header(
-    header: &Header,
-    fallback_title: &str,
-    report: &mut KshReport,
-) -> (Metadata, i64, Walk) {
-    let text = |key: &str| header.get(key).map_or("", str::trim_ascii);
-    let mut number = |key: &str, default: i64, low: i64, high: i64| -> i64 {
-        header.get(key).map_or(default, |value| {
-            value
-                .trim_ascii()
-                .parse::<i64>()
-                .ok()
-                .filter(|parsed| (low..=high).contains(parsed))
-                .unwrap_or_else(|| {
-                    report.invalid_option_values += 1;
-                    default
-                })
-        })
-    };
-    let offset_ms = number("o", 0, -MAX_OFFSET_MS, MAX_OFFSET_MS);
-    let level = number("level", 1, 1, 20);
-    let preview_ms = number("po", 0, 0, MAX_OFFSET_MS);
-    let preview_length_ms = number("plength", 0, 0, MAX_OFFSET_MS);
+impl Header {
+    fn text(&self, key: &str) -> &str {
+        self.get(key).map_or("", str::trim_ascii)
+    }
 
-    let title = text("title");
-    let difficulty = match text("difficulty").to_ascii_lowercase().as_str() {
+    /// An integer option in `low..=high`; `default` when absent, and when invalid (counted).
+    fn number(&self, key: &str, default: i64, (low, high): (i64, i64), report: &mut KshReport) -> i64 {
+        self.get(key).map_or(default, |value| {
+            value.trim_ascii().parse::<i64>().ok().filter(|parsed| (low..=high).contains(parsed)).unwrap_or_else(|| {
+                report.invalid_option_values += 1;
+                default
+            })
+        })
+    }
+
+    /// The first file of an image option, unless it names one of the game's presets.
+    fn image(&self, key: &str, presets: &[&str], report: &mut KshReport) -> Option<String> {
+        let first = self.text(key).split(';').next().unwrap_or("").trim_ascii();
+        if presets.contains(&first) {
+            return None;
+        }
+        safe_name(first, &mut report.unsafe_names)
+    }
+}
+
+/// The difficulty name; one the format does not know reads as `Infinite` (counted).
+fn difficulty_of(header: &Header, report: &mut KshReport) -> &'static str {
+    match header.text("difficulty").to_ascii_lowercase().as_str() {
         "" | "light" => "Light",
         "challenge" => "Challenge",
         "extended" => "Extended",
@@ -521,45 +508,37 @@ fn read_header(
             report.unknown_difficulty = true;
             "Infinite"
         }
-    };
-
-    let mut files = text("m").split(';').map(str::trim_ascii);
-    let audio_file = files
-        .next()
-        .and_then(|name| safe_name(name, &mut report.unsafe_names))
-        .unwrap_or_default();
-    report.extra_audio_files = files.filter(|name| !name.is_empty()).count();
-
-    let image = |key: &str, presets: &[&str], report: &mut KshReport| -> Option<String> {
-        let first = text(key).split(';').next().unwrap_or("").trim_ascii();
-        if presets.contains(&first) {
-            return None;
-        }
-        safe_name(first, &mut report.unsafe_names)
-    };
-    let background_file = image("bg", &BACKGROUND_PRESETS, report)
-        .or_else(|| image("jacket", &JACKET_PRESETS, report));
-
-    let mut signature = (4, 4);
-    if let Some(value) = header.get("beat") {
-        if let Some(parsed) = signature_of(value) {
-            signature = parsed;
-        } else {
-            report.invalid_time_signatures += 1;
-        }
     }
+}
+
+/// The metadata and the starting state of the walk from the header options.
+fn read_header(header: &Header, fallback_title: &str, report: &mut KshReport) -> (Metadata, i64, Walk) {
+    let offset_ms = header.number("o", 0, (-MAX_OFFSET_MS, MAX_OFFSET_MS), report);
+    let level = header.number("level", 1, (1, 20), report);
+    let preview_ms = header.number("po", 0, (0, MAX_OFFSET_MS), report);
+    let preview_length_ms = header.number("plength", 0, (0, MAX_OFFSET_MS), report);
+    let difficulty = difficulty_of(header, report);
+
+    let mut files = header.text("m").split(';').map(str::trim_ascii);
+    let audio_file = files.next().and_then(|name| safe_name(name, &mut report.unsafe_names)).unwrap_or_default();
+    report.extra_audio_files = files.filter(|name| !name.is_empty()).count();
+    let background_file =
+        header.image("bg", &BACKGROUND_PRESETS, report).or_else(|| header.image("jacket", &JACKET_PRESETS, report));
+
+    let signature = header.get("beat").map_or((4, 4), |value| {
+        signature_of(value).unwrap_or_else(|| {
+            report.invalid_time_signatures += 1;
+            (4, 4)
+        })
+    });
     let bpm = header_bpm(header, report);
 
+    let title = header.text("title");
     #[allow(clippy::cast_precision_loss)] // 1..=20
     let metadata = Metadata {
-        title: if title.is_empty() {
-            fallback_title
-        } else {
-            title
-        }
-        .into(),
-        artist: text("artist").into(),
-        creator: text("effect").into(),
+        title: if title.is_empty() { fallback_title } else { title }.into(),
+        artist: header.text("artist").into(),
+        creator: header.text("effect").into(),
         difficulty_name: difficulty.into(),
         difficulty_value: Some(level as f32),
         audio_file: audio_file.into(),

@@ -303,49 +303,40 @@ fn parse(data: &[u8]) -> RoxResult<Parsed<'_>> {
         usize::from(tempo_chunk.param3),
         tempo_chunk.body,
     )?;
+    let charts = chart_chunks(&walked.chunks, &mut skipped);
+    Ok(Parsed { tempo, tps: tempo_chunk.param2, charts, skipped })
+}
+
+/// The step chunks the game reads, the first of each difficulty code, each with the first mine chunk of its code; the rest is
+/// said in `skipped`.
+fn chart_chunks<'a>(chunks: &[Chunk<'a>], skipped: &mut Vec<String>) -> Vec<ChartChunk<'a>> {
     let mut mine_chunks: HashMap<u16, Chunk<'_>> = HashMap::new();
-    for chunk in walked.chunks.iter().filter(|c| c.kind == kind::MINES) {
+    for chunk in chunks.iter().filter(|c| c.kind == kind::MINES) {
         mine_chunks.entry(chunk.param2).or_insert(*chunk);
     }
     let mut charts: Vec<ChartChunk<'_>> = Vec::new();
-    for chunk in &walked.chunks {
+    for chunk in chunks {
         match chunk.kind {
             kind::STEPS => {
-                let Some((style, difficulty)) = split_code(chunk.param2) else {
-                    skipped.push(format!(
-                        "step chunk at offset {}: unsupported difficulty code {:#06x}",
-                        chunk.offset, chunk.param2
-                    ));
+                let (offset, code) = (chunk.offset, chunk.param2);
+                let Some((style, difficulty)) = split_code(code) else {
+                    skipped.push(format!("step chunk at offset {offset}: unsupported difficulty code {code:#06x}"));
                     continue;
                 };
-                if charts.iter().any(|c| c.code == chunk.param2) {
+                if charts.iter().any(|c| c.code == code) {
                     skipped.push(format!(
-                        "step chunk at offset {}: a second chunk for code {:#06x} (the game finds the first)",
-                        chunk.offset, chunk.param2
+                        "step chunk at offset {offset}: a second chunk for code {code:#06x} (the game finds the first)"
                     ));
                     continue;
                 }
-                charts.push(ChartChunk {
-                    code: chunk.param2,
-                    style,
-                    difficulty,
-                    chunk: *chunk,
-                    mines: mine_chunks.get(&chunk.param2).copied(),
-                });
+                charts.push(ChartChunk { code, style, difficulty, chunk: *chunk, mines: mine_chunks.get(&code).copied() });
             }
-            kind::METADATA | kind::LANES => skipped.push(format!(
-                "chunk type {} at offset {}: Hudson / metadata chunk, not read",
-                chunk.kind, chunk.offset
-            )),
+            kind::METADATA | kind::LANES => skipped
+                .push(format!("chunk type {} at offset {}: Hudson / metadata chunk, not read", chunk.kind, chunk.offset)),
             _ => {}
         }
     }
-    Ok(Parsed {
-        tempo,
-        tps: tempo_chunk.param2,
-        charts,
-        skipped,
-    })
+    charts
 }
 
 /// The playable charts in file order, stopping once `want` of them are found.
@@ -458,47 +449,16 @@ fn shock_mask(byte: u8) -> Option<u8> {
 }
 
 /// The notes of a step chunk: rows in file order, shock arrows as mines, freezes resolved from the freeze block.
-fn read_steps(
-    chunk: &Chunk<'_>,
-    panel_mask: u8,
-    tempo: &TempoMap,
-    report: &mut SsqReport,
-) -> Result<Vec<Built1>, String> {
+fn read_steps(chunk: &Chunk<'_>, panel_mask: u8, tempo: &TempoMap, report: &mut SsqReport) -> Result<Vec<Built1>, String> {
     let body = chunk.body;
     let count = usize::from(chunk.param3);
-    let steps_at = count * 4;
-    let freeze_at = steps_at + count.next_multiple_of(2);
-    if body.len() < freeze_at {
-        return Err(format!(
-            "the chunk holds {} body bytes, {count} steps need {freeze_at}",
-            body.len()
-        ));
-    }
-    let steps = &body[steps_at..steps_at + count];
-    #[allow(clippy::naive_bytecount)] // one chunk of at most 65535 bytes
-    let freeze_count = steps.iter().filter(|&&byte| byte == 0).count();
-    if body.len() < freeze_at + freeze_count * 2 {
-        return Err(format!(
-            "the chunk holds {} body bytes, {count} steps and {freeze_count} freeze ends need {}",
-            body.len(),
-            freeze_at + freeze_count * 2
-        ));
-    }
-    let freeze_block = &body[freeze_at..];
-    let mut freeze_index = 0;
-    let mut notes: Vec<Built1> = Vec::with_capacity(count);
-    // Per panel, the latest note on it (index in `notes`), what a freeze end walking backwards finds.
-    let mut latest: [Option<usize>; 8] = [None; 8];
+    let (steps, freeze_block) = step_blocks(body, count)?;
+    let mut freezes = freeze_block.as_chunks::<2>().0.iter();
+    let mut rows = Rows { notes: Vec::with_capacity(count), latest: [None; 8], panel_mask };
     for (i, &byte) in steps.iter().enumerate() {
         let tick = i64::from(i32_at(body, i));
-        let freeze = (byte == 0).then(|| {
-            let entry = (
-                freeze_block[freeze_index * 2],
-                freeze_block[freeze_index * 2 + 1],
-            );
-            freeze_index += 1;
-            entry
-        });
+        // A step byte of 0 takes the next freeze entry, `(panels, kind)`, whether the row is kept or not.
+        let freeze = (byte == 0).then(|| freezes.next().map(|&[panels, kind]| (panels, kind))).flatten();
         if tick < 0 {
             report.negative_ticks += 1;
             continue;
@@ -508,29 +468,48 @@ fn read_steps(
             report.notes_out_of_range += 1;
             continue;
         }
-        if let Some((panels, freeze_kind)) = freeze {
-            if freeze_kind != 1 {
-                report.ignored_freeze_kinds += 1;
-                continue;
-            }
-            for panel in 0..8u8 {
-                if panels & panel_mask & (1 << panel) == 0 {
-                    continue;
-                }
-                let head = latest[usize::from(panel)].map(|index| &mut notes[index]);
-                let Some(head) = head.filter(|head| !head.mine) else {
-                    report.freeze_ends_without_head += 1;
-                    continue;
-                };
-                let duration = time_us - head.time_us;
-                if duration > 0 {
-                    head.freeze_us = Some(duration);
-                } else {
-                    report.empty_freezes_as_taps += 1;
-                }
-            }
-            continue;
+        match freeze {
+            Some((_, kind)) if kind != 1 => report.ignored_freeze_kinds += 1,
+            Some((panels, _)) => rows.freeze_end(panels, time_us, report),
+            None => rows.step(byte, time_us, report),
         }
+    }
+    Ok(rows.notes)
+}
+
+/// The step bytes and the freeze block of a step chunk: `count` ticks (i32), `count` step bytes padded to an even size, then
+/// one 2-byte entry per step byte of 0.
+fn step_blocks(body: &[u8], count: usize) -> Result<(&[u8], &[u8]), String> {
+    let steps_at = count * 4;
+    let freeze_at = steps_at + count.next_multiple_of(2);
+    if body.len() < freeze_at {
+        return Err(format!("the chunk holds {} body bytes, {count} steps need {freeze_at}", body.len()));
+    }
+    let steps = &body[steps_at..steps_at + count];
+    #[allow(clippy::naive_bytecount)] // one chunk of at most 65535 bytes
+    let freeze_count = steps.iter().filter(|&&byte| byte == 0).count();
+    let needed = freeze_at + freeze_count * 2;
+    if body.len() < needed {
+        return Err(format!("the chunk holds {} body bytes, {count} steps and {freeze_count} freeze ends need {needed}", body.len()));
+    }
+    Ok((steps, &body[freeze_at..]))
+}
+
+/// The notes read so far and, per panel, the latest note on it (index in `notes`): what a freeze end walking backwards finds.
+struct Rows {
+    notes: Vec<Built1>,
+    latest: [Option<usize>; 8],
+    panel_mask: u8,
+}
+
+impl Rows {
+    fn panels(&self, bits: u8) -> impl Iterator<Item = u8> + use<> {
+        let bits = bits & self.panel_mask;
+        (0..8u8).filter(move |panel| bits & (1 << panel) != 0)
+    }
+
+    /// A row of steps: one note per panel, a shock arrow as mines.
+    fn step(&mut self, byte: u8, time_us: i64, report: &mut SsqReport) {
         let (bits, mine) = match shock_mask(byte) {
             Some(mask) => {
                 report.shock_arrows += 1;
@@ -538,23 +517,31 @@ fn read_steps(
             }
             None => (byte, false),
         };
-        if bits & !panel_mask != 0 && !mine {
+        if bits & !self.panel_mask != 0 && !mine {
             report.panels_outside_style += 1;
         }
-        for panel in 0..8u8 {
-            if bits & panel_mask & (1 << panel) == 0 {
-                continue;
-            }
-            latest[usize::from(panel)] = Some(notes.len());
-            notes.push(Built1 {
-                time_us,
-                column: panel,
-                freeze_us: None,
-                mine,
-            });
+        for panel in self.panels(bits) {
+            self.latest[usize::from(panel)] = Some(self.notes.len());
+            self.notes.push(Built1 { time_us, column: panel, freeze_us: None, mine });
         }
     }
-    Ok(notes)
+
+    /// A freeze end: the latest note of each of its panels becomes a freeze lasting until `time_us`.
+    fn freeze_end(&mut self, panels: u8, time_us: i64, report: &mut SsqReport) {
+        for panel in self.panels(panels) {
+            let head = self.latest[usize::from(panel)].map(|index| &mut self.notes[index]);
+            let Some(head) = head.filter(|head| !head.mine) else {
+                report.freeze_ends_without_head += 1;
+                continue;
+            };
+            let duration = time_us - head.time_us;
+            if duration > 0 {
+                head.freeze_us = Some(duration);
+            } else {
+                report.empty_freezes_as_taps += 1;
+            }
+        }
+    }
 }
 
 /// The mine chunk (type 20) of a chart: `{i32 tick, u8 panels, u8 flags, u16 reserved}` entries.

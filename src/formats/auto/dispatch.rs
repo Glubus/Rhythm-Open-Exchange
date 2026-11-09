@@ -30,7 +30,8 @@ use crate::formats::KshDecoder;
 /// Returns `UnsupportedFormat` if the extension is unknown, or a decode error on failure.
 pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
     let path = path.as_ref();
-    match detect(path) {
+    let detected = detect(path);
+    match detected {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &std::fs::read(path)?),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, 0),
@@ -39,13 +40,9 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
         Ok(DetectedFormat::Bestdori) => return BestdoriDecoder::decode_file(path),
         Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
         Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
+        Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, 0),
+        Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, 0),
         _ => {}
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
-        return ChartDecoder::decode_file(path, 0);
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHeroMid) {
-        return MidDecoder::decode_file(path, 0);
     }
     if let Some(chart) = decode_vslice_file(path, 0)? {
         return Ok(chart);
@@ -56,9 +53,8 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
             return decode_bandori(fmt, path, &data);
         }
     }
-    let fmt = detect(path)?;
-    let data = std::fs::read(path)?;
-    decode_bytes(fmt, &data)
+    let fmt = detected?;
+    decode_bytes(fmt, &std::fs::read(path)?)
 }
 
 /// Decode chart `index` of a file: the `index`-th playable chart of a `.sm`/`.ssc` file (the
@@ -75,61 +71,35 @@ pub fn auto_decode(path: impl AsRef<Path>) -> RoxResult<RoxChart> {
 /// Returns an error if the file does not decode or has no such chart.
 pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<RoxChart> {
     let path = path.as_ref();
+    let single = || RoxError::InvalidFormat(format!("{} has a single chart, not chart {index}", path.display()));
+    let read = || std::fs::read(path);
     match detect(path) {
         Ok(DetectedFormat::Edit) => return Err(edit_needs_its_song()),
         Ok(DetectedFormat::Ssq) => return SsqDecoder::decode_file(path, index),
-        Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&std::fs::read(path)?, index),
-        Ok(
-            DetectedFormat::Ksf
-            | DetectedFormat::Sus
-            | DetectedFormat::Usc
-            | DetectedFormat::Imd
-            | DetectedFormat::Ksh,
-        )
+        Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, index),
+        Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, index),
+        Ok(DetectedFormat::Fnfc) => return VSliceDecoder::decode_fnfc_variant(&read()?, "default", index),
+        Ok(DetectedFormat::Sng) => return SngPackage::open(&read()?)?.decode_variant(index),
+        Ok(DetectedFormat::Ojn) => return OjnDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Dtx) => return DtxDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Ksf | DetectedFormat::Sus | DetectedFormat::Usc | DetectedFormat::Imd | DetectedFormat::Ksh)
             if index > 0 =>
         {
-            return Err(RoxError::InvalidFormat(format!(
-                "{} has a single chart, not chart {index}",
-                path.display()
-            )));
+            return Err(single());
         }
-        Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &std::fs::read(path)?),
+        Ok(DetectedFormat::Ksf) => return decode_ksf_bytes(path, &read()?),
         Ok(DetectedFormat::Sus) => return SusDecoder::decode_file(path),
         Ok(DetectedFormat::Usc) => return UscDecoder::decode_file(path),
         Ok(DetectedFormat::Imd) => return ImdDecoder::decode_file(path),
         Ok(DetectedFormat::Ksh) => return KshDecoder::decode_file(path),
         _ => {}
     }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHero) {
-        return ChartDecoder::decode_file(path, index);
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::CloneHeroMid) {
-        return MidDecoder::decode_file(path, index);
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Fnfc) {
-        return VSliceDecoder::decode_fnfc_variant(&std::fs::read(path)?, "default", index);
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Sng) {
-        return SngPackage::open(&std::fs::read(path)?)?.decode_variant(index);
-    }
     if let Some(chart) = decode_vslice_file(path, index)? {
         return Ok(chart);
     }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Ojn) {
-        return OjnDecoder::decode_variant(&std::fs::read(path)?, index);
-    }
-    if detect(path).is_ok_and(|fmt| fmt == DetectedFormat::Dtx) {
-        return DtxDecoder::decode_variant(&std::fs::read(path)?, index);
-    }
     if !crate::formats::sm::is_stepmania(path) {
-        return if index == 0 {
-            auto_decode(path)
-        } else {
-            Err(RoxError::InvalidFormat(format!(
-                "{} has a single chart, not chart {index}",
-                path.display()
-            )))
-        };
+        return if index == 0 { auto_decode(path) } else { Err(single()) };
     }
     let file = crate::formats::sm::parse_file(path)?;
     match file.charts.get(index) {
@@ -203,106 +173,72 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
     let Ok(fmt) = detect(path) else {
         return Ok(None);
     };
+    let read = || std::fs::read(path);
+    let ini = || crate::formats::clone_hero::decoder::read_sibling_ini(path);
     Ok(Some(match fmt {
         DetectedFormat::Ojn => {
-            let data = std::fs::read(path)?;
-            OjnDecoder::variants(&data)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.name.code().to_owned(),
-                    chart: OjnDecoder::decode_variant(&data, v.index),
-                })
-                .collect()
+            let data = read()?;
+            each(&OjnDecoder::variants(&data)?, |v| v.name.code().to_owned(), |v| OjnDecoder::decode_variant(&data, v.index))
         }
         DetectedFormat::Fnfc => {
-            let data = std::fs::read(path)?;
-            VSliceDecoder::fnfc_variants(&data, "default")?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.difficulty.clone(),
-                    chart: VSliceDecoder::decode_fnfc_variant(&data, "default", v.index),
-                })
-                .collect()
+            let data = read()?;
+            each(
+                &VSliceDecoder::fnfc_variants(&data, "default")?,
+                |v| v.difficulty.clone(),
+                |v| VSliceDecoder::decode_fnfc_variant(&data, "default", v.index),
+            )
         }
         DetectedFormat::Sng => {
-            let data = std::fs::read(path)?;
+            let data = read()?;
             let package = SngPackage::open(&data)?;
-            package
-                .variants()?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.section.clone(),
-                    chart: package.decode_variant(v.index),
-                })
-                .collect()
+            each(&package.variants()?, |v| v.section.clone(), |v| package.decode_variant(v.index))
         }
         DetectedFormat::CloneHero => {
-            let data = std::fs::read(path)?;
-            let ini = crate::formats::clone_hero::decoder::read_sibling_ini(path);
-            ChartDecoder::variants(&data)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.section.clone(),
-                    chart: ChartDecoder::decode_with_ini(&data, ini.as_deref(), v.index),
-                })
-                .collect()
+            let (data, ini) = (read()?, ini());
+            each(
+                &ChartDecoder::variants(&data)?,
+                |v| v.section.clone(),
+                |v| ChartDecoder::decode_with_ini(&data, ini.as_deref(), v.index),
+            )
         }
         DetectedFormat::CloneHeroMid => {
-            let data = std::fs::read(path)?;
-            let ini = crate::formats::clone_hero::decoder::read_sibling_ini(path);
-            MidDecoder::variants(&data)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.section.clone(),
-                    chart: MidDecoder::decode_with_ini(&data, ini.as_deref(), v.index),
-                })
-                .collect()
+            let (data, ini) = (read()?, ini());
+            each(&MidDecoder::variants(&data)?, |v| v.section.clone(), |v| MidDecoder::decode_with_ini(&data, ini.as_deref(), v.index))
         }
         DetectedFormat::Ssq => {
-            let data = std::fs::read(path)?;
+            let data = read()?;
             let title = crate::formats::ssq::decoder::title_of(path);
-            SsqDecoder::variants(&data)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.name(),
-                    chart: SsqDecoder::decode_with_title(&data, v.index, &title),
-                })
-                .collect()
+            each(&SsqDecoder::variants(&data)?, crate::formats::ssq::Variant::name, |v| {
+                SsqDecoder::decode_with_title(&data, v.index, &title)
+            })
         }
-        DetectedFormat::Dtx => dtx_variants(&std::fs::read(path)?)?,
+        DetectedFormat::Dtx => DtxDecoder::decode_all(&read()?)?
+            .into_iter()
+            .map(|(variant, chart)| FileVariant { name: variant.part.name().to_owned(), chart })
+            .collect(),
         DetectedFormat::Dwi => {
-            let data = std::fs::read(path)?;
-            DwiDecoder::variants(&data)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: format!("{} {}", v.stepstype, v.name),
-                    chart: DwiDecoder::decode_variant(&data, v.index),
-                })
-                .collect()
+            let data = read()?;
+            each(&DwiDecoder::variants(&data)?, |v| format!("{} {}", v.stepstype, v.name), |v| DwiDecoder::decode_variant(&data, v.index))
         }
         DetectedFormat::Fnf => match read_vslice_pair(path)? {
-            Some((chart, metadata)) => VSliceDecoder::variants(&chart, &metadata)?
-                .iter()
-                .map(|v| FileVariant {
-                    name: v.difficulty.clone(),
-                    chart: VSliceDecoder::decode_variant(&chart, &metadata, v.index),
-                })
-                .collect(),
+            Some((chart, metadata)) => each(
+                &VSliceDecoder::variants(&chart, &metadata)?,
+                |v| v.difficulty.clone(),
+                |v| VSliceDecoder::decode_variant(&chart, &metadata, v.index),
+            ),
             None => return Ok(None),
         },
         _ => return Ok(None),
     }))
 }
 
-/// Every instrument of a `.dtx` (Drums, Guitar, Bass), each decoded.
-fn dtx_variants(data: &[u8]) -> RoxResult<Vec<FileVariant>> {
-    Ok(DtxDecoder::decode_all(data)?
-        .into_iter()
-        .map(|(variant, chart)| FileVariant {
-            name: variant.part.name().to_owned(),
-            chart,
-        })
-        .collect())
+/// Every variant of a list, named and decoded.
+fn each<V>(
+    variants: &[V],
+    name: impl Fn(&V) -> String,
+    decode: impl Fn(&V) -> RoxResult<RoxChart>,
+) -> Vec<FileVariant> {
+    variants.iter().map(|v| FileVariant { name: name(v), chart: decode(v) }).collect()
 }
 
 /// The bytes of a V-Slice chart file and of its metadata file; `None` when `path` is not a V-Slice chart (another name, or a

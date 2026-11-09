@@ -346,25 +346,15 @@ pub(super) fn nth(converted: Converted, index: usize) -> RoxResult<Built> {
 /// Parses a `.chart` and converts every 5-lane track that has a note on the five frets.
 pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted> {
     if data.len() > MAX_TEXT_BYTES {
-        return Err(RoxError::InvalidFormat(format!(
-            "chart: {} bytes, more than {MAX_TEXT_BYTES}",
-            data.len()
-        )));
+        return Err(RoxError::InvalidFormat(format!("chart: {} bytes, more than {MAX_TEXT_BYTES}", data.len())));
     }
     let text = decode_text(data);
     let sections = sections(&text);
-    let song_section = sections
-        .iter()
-        .find(|s| s.name == "Song")
-        .ok_or_else(|| RoxError::InvalidFormat("chart: no [Song] section".into()))?;
+    let song_section =
+        sections.iter().find(|s| s.name == "Song").ok_or_else(|| RoxError::InvalidFormat("chart: no [Song] section".into()))?;
     let song = parse_song(&song_section.lines).map_err(RoxError::InvalidFormat)?;
     let resolution = song.resolution.unwrap_or(DEFAULT_RESOLUTION);
-
-    let sync = sections
-        .iter()
-        .find(|s| s.name == "SyncTrack")
-        .map(|s| parse_sync(&s.lines))
-        .unwrap_or_default();
+    let sync = sections.iter().find(|s| s.name == "SyncTrack").map(|s| parse_sync(&s.lines)).unwrap_or_default();
     let tempo = TempoMap::new(resolution, &sync.tempos);
     let mut shared = ChartReport {
         resolution,
@@ -373,58 +363,52 @@ pub(super) fn convert(data: &[u8], ini: Option<&SongIni>) -> RoxResult<Converted
         ignored_sync_events: sync.ignored,
         replaced_sync_events: sync.replaced,
         default_tempo_used: sync.tempos.first().is_none_or(|first| first.0 > 0),
+        unsupported_tracks: sections
+            .iter()
+            .filter(|s| is_track_name(s.name) && !is_supported_name(s.name))
+            .map(|s| s.name.to_owned())
+            .collect(),
         ..ChartReport::default()
     };
     let (shift_us, source) = audio_shift(&song, ini, &mut shared);
     shared.shift_us = shift_us;
     shared.shift_source = source;
-    let cutoff = ini
-        .and_then(|i| i.sustain_cutoff_threshold)
-        .and_then(|t| u64::try_from(t).ok())
-        .unwrap_or(0);
-
+    let cutoff = ini.and_then(|i| i.sustain_cutoff_threshold).and_then(|t| u64::try_from(t).ok()).unwrap_or(0);
     let timing = timing_points(&tempo, &sync.signatures, shift_us);
+
     let mut tracks = Vec::new();
-    let mut unsupported: Vec<String> = Vec::new();
     for instrument in Instrument::ALL {
         for difficulty in Difficulty::ALL {
-            let name = format!(
-                "{}{}",
-                difficulty.section_prefix(),
-                instrument.section_suffix()
-            );
-            let Some(section) = sections.iter().find(|s| s.name == name) else {
-                continue;
-            };
+            let name = format!("{}{}", difficulty.section_prefix(), instrument.section_suffix());
+            let Some(section) = sections.iter().find(|s| s.name == name) else { continue };
             let mut report = shared.clone();
             report.section = name;
             let notes = track_notes(section, &tempo, shift_us, cutoff, &mut report);
-            if notes.is_empty() {
-                continue;
-            }
-            let holds = notes.iter().filter(|n| n.is_hold()).count();
-            let mut chart = RoxChart::new(KEYS);
-            chart.metadata = metadata(&song, ini, instrument, difficulty);
-            chart.timing_points.clone_from(&timing);
-            chart.notes = notes;
-            tracks.push(Built {
-                chart,
-                report,
-                instrument,
-                difficulty,
-                holds,
-            });
+            let chart = || metadata(&song, ini, instrument, difficulty);
+            tracks.extend(built(notes, chart, &timing, report, instrument, difficulty));
         }
-    }
-    for section in &sections {
-        if is_track_name(section.name) && !is_supported_name(section.name) {
-            unsupported.push(section.name.to_owned());
-        }
-    }
-    for track in &mut tracks {
-        track.report.unsupported_tracks.clone_from(&unsupported);
     }
     Ok(Converted { song, tracks })
+}
+
+/// The chart of one track and difficulty; `None` when it has no note. Shared by the `.chart` and the `.mid` decoders.
+pub(super) fn built(
+    notes: Vec<Note>,
+    metadata: impl FnOnce() -> Metadata,
+    timing: &[TimingPoint],
+    report: ChartReport,
+    instrument: Instrument,
+    difficulty: Difficulty,
+) -> Option<Built> {
+    if notes.is_empty() {
+        return None;
+    }
+    let holds = notes.iter().filter(|n| n.is_hold()).count();
+    let mut chart = RoxChart::new(KEYS);
+    chart.metadata = metadata();
+    chart.timing_points = timing.to_vec();
+    chart.notes = notes;
+    Some(Built { chart, report, instrument, difficulty, holds })
 }
 
 /// `<Difficulty><Something>`.

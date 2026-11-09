@@ -209,72 +209,62 @@ fn tempo_of(bpm: &[BpmChange]) -> (f64, Vec<&BpmChange>) {
 pub(super) fn build(score: Score, report: &mut BandoriReport, format: &str) -> RoxResult<RoxChart> {
     let (initial, changes) = tempo_of(&score.bpm);
     let tempo = TempoMap::new(initial, &changes);
+    // Times count from the music start.
     let origin = tempo.seconds(score.start_beat);
-    let mut timed = Vec::with_capacity(score.notes.len());
-    for note in &score.notes {
-        if note.beat < score.start_beat {
-            report.notes_before_start += 1;
-            continue;
-        }
-        let start = micros(tempo.seconds(note.beat) - origin);
-        let duration = match note.end_beat {
-            Some(end) => micros(tempo.seconds(end) - origin)
-                .zip(start)
-                .map(|(end, start)| end - start),
-            None => Some(0),
-        };
-        let (Some(time_us), Some(duration)) = (start, duration) else {
-            report.notes_out_of_range += 1;
-            continue;
-        };
-        let duration_us = if note.end_beat.is_none() {
-            None
-        } else if duration > 0 {
-            Some(duration)
-        } else {
-            report.empty_slides_as_taps += 1;
-            None
-        };
-        timed.push(Timed {
-            time_us,
-            duration_us,
-            column: note.column,
-        });
-    }
+    let at = |beat: f64| micros(tempo.seconds(beat) - origin);
+    let timed = score.notes.iter().filter_map(|note| timed(note, score.start_beat, at, report)).collect();
     let notes = settle(timed, report);
     if notes.is_empty() {
-        return Err(RoxError::InvalidFormat(format!(
-            "{format}: no playable note"
-        )));
+        return Err(RoxError::InvalidFormat(format!("{format}: no playable note")));
     }
     let mut chart = RoxChart::new(COLUMNS);
     chart.metadata = score.metadata;
     chart.notes = notes;
-    // The tempo points as times; the ones before the audio collapse into the one in effect at time 0, which is the first point.
     let beats = std::iter::once((0.0, initial)).chain(changes.iter().map(|c| (c.beat, c.bpm)));
-    let mut points: Vec<(i64, f64)> = beats
-        .filter_map(|(beat, bpm)| Some((micros(tempo.seconds(beat) - origin)?, bpm)))
-        .collect();
-    let in_effect = points
-        .partition_point(|point| point.0 <= 0)
-        .saturating_sub(1);
+    chart.timing_points = timing_points(beats.filter_map(|(beat, bpm)| Some((at(beat)?, bpm))).collect());
+    report.bpm_changes = chart.timing_points.len();
+    Ok(chart)
+}
+
+/// A note's time and length; `None` (counted) before the music start or out of range. A slide that ends at or before its start is
+/// a tap (counted).
+fn timed(note: &ScoreNote, start_beat: f64, at: impl Fn(f64) -> Option<i64>, report: &mut BandoriReport) -> Option<Timed> {
+    if note.beat < start_beat {
+        report.notes_before_start += 1;
+        return None;
+    }
+    let start = at(note.beat);
+    let duration = match note.end_beat {
+        Some(end) => at(end).zip(start).map(|(end, start)| end - start),
+        None => Some(0),
+    };
+    let (Some(time_us), Some(duration)) = (start, duration) else {
+        report.notes_out_of_range += 1;
+        return None;
+    };
+    let duration_us = match note.end_beat {
+        None => None,
+        Some(_) if duration > 0 => Some(duration),
+        Some(_) => {
+            report.empty_slides_as_taps += 1;
+            None
+        }
+    };
+    Some(Timed { time_us, duration_us, column: note.column })
+}
+
+/// The tempo points `(time, bpm)` as timing points; the ones before the audio collapse into the one in effect at time 0, which is
+/// the first point.
+fn timing_points(mut points: Vec<(i64, f64)>) -> Vec<TimingPoint> {
+    let in_effect = points.partition_point(|point| point.0 <= 0).saturating_sub(1);
     points.drain(..in_effect);
     if let Some(first) = points.first_mut() {
         // A tempo from before the first note goes on backwards: the model wants a first point no later than the first note.
         first.0 = 0;
     }
-    for (time_us, bpm) in &points {
-        #[allow(clippy::cast_possible_truncation)]
-        // `valid_bpm` bounds it by 1e7, exact in an f32 up to rounding
-        let bpm = *bpm as f32;
-        chart.timing_points.push(TimingPoint::Bpm {
-            time_us: *time_us,
-            bpm,
-            signature: SIGNATURE,
-        });
-    }
-    report.bpm_changes = points.len();
-    Ok(chart)
+    #[allow(clippy::cast_possible_truncation)] // `valid_bpm` bounds it by 1e7, exact in an f32 up to rounding
+    let point = |(time_us, bpm): (i64, f64)| TimingPoint::Bpm { time_us, bpm: bpm as f32, signature: SIGNATURE };
+    points.into_iter().map(point).collect()
 }
 
 /// Sorts the notes by time and column (holds first at a tie) and drops the ones the model forbids: inside a hold of their column,
