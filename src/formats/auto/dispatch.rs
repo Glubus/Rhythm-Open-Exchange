@@ -30,6 +30,7 @@ use crate::formats::CodenameDecoder;
 use crate::formats::YavDecoder;
 use crate::formats::DanceDecoder;
 use crate::formats::PyddrStepDecoder;
+use crate::formats::{NotDecoder, StxDecoder, UcsDecoder};
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -95,8 +96,13 @@ fn decode_named<'a>(
 ) -> Option<RoxResult<RoxChart>> {
     let title = || crate::formats::ssq::decoder::title_of(path);
     let bandori_title = || crate::formats::bandori::title_of(path);
+    let file_name = || path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let decode: ChartReader<'_> = match fmt {
         DetectedFormat::Ssq => Box::new(move |data| SsqDecoder::decode_with_title(data, 0, &title())),
+        DetectedFormat::Not => Box::new(move |data| NotDecoder::decode_named(data, &file_name()).map(|(mut chart, _)| {
+            chart.metadata.title = title().into();
+            chart
+        })),
         DetectedFormat::Step => Box::new(move |data| {
             if crate::formats::pydance::looks_like_pyddr_step(data) {
                 PyddrStepDecoder::decode_variant(data, 0)
@@ -153,6 +159,7 @@ pub fn auto_decode_variant(path: impl AsRef<Path>, index: usize) -> RoxResult<Ro
         Ok(DetectedFormat::Dwi) => return DwiDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Msd) => return MsdDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::Dance) => return DanceDecoder::decode_variant(&read()?, index),
+        Ok(DetectedFormat::Stx) => return StxDecoder::decode_variant(&read()?, index),
         Ok(DetectedFormat::CloneHero) => return ChartDecoder::decode_file(path, index),
         Ok(DetectedFormat::CloneHeroMid) => return MidDecoder::decode_file(path, index),
         Ok(DetectedFormat::Fnfc) => return VSliceDecoder::decode_fnfc_variant(&read()?, "default", index),
@@ -318,6 +325,10 @@ pub fn auto_decode_all(path: impl AsRef<Path>) -> RoxResult<Option<Vec<FileVaria
             let data = read()?;
             each(&DanceDecoder::variants(&data)?, |v| format!("{} {}", v.mode, v.difficulty), |v| DanceDecoder::decode_variant(&data, v.index))
         }
+        DetectedFormat::Stx => {
+            let data = read()?;
+            each(&StxDecoder::variants(&data)?, |v| v.mode.to_owned(), |v| StxDecoder::decode_variant(&data, v.index))
+        }
         DetectedFormat::Fnf => match read_vslice_pair(path)? {
             Some((chart, metadata)) => each(
                 &VSliceDecoder::variants(&chart, &metadata)?,
@@ -455,6 +466,9 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Dwi => DwiDecoder::decode(data),
         DetectedFormat::Msd => MsdDecoder::decode(data),
         DetectedFormat::Dance => DanceDecoder::decode(data),
+        DetectedFormat::Ucs => UcsDecoder::decode(data),
+        DetectedFormat::Stx => StxDecoder::decode(data),
+        DetectedFormat::Not => NotDecoder::decode(data),
         DetectedFormat::Xmk => XmkDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),

@@ -83,6 +83,12 @@ pub enum DetectedFormat {
     Yav,
     /// `.dance` (pydance): several charts per file, one per step section. Decode only.
     Dance,
+    /// `.ucs` (Pump It Up User Custom Step): ONE chart per file, 5 or 10 columns. Decode only.
+    Ucs,
+    /// `.stx` (Pump It Up `STF4`): one chart per mode of the song. Decode only.
+    Stx,
+    /// `.not` / `.not5` (Pump It Up `NOT4` / `NOT5`): ONE chart per file; double when the name says so or a 2P panel is used. Decode only.
+    Not,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -140,6 +146,9 @@ pub fn detect(path: &Path) -> RoxResult<DetectedFormat> {
         "swf" => Ok(DetectedFormat::Swf),
         "yav" => Ok(DetectedFormat::Yav),
         "dance" => Ok(DetectedFormat::Dance),
+        "ucs" => Ok(DetectedFormat::Ucs),
+        "stx" => Ok(DetectedFormat::Stx),
+        "not" | "not5" => Ok(DetectedFormat::Not),
         "bestdori" => Ok(DetectedFormat::Bestdori),
         "bdon" => Ok(DetectedFormat::Bdon),
         other => Err(RoxError::UnsupportedFormat(other.to_string())),

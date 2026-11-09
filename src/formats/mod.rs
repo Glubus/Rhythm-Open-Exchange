@@ -51,6 +51,8 @@ pub mod qua;
 #[cfg(feature = "std")]
 pub mod pydance;
 #[cfg(feature = "std")]
+pub mod pump;
+#[cfg(feature = "std")]
 pub mod sekai;
 #[cfg(feature = "std")]
 pub mod sm_edit;
@@ -119,6 +121,8 @@ pub use sekai::{
 pub use sm_edit::EditDecoder;
 #[cfg(feature = "std")]
 pub use pydance::{DanceDecoder, DanceReport, PyddrStepDecoder, looks_like_pyddr_step};
+#[cfg(feature = "std")]
+pub use pump::{NotDecoder, StxDecoder, UcsDecoder};
 #[cfg(feature = "std")]
 pub use ssq::{SsqDecoder, StepDecoder, looks_like_step};
 #[cfg(feature = "std")]
