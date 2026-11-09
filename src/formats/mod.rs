@@ -79,7 +79,7 @@ pub use auto::{
     auto_encode,
 };
 #[cfg(feature = "std")]
-pub use imd::{ImdDecoder, ImdReport, is_imd_chart_file, looks_like_imd};
+pub use imd::{ImdDecoder, ImdJsonDecoder, ImdReport, is_imd_chart_file, is_imdjson_chart_file, looks_like_imd, looks_like_imdjson};
 #[cfg(feature = "std")]
 pub use bandori::{
     BandoriReport, BestdoriDecoder, SimulatorDecoder, is_bandori_chart_file, is_bestdori_chart_name,

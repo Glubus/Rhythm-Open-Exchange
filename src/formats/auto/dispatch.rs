@@ -30,7 +30,7 @@ use crate::formats::CodenameDecoder;
 use crate::formats::YavDecoder;
 use crate::formats::DanceDecoder;
 use crate::formats::PyddrStepDecoder;
-use crate::formats::{NotDecoder, R2BeatDecoder, StxDecoder, UcsDecoder};
+use crate::formats::{ImdJsonDecoder, NotDecoder, R2BeatDecoder, StxDecoder, UcsDecoder};
 
 /// Decode a file to a `RoxChart`, detecting the format from the file extension. The BanG Dream formats are told by content (a `.txt` that is a
 /// BanG! Simulator score, a `.json` that is a Bestdori or BDON chart, whatever its name): any other `.txt` or `.json` is read, or refused, as before.
@@ -99,6 +99,7 @@ fn decode_named<'a>(
     let file_name = || path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let decode: ChartReader<'_> = match fmt {
         DetectedFormat::Ssq => Box::new(move |data| SsqDecoder::decode_with_title(data, 0, &title())),
+        DetectedFormat::ImdJson => Box::new(move |data| ImdJsonDecoder::decode_with_report(data, &file_name()).map(|(chart, _)| chart)),
         DetectedFormat::Not => Box::new(move |data| NotDecoder::decode_named(data, &file_name()).map(|(mut chart, _)| {
             chart.metadata.title = title().into();
             chart
@@ -470,6 +471,7 @@ fn decode_bytes(fmt: DetectedFormat, data: &[u8]) -> RoxResult<RoxChart> {
         DetectedFormat::Stx => StxDecoder::decode(data),
         DetectedFormat::Not => NotDecoder::decode(data),
         DetectedFormat::R2Beat => R2BeatDecoder::decode(data),
+        DetectedFormat::ImdJson => ImdJsonDecoder::decode_with_report(data, "").map(|(chart, _)| chart),
         DetectedFormat::Xmk => XmkDecoder::decode(data),
         DetectedFormat::Ksf => KsfDecoder::decode(data),
         DetectedFormat::Sus => SusDecoder::decode(data),

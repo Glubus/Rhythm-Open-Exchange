@@ -91,6 +91,7 @@
 //! What the decoder dropped or simplified is in the [`ImdReport`] of `decode_with_report`.
 
 mod decoder;
+mod json;
 mod sniff;
 
 #[cfg(test)]
@@ -99,4 +100,5 @@ mod tests;
 pub use decoder::{
     ImdDecoder, ImdDifficulty, ImdName, ImdReport, MAX_LANES, MIN_LANES, parse_name,
 };
+pub use json::{ImdJsonDecoder, is_imdjson_chart_file, looks_like_imdjson};
 pub use sniff::{is_imd_chart_file, looks_like_imd};

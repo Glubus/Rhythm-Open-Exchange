@@ -91,6 +91,8 @@ pub enum DetectedFormat {
     Not,
     /// R2Beat `.xml`, told by its content (an XML `TITLE` root with `BPM Frame` entries): ONE 4-column chart. Decode only.
     R2Beat,
+    /// Rhythm Master imdjson (a `.json` whose `signature` is `BNDQ`): ONE chart, read as the `.imd` it stands for. Decode only.
+    ImdJson,
 }
 
 /// Detect format from the file extension of a path (`.mid` is the exception: only a file named `notes.mid` is a chart).
@@ -188,6 +190,8 @@ pub fn detect_content(path: &Path, head: &[u8]) -> Option<DetectedFormat> {
         Some(DetectedFormat::Bestdori)
     } else if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("xml")) {
         crate::formats::r2beat::looks_like_r2beat(head).then_some(DetectedFormat::R2Beat)
+    } else if crate::formats::imd::looks_like_imdjson(head) {
+        Some(DetectedFormat::ImdJson)
     } else {
         crate::formats::sekai::looks_like_bdon(head).then_some(DetectedFormat::Bdon)
     }
